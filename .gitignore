@@ -1,0 +1,5 @@
+# data directory used for local development
+.opsicle
+
+# dependencies
+vendor

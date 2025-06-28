@@ -1,0 +1,28 @@
+apiVersion: v1
+type: Automation
+metadata:
+  name: basic
+spec:
+  status:
+    startedAt: 2025-06-28 15:17:39 +0800
+  phases:
+  - name: initialisation
+    image: alpine:latest
+    commands:
+      - echo "initialisation"
+  - name: information-gathering
+    image: alpine:latest
+    commands:
+      - nslookup google.com
+  - name: execution
+    image: alpine:latest
+    commands:
+      - wget -qO - google.com > /tmp/google.com.txt
+  - name: clean-up
+    image: alpine:latest
+    commands:
+      - cat /tmp/google.com.txt
+      - echo "done"
+  volumeMounts:
+  - host: ./tmp
+    container: /tmp
