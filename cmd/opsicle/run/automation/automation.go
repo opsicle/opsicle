@@ -3,6 +3,7 @@ package automation
 import (
 	"fmt"
 	"opsicle/internal/automations"
+	"opsicle/internal/common"
 	"opsicle/internal/config"
 	"opsicle/internal/worker"
 	"os"
@@ -51,13 +52,28 @@ var Command = &cobra.Command{
 		}
 		var logsWaiter sync.WaitGroup
 		workerLogs := make(chan worker.LogEntry, 64)
-		doneEventChannel := make(chan struct{})
+		automationLogs := make(chan string, 64)
+		doneEventChannel := make(chan common.Done)
 		logsWaiter.Add(1)
 		go func() {
 			<-doneEventChannel
 			close(workerLogs)
 		}()
+		logsWaiter.Add(1)
 		go func() {
+			// wait for the logs to finish, otherwise some logs
+			// might not be printed
+			defer logsWaiter.Done()
+			for {
+				automationLog, ok := <-automationLogs
+				if !ok {
+					break
+				}
+				fmt.Print(automationLog)
+			}
+		}()
+		go func() {
+			defer close(automationLogs)
 			logrus.Infof("started worker logging event loop for automation[%s]", automationInstance.Resource.Metadata.Name)
 			for {
 				workerLog, ok := <-workerLogs
@@ -84,9 +100,10 @@ var Command = &cobra.Command{
 		}()
 		logsWaiter.Add(1)
 		if err := worker.RunAutomation(worker.RunAutomationOpts{
-			Done: &doneEventChannel,
-			Spec: automationInstance,
-			Logs: workerLogs,
+			Done:           &doneEventChannel,
+			Spec:           automationInstance,
+			ServiceLogs:    workerLogs,
+			AutomationLogs: automationLogs,
 		}); err != nil {
 			return fmt.Errorf("automation execution failed with message: %s", err)
 		}

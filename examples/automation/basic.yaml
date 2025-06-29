@@ -13,15 +13,15 @@ spec:
   - name: information-gathering
     image: alpine:latest
     commands:
-      - nslookup google.com
+      - nslookup httpbin.org
   - name: execution
     image: alpine:latest
     commands:
-      - wget -qO - google.com > /tmp/google.com.txt
+      - wget -qO - https://httpbin.org/ip > /tmp/httpbin.org.ip.txt
   - name: clean-up
     image: alpine:latest
     commands:
-      - cat /tmp/google.com.txt
+      - cat /tmp/httpbin.org.ip.txt
       - echo "done"
   volumeMounts:
   - host: ./tmp

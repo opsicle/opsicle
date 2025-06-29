@@ -2,14 +2,12 @@ package worker
 
 import (
 	"fmt"
-	"io/fs"
 	"net/url"
 	"opsicle/internal/automations"
 	"opsicle/internal/config"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -33,8 +31,12 @@ type Worker struct {
 	// the Mode is set to `ModeFilesystem`
 	FilesystemPath string
 
-	// Logs is a channel where logs are emitted to
-	Logs *chan LogEntry
+	// ServiceLogs is a channel where service-level logs are emitted to
+	ServiceLogs *chan LogEntry
+
+	// AutomationLogs is a channel where logs from the executed automation are
+	// emitted to
+	AutomationLogs *chan string
 
 	// PollInterval is the duration between polls of the queue
 	PollInterval time.Duration
@@ -47,21 +49,37 @@ type Worker struct {
 }
 
 func (w *Worker) Start() error {
-	var logChannel chan LogEntry
-	if w.Logs == nil {
-		logChannel = make(chan LogEntry, 128)
-		defer close(logChannel)
+	var serviceLogs chan LogEntry
+	if w.ServiceLogs == nil {
+		serviceLogs = make(chan LogEntry, 128)
+		defer close(serviceLogs)
 		go func() { // noop loop if log channel isn't specified
 			for {
-				_, ok := <-logChannel
+				_, ok := <-serviceLogs
 				if !ok {
 					return
 				}
 			}
 		}()
 	} else {
-		logChannel = *w.Logs
+		serviceLogs = *w.ServiceLogs
 	}
+	var automationLogs chan string
+	if w.AutomationLogs == nil {
+		automationLogs = make(chan string, 128)
+		defer close(automationLogs)
+		go func() { // noop loop if log channel isn't specified
+			for {
+				_, ok := <-automationLogs
+				if !ok {
+					return
+				}
+			}
+		}()
+	} else {
+		automationLogs = *w.AutomationLogs
+	}
+
 	var lifecycleWaiter sync.WaitGroup
 	lifecycleWaiter.Add(1)
 	go func() {
@@ -85,80 +103,75 @@ func (w *Worker) Start() error {
 				<-time.After(w.PollInterval)
 			}
 		case ModeFilesystem:
-			filesystemPath := w.FilesystemPath
-			if !path.IsAbs(filesystemPath) {
-				cwd, err := os.Getwd()
-				if err != nil {
-					return
-				}
-				filesystemPath = path.Join(cwd, filesystemPath)
-			}
-			logrus.Infof("starting polling from path[%s]", filesystemPath)
-			for {
-				logrus.Tracef("checking path[%s] for new automations...", filesystemPath)
-				latestFile, err := getLatestFile(filesystemPath)
-				if err != nil {
-					logChannel <- LogEntry{
-						config.LogLevelError,
-						fmt.Sprintf("failed to get the latest file: %s", err),
-					}
-				} else {
-					logChannel <- LogEntry{
-						config.LogLevelInfo,
-						fmt.Sprintf("found file[%s], processing...", latestFile),
-					}
-					automationInstance, err := automations.LoadFromFile(latestFile)
+			directoryToWatch := w.FilesystemPath
+			if !path.IsAbs(directoryToWatch) {
+				baseDir := "/"
+				if strings.Index(directoryToWatch, "~") == 0 {
+					userHomeDir, err := os.UserHomeDir()
 					if err != nil {
-						logChannel <- LogEntry{
-							config.LogLevelError,
-							fmt.Sprintf("failed to load automation from path[%s]: %s", latestFile, err),
-						}
-					} else {
-						if err := RunAutomation(RunAutomationOpts{
-							Spec: automationInstance,
-							Logs: logChannel,
-						}); err != nil {
-							logChannel <- LogEntry{
-								config.LogLevelError,
-								fmt.Sprintf("failed to run automation from path[%s]: %s", latestFile, err),
-							}
-						} else {
-							os.Remove(latestFile)
-						}
+						return
 					}
+					baseDir = userHomeDir
+				} else {
+					workingDirectory, err := os.Getwd()
+					if err != nil {
+						return
+					}
+					baseDir = workingDirectory
 				}
-				<-time.After(w.PollInterval)
+				directoryToWatch = filepath.Join(baseDir, directoryToWatch)
 			}
+			logrus.Infof("using path[%s] as the queue", directoryToWatch)
+			directoryOfProcessedFiles := filepath.Join(directoryToWatch, "/.opsicle.done")
+			if err := os.MkdirAll(directoryOfProcessedFiles, os.ModePerm); err != nil {
+				serviceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to ensure directory at path[%s]: %s", directoryOfProcessedFiles, err)}
+				break
+			}
+			directoryOfProcessingFiles := filepath.Join(directoryToWatch, "/.opsicle.doing")
+			if err := os.MkdirAll(directoryOfProcessingFiles, os.ModePerm); err != nil {
+				serviceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to ensure directory at path[%s]: %s", directoryOfProcessingFiles, err)}
+				break
+			}
+
+			go func() {
+				for {
+					automationLog, ok := <-automationLogs
+					if !ok {
+						break
+					}
+					fmt.Print(automationLog)
+				}
+			}()
+
+			startFilesystemQueueLoop(startFilesystemQueueLoopOpts{
+				Handler: func(nextAutomation string) error {
+					automationInstance, err := automations.LoadFromFile(nextAutomation)
+					if err != nil {
+						serviceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to load automation from path[%s]: %s", nextAutomation, err)}
+						return fmt.Errorf("failed to load automation from path[%s]: %s", nextAutomation, err)
+					}
+					err = RunAutomation(RunAutomationOpts{
+						Spec:           automationInstance,
+						AutomationLogs: automationLogs,
+						ServiceLogs:    serviceLogs,
+					})
+					if err != nil {
+						serviceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to run automation from path[%s]: %s", nextAutomation, err)}
+						return fmt.Errorf("failed to run automation from path[%s]: %s", nextAutomation, err)
+					}
+					return nil
+				},
+				Path:           directoryToWatch,
+				ProcessedPath:  directoryOfProcessedFiles,
+				ProcessingPath: directoryOfProcessingFiles,
+				PollInterval:   w.PollInterval,
+				ServiceLogs:    serviceLogs,
+			})
 		}
 	}()
 
 	lifecycleWaiter.Wait()
 	return nil
-}
-
-func getLatestFile(directoryPath string) (string, error) {
-	var files []fs.FileInfo
-	err := filepath.Walk(directoryPath, func(path string, info fs.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		files = append(files, info)
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-
-	if len(files) == 0 {
-		return "", nil
-	}
-
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].ModTime().After(files[j].ModTime())
-	})
-
-	latest := files[0]
-	return filepath.Join(directoryPath, latest.Name()), nil
 }
 
 type NewWorkerOpts struct {
@@ -182,7 +195,7 @@ type NewWorkerOpts struct {
 
 func NewWorker(opts NewWorkerOpts) *Worker {
 	worker := Worker{
-		Logs:         opts.Logs,
+		ServiceLogs:  opts.Logs,
 		Mode:         opts.Mode,
 		PollInterval: opts.PollInterval,
 	}

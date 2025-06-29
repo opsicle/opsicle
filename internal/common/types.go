@@ -1,5 +1,7 @@
 package common
 
+type Done struct{}
+
 type Resource struct {
 	ApiVersion string   `json:"apiVersion" yaml:"apiVersion"`
 	Type       string   `json:"type" yaml:"type"`

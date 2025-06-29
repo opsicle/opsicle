@@ -45,7 +45,8 @@ type automationSpec struct {
 	Phases       []automationPhase `json:"phases" yaml:"phases"`
 	VolumeMounts []volumeMount     `json:"volumeMounts" yaml:"volumeMounts"`
 
-	Logs chan LogEntry `json:"-"`
+	AutomationLogs chan string   `json:"-"`
+	ServiceLogs    chan LogEntry `json:"-"`
 }
 
 func serializeVolumeMounts(volumeMounts []automationtemplates.VolumeMount) ([]volumeMount, error) {
