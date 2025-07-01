@@ -46,10 +46,11 @@ var Command = &cobra.Command{
 		if fi.IsDir() {
 			return fmt.Errorf("failed to get a file at path[%s]: got a directory", resourcePath)
 		}
-		automationInstance, err := automations.LoadFromFile(resourcePath)
+		automationInstance, err := automations.LoadAutomationFromFile(resourcePath)
 		if err != nil {
 			return fmt.Errorf("failed to load automation from path[%s]: %s", resourcePath, err)
 		}
+
 		var logsWaiter sync.WaitGroup
 		workerLogs := make(chan worker.LogEntry, 64)
 		automationLogs := make(chan string, 64)

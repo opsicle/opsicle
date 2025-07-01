@@ -1,6 +1,7 @@
 package run
 
 import (
+	"opsicle/cmd/opsicle/run/approver"
 	"opsicle/cmd/opsicle/run/automation"
 	"opsicle/cmd/opsicle/run/migrations"
 
@@ -8,6 +9,7 @@ import (
 )
 
 func init() {
+	Command.AddCommand(approver.Command)
 	Command.AddCommand(automation.Command)
 	Command.AddCommand(migrations.Command)
 }

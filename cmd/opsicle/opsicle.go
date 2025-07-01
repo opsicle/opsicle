@@ -54,12 +54,16 @@ func init() {
 		case config.LogLevelError:
 			logrus.SetLevel(logrus.ErrorLevel)
 		}
+		logrus.SetFormatter(&logrus.TextFormatter{
+			FullTimestamp: true,
+		})
 
 		configPath := viper.GetString("config")
 
 		config.LoadGlobal(configPath)
 	})
 
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
 }
 

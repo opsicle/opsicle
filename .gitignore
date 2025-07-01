@@ -3,3 +3,6 @@
 
 # dependencies
 vendor
+
+# for local environment variable management
+.envrc

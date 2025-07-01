@@ -2,7 +2,7 @@ package automationtemplate
 
 import (
 	"fmt"
-	"opsicle/internal/automationtemplates"
+	"opsicle/internal/automations"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -33,7 +33,7 @@ var Command = &cobra.Command{
 		if fi.IsDir() {
 			return fmt.Errorf("failed to get a file at path[%s]: got a directory", resourcePath)
 		}
-		automationTemplate, err := automationtemplates.LoadFromFile(resourcePath)
+		automationTemplate, err := automations.LoadAutomationTemplateFromFile(resourcePath)
 		if err != nil {
 			return fmt.Errorf("failed to load automation template from path[%s]: %s", resourcePath, err)
 		}

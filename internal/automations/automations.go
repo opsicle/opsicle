@@ -1,7 +1,6 @@
 package automations
 
 import (
-	"opsicle/internal/automationtemplates"
 	"opsicle/internal/common"
 	"os"
 
@@ -10,13 +9,11 @@ import (
 
 type Automation struct {
 	common.Resource `json:"resource" yaml:",inline"`
-	Spec            Spec `json:"spec" yaml:"spec"`
+	Spec            AutomationSpec `json:"spec" yaml:"spec"`
 }
 
-type Spec automationtemplates.SpecTemplate
-
-// LoadFromFile reads YAML from file and returns an AutomationTemplate
-func LoadFromFile(path string) (*Automation, error) {
+// LoadAutomationFromFile reads YAML from file and returns an Automation
+func LoadAutomationFromFile(path string) (*Automation, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err

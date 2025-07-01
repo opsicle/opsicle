@@ -1,0 +1,4 @@
+*
+!data
+!.gitignore
+!redis.conf

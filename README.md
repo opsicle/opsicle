@@ -184,65 +184,73 @@ A sample runbook automation template is as follows:
 apiVersion: v1
 type: AutomationTemplate
 metadata:
-  name: sample-runbook-script
+  name: basic
+  labels:
+    opsicle/description: "this is a basic automation template resource"
 spec:
-  additionalMetadata:
-    displayName: Sample runbook script
-    description: |
-      This is a sample runbook script with a
-      multi-line description as defined in YAML
+  metadata:
+    displayName: Basic Automation
     owners:
-    - name: Dennis
-      email: ritchie@opsicle.com
     - name: Bjarne
-      email: stroustrup@opsicle.com
-  tags:
-    criticalityLevel: two
-    team: backend
+      email: stroustrup@opsicle.io
+    - name: Dennis
+      email: ritchie@opsicle.io
   template:
-    alert:
-      channels:
-      - name: slack
-        template:
-          onStart: |
-            The sample runbook script has started running
-          onExecute: |
-            The sample runbook script has reached the main script execution
-          onInit: |
-            The sample runbook script has reached the init script
-          onFinal: |
-            The sample runbook script has reached the finalization script
-          onFailure: |
-            The sample runbook script failed to execute successfully
-          onSuccess: | 
-            The sample runbook script has successfully completed
+    volumeMounts:
+    - host: ./tmp
+      container: /tmp
+    phases:
+    - name: initialisation
+      image: alpine:latest
+      commands:
+        - echo "initialisation"
+    - name: information-gathering
+      image: alpine:latest
+      commands:
+        - nslookup google.com
+    - name: execution
+      image: alpine:latest
+      commands:
+        - mkdir ./tmp
+        - wget -qO - google.com > /tmp/google.com.txt
+    - name: clean-up
+      image: alpine:latest
+      commands:
+        - cat /tmp/google.com.txt
+        - echo "done"
+```
+
+### Automation Manifest
+
+```yaml
+apiVersion: v1
+type: Automation
+metadata:
+  name: basic
+spec:
+  status:
+    startedAt: 2025-06-28 15:17:39 +0800
+  phases:
+  - name: initialisation
     image: alpine:latest
-    execution:
-      init:
-      - echo "initialisation always runs before the main script"
-      main:
-      - echo "main script run phase"
-      final:
-      - echo "finalisation always runs even if main errors out"
-    variables:
-    - name: VAR_LITERAL
-      type: literal
-      value: literal string
-    - name: VAR_INPUT
-      type: input
-    - name: VAR_SECRET
-      type: secret
-      source: secret-id # this has to exist
-    - name: VAR_IP_ADDRESS
-      type: remote
-      method: get
-      headers:
-        Header-One:
-        - header-one
-        User-Agent:
-        - opsicle/v1
-      data: null
-      source: https://httpbin.org/ip
+    commands:
+      - echo "initialisation"
+  - name: information-gathering
+    image: alpine:latest
+    commands:
+      - nslookup httpbin.org
+  - name: execution
+    image: alpine:latest
+    commands:
+      - wget -qO - https://httpbin.org/ip > /tmp/httpbin.org.ip.txt
+  - name: clean-up
+    image: alpine:latest
+    commands:
+      - cat /tmp/httpbin.org.ip.txt
+      - echo "done"
+  volumeMounts:
+  - host: ./tmp
+    container: /tmp
 ```
 
 ### Access Templates

@@ -24,17 +24,16 @@ type streamDockerLogsOpts struct {
 	// ContainerId is the ID of the Docker container to stream logs from
 	ContainerId string
 
-	// AutomationLogsChannel is for the caller to receive logs from the
-	// **container**, NOT the function. WARNING: this channel will be
-	// closed by this function upon completion
-	AutomationLogsChannel chan string
+	// AutomationLogs is for the caller to receive logs from the
+	// **container**, NOT the function
+	AutomationLogs chan string
 
 	// Context is for inheritance of the caller's context
 	Context *context.Context
 
-	// ControllerLogsChannel is for the caller to receive logs from the
+	// ServiceLogs is for the caller to receive logs from the
 	// **function**, NOT the container
-	ControllerLogsChannel chan LogEntry
+	ServiceLogs chan LogEntry
 
 	// DockerClient is the client which is able to perform Docker operations
 	// on the Docker daemon running locally
@@ -61,61 +60,101 @@ func streamDockerLogs(opts streamDockerLogsOpts) error {
 		ctx = *opts.Context
 	}
 
+	bufferSize := DefaultBufferSize
+	if opts.BufferSize != nil {
+		bufferSize = *opts.BufferSize
+	}
+
+	isStderrEnabled := DefaultIsStderrEnabled
+	if opts.IsStderrEnabled != nil {
+		isStderrEnabled = *opts.IsStderrEnabled
+	}
+	isStdoutEnabled := DefaultIsStdoutEnabled
+	if opts.IsStdoutEnabled != nil {
+		isStdoutEnabled = *opts.IsStdoutEnabled
+	}
+	displayContainerId := opts.ContainerId[:11]
+
+	opts.ServiceLogs <- LogEntry{config.LogLevelDebug, fmt.Sprintf("container[%s]: creating container logs stream...", displayContainerId)}
 	out, err := opts.DockerClient.ContainerLogs(
 		ctx, opts.ContainerId, container.LogsOptions{
-			ShowStdout: true, ShowStderr: true, Follow: true,
+			ShowStdout: isStdoutEnabled,
+			ShowStderr: isStderrEnabled,
+			Follow:     true,
 		})
 	if err != nil {
-		opts.ControllerLogsChannel <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to stream logs: %v", err)}
+		opts.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("container[%s]: failed to stream logs: %v", displayContainerId, err)}
 		opts.DoneChannel <- common.Done{}
 		return nil
 	}
 	defer out.Close()
 
-	rOut, wOut := io.Pipe()
-	rErr, wErr := io.Pipe()
+	outReader, outWriter := io.Pipe()
+	errReader, errWriter := io.Pipe()
 
 	go func() {
-		stdcopy.StdCopy(wOut, wErr, out)
-		wOut.Close()
-		wErr.Close()
+		if _, err := stdcopy.StdCopy(outWriter, errWriter, out); err != nil {
+			opts.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("container[%s]: failed to demux stdout/sterr stream: %v", displayContainerId, err)}
+		}
+		outWriter.Close()
+		errWriter.Close()
 	}()
 
-	var waiter sync.WaitGroup
-	waiter.Add(1)
+	var logStreamWaiter sync.WaitGroup
+	logStreamWaiter.Add(1)
 	go func() {
-		defer waiter.Done()
-		buf := make([]byte, 1024)
+		defer logStreamWaiter.Done()
+		buffer := make([]byte, bufferSize)
+		opts.ServiceLogs <- LogEntry{config.LogLevelDebug, fmt.Sprintf("container[%s]: created stdout stream with bufferSize[%v]", displayContainerId, bufferSize)}
 		for {
-			n, err := rOut.Read(buf)
+			n, err := outReader.Read(buffer)
 			if n > 0 {
-				opts.AutomationLogsChannel <- string(buf[:n])
+				opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: streamed %v bytes from stdout", displayContainerId, n)}
+				opts.AutomationLogs <- string(buffer[:n])
 			}
 			if err != nil {
+				if err != io.EOF {
+					opts.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("container[%s]: received error while streaming stdout: %s", displayContainerId, err)}
+					break
+				}
+				opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: eof received on stdout", displayContainerId)}
 				break
 			}
 		}
+		opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: stdout stream closed", displayContainerId)}
 	}()
 
-	waiter.Add(1)
+	logStreamWaiter.Add(1)
 	go func() {
-		defer waiter.Done()
-		buf := make([]byte, 1024)
+		defer logStreamWaiter.Done()
+		buffer := make([]byte, bufferSize)
+		opts.ServiceLogs <- LogEntry{config.LogLevelDebug, fmt.Sprintf("container[%s]: created stderr stream with bufferSize[%v]", displayContainerId, bufferSize)}
 		for {
-			n, err := rErr.Read(buf)
+			n, err := errReader.Read(buffer)
 			if n > 0 {
-				opts.AutomationLogsChannel <- string(buf[:n]) // Optionally prefix with [stderr]
+				opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: streamed %v bytes from stderr", displayContainerId, n)}
+				opts.AutomationLogs <- prefixWithStderr(string(buffer[:n]))
 			}
 			if err != nil {
+				if err != io.EOF {
+					opts.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("container[%s]: received error while streaming stderr: %s", displayContainerId, err)}
+					break
+				}
+				opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: eof received on stderr", displayContainerId)}
 				break
 			}
 		}
-		opts.DoneChannel <- common.Done{}
+		opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: stderr stream closed", displayContainerId)}
 	}()
 
-	waiter.Wait()
-	close(opts.AutomationLogsChannel)
+	logStreamWaiter.Wait()
+	opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: logs streaming is complete", displayContainerId)}
+	opts.DoneChannel <- common.Done{}
 	return nil
+}
+
+func prefixWithStderr(text string) string {
+	return "[stderr] " + text
 }
 
 // // func streamDockerLogs(ctx context.Context, cli *client.Client, containerId string, logChan chan<- LogEntry, done chan<- struct{}) {
@@ -147,7 +186,7 @@ func streamDockerLogs(opts streamDockerLogsOpts) error {
 // 		<-time.After(100 * time.Millisecond)
 // 		opts.DoneChannel <- common.Done{}
 // 	}()
-// 	opts.ControllerLogsChannel <- LogEntry{config.LogLevelDebug, fmt.Sprintf("container[%s]: establishing streaming with container logs...", displayContainerId)}
+// 	opts.ServiceLogs <- LogEntry{config.LogLevelDebug, fmt.Sprintf("container[%s]: establishing streaming with container logs...", displayContainerId)}
 // 	outputStream, err := opts.DockerClient.ContainerLogs(
 // 		ctx,
 // 		opts.ContainerId,
@@ -160,21 +199,21 @@ func streamDockerLogs(opts streamDockerLogsOpts) error {
 // 	if err != nil {
 // 		return fmt.Errorf("failed to stream logs for container[%s]: %v", displayContainerId, err)
 // 	}
-// 	opts.ControllerLogsChannel <- LogEntry{config.LogLevelInfo, fmt.Sprintf("container[%s]: successfully established streaming with container logs", displayContainerId)}
+// 	opts.ServiceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("container[%s]: successfully established streaming with container logs", displayContainerId)}
 // 	defer outputStream.Close()
 
 // 	for {
 // 		outputBuffer := make([]byte, bufferSize)
 // 		n, err := outputStream.Read(outputBuffer)
 // 		if n > 0 {
-// 			opts.ControllerLogsChannel <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: received %v bytes of logs", displayContainerId, n)}
+// 			opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: received %v bytes of logs", displayContainerId, n)}
 // 			fmt.Printf("sending %v bytes:\n------START------\n%s\n------END------\n", n, string(outputBuffer))
-// 			opts.AutomationLogsChannel <- string(outputBuffer[:n])
-// 			opts.ControllerLogsChannel <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: emitted %v bytes of logs", displayContainerId, n)}
+// 			opts.AutomationLogs <- string(outputBuffer[:n])
+// 			opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: emitted %v bytes of logs", displayContainerId, n)}
 // 		}
 // 		if err != nil {
 // 			if err == io.EOF {
-// 				opts.ControllerLogsChannel <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: received eof from docker daemon, exiting gracefully...", displayContainerId)}
+// 				opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("container[%s]: received eof from docker daemon, exiting gracefully...", displayContainerId)}
 // 				break
 // 			}
 // 			return fmt.Errorf("log read error in container[%s]: %v", displayContainerId, err)

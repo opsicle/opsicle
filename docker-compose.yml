@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # opsicle:
+  #   build:
+  #     context: .
+  #     target: final
+  #   image: opsicle:local
+  #   depends_on:
+  #     - redis
+  #   environment:
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     REDIS_USERNAME: opsicle
+  #     REDIS_PASSWORD: StrongPassword123
+  #   ports:
+  #     - "8080:8080"
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - ./data/.redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./data/.redis/data/redis-data:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  redis-data:

@@ -2,10 +2,13 @@ package worker
 
 import (
 	"fmt"
+	"opsicle/internal/common"
 	"opsicle/internal/config"
 	"opsicle/internal/worker"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -94,18 +97,38 @@ var Command = &cobra.Command{
 				log(logEntry.Message)
 			}
 		}()
+		automationLogs := make(chan string, 64)
+		go func() {
+			for {
+				automationLog, ok := <-automationLogs
+				if !ok {
+					break
+				}
+				fmt.Print(automationLog)
+			}
+		}()
+		doneChannel := make(chan common.Done)
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+		go func() {
+			sig := <-sigs
+			logrus.Infof("received signal: %s", sig)
+			doneChannel <- common.Done{}
+		}()
 		workerInstance := worker.NewWorker(worker.NewWorkerOpts{
-			Logs:         &logChannel,
-			Mode:         mode,
-			PollInterval: pollInterval,
-			Runtime:      runtime,
-			Source:       source,
+			AutomationLogs: &automationLogs,
+			DoneChannel:    doneChannel,
+			ServiceLogs:    &logChannel,
+			Mode:           mode,
+			PollInterval:   pollInterval,
+			Runtime:        runtime,
+			Source:         source,
 		})
 		if err := workerInstance.Start(); err != nil {
 			logrus.Errorf("failed to start worker instance: %s", err)
 			os.Exit(1)
 		}
-
+		logrus.Infof("ok: exitting with status code 0")
 		return nil
 	},
 }

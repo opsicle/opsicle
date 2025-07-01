@@ -1,6 +1,7 @@
 package start
 
 import (
+	"opsicle/cmd/opsicle/start/approver"
 	"opsicle/cmd/opsicle/start/controller"
 	"opsicle/cmd/opsicle/start/worker"
 
@@ -8,6 +9,7 @@ import (
 )
 
 func init() {
+	Command.AddCommand(approver.Command)
 	Command.AddCommand(controller.Command)
 	Command.AddCommand(worker.Command)
 }

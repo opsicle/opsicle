@@ -13,3 +13,13 @@ type Metadata struct {
 	Annotations map[string]string `json:"annotations,omitempty" yaml:"annotations,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 }
+
+type AutomationLog struct {
+	Source  string `json:"source"`
+	Message string `json:"message"`
+}
+
+type ServiceLog struct {
+	Level   string `json:"level"`
+	Message string `json:"message"`
+}

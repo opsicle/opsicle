@@ -6,6 +6,9 @@ import (
 	"opsicle/internal/automations"
 	"opsicle/internal/common"
 	"opsicle/internal/config"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -41,14 +44,6 @@ func RunAutomation(opts RunAutomationOpts) error {
 	if opts.Spec.Metadata.Name == "" {
 		return fmt.Errorf("failed to receive a name, the name needs to be defined")
 	}
-	phases := serializePhases(opts.Spec.Spec.Phases)
-	if len(phases) == 0 {
-		return fmt.Errorf("failed to receive a phase, at least one phase needs to be present")
-	}
-	volumeMounts, err := serializeVolumeMounts(opts.Spec.Spec.VolumeMounts)
-	if err != nil {
-		return fmt.Errorf("failed to process volume mounts: %s", err)
-	}
 	dockerApiVersion := DefaultDockerApiVersion
 	if opts.DockerApiVersion != nil {
 		dockerApiVersion = *opts.DockerApiVersion
@@ -56,8 +51,8 @@ func RunAutomation(opts RunAutomationOpts) error {
 
 	if err := runAutomation(
 		automationSpec{
-			Phases:         phases,
-			VolumeMounts:   volumeMounts,
+			Phases:         opts.Spec.Spec.Phases,
+			VolumeMounts:   opts.Spec.Spec.VolumeMounts,
 			AutomationLogs: opts.AutomationLogs,
 			ServiceLogs:    opts.ServiceLogs,
 		},
@@ -87,17 +82,30 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 
 	var mounts []mount.Mount
 	for _, vm := range spec.VolumeMounts {
+		hostVolumePath := vm.Host
+		if !path.IsAbs(hostVolumePath) {
+			workingDirectory, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to get working directory: %s", err)
+			}
+			hostVolumePath = filepath.Join(workingDirectory, hostVolumePath)
+		}
 		mounts = append(mounts, mount.Mount{
 			Type:   mount.TypeBind,
-			Source: vm.HostPath,
-			Target: vm.ContainerPath,
+			Source: hostVolumePath,
+			Target: vm.Container,
 		})
 	}
 
 	for _, phase := range spec.Phases {
 		spec.ServiceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("phase[%s]: starting", phase.Name)}
 
-		timeout := time.Duration(phase.Timeout) * time.Second
+		var timeout time.Duration
+		if phase.Timeout == 0 {
+			timeout = 60 * time.Second
+		} else {
+			timeout = time.Duration(phase.Timeout) * time.Second
+		}
 		phaseCtx, cancel := context.WithTimeout(baseCtx, timeout)
 		defer cancel()
 
@@ -127,13 +135,13 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 		done := make(chan common.Done)
 		go func() {
 			if err := streamDockerLogs(streamDockerLogsOpts{
-				ContainerId:           containerInfo.ID,
-				ControllerLogsChannel: spec.ServiceLogs,
-				AutomationLogsChannel: containerLogs,
-				DockerClient:          dockerClient,
-				DoneChannel:           done,
+				ContainerId:    containerInfo.ID,
+				ServiceLogs:    spec.ServiceLogs,
+				AutomationLogs: containerLogs,
+				DockerClient:   dockerClient,
+				DoneChannel:    done,
 			}); err != nil {
-
+				spec.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("phase[%s]: failed to stream logs for container[%s]: %s", phase.Name, displayContainerId, err)}
 			}
 		}()
 
@@ -148,22 +156,26 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 		go func() {
 			defer waiter.Done()
 			spec.ServiceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("phase[%s]: started streaming logs for container[%s]", phase.Name, displayContainerId)}
+			var phaseLogsMutex sync.Mutex
 			for {
 				containerLog, ok := <-containerLogs
 				if !ok {
 					break
 				}
-				spec.AutomationLogs <- string(containerLog)
+				spec.AutomationLogs <- containerLog
+				phaseLogsMutex.Lock()
+				phase.Logs = append(phase.Logs, automations.PhaseLog{
+					Timestamp: time.Now().Format("2006-01-02 15:04:05"),
+					Message:   containerLog,
+				})
+				phaseLogsMutex.Unlock()
 			}
 		}()
 		waiter.Add(1)
 		go func() {
 			defer waiter.Done()
 			isDone := false
-			for {
-				if isDone {
-					break
-				}
+			for !isDone {
 				select {
 				case <-phaseCtx.Done():
 					spec.ServiceLogs <- LogEntry{config.LogLevelWarn, fmt.Sprintf("phase[%s]: timed out, killing container[%s]...", phase.Name, displayContainerId)}
@@ -187,6 +199,7 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 			}
 			spec.ServiceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("phase[%s]: container[%s] is done", phase.Name, displayContainerId)}
 			time.After(100 * time.Second)
+			close(containerLogs)
 		}()
 		waiter.Wait()
 	}
