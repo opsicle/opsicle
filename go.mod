@@ -6,6 +6,7 @@ require (
 	github.com/docker/docker v28.3.0+incompatible
 	github.com/go-redis/redis/v7 v7.4.1
 	github.com/go-telegram/bot v1.15.0
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.9.1

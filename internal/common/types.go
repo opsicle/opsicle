@@ -1,5 +1,11 @@
 package common
 
+import (
+	"opsicle/internal/config"
+
+	"github.com/sirupsen/logrus"
+)
+
 type Done struct{}
 
 type Resource struct {
@@ -22,4 +28,29 @@ type AutomationLog struct {
 type ServiceLog struct {
 	Level   string `json:"level"`
 	Message string `json:"message"`
+}
+
+func StartServiceLogLoop(serviceLogs chan ServiceLog) {
+	go func() {
+		for {
+			logEntry, ok := <-serviceLogs
+			if !ok {
+				return
+			}
+			log := logrus.Info
+			switch logEntry.Level {
+			case config.LogLevelTrace:
+				log = logrus.Trace
+			case config.LogLevelDebug:
+				log = logrus.Debug
+			case config.LogLevelInfo:
+				log = logrus.Info
+			case config.LogLevelWarn:
+				log = logrus.Warn
+			case config.LogLevelError:
+				log = logrus.Error
+			}
+			log(logEntry.Message)
+		}
+	}()
 }

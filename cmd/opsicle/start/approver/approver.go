@@ -72,6 +72,10 @@ var Command = &cobra.Command{
 	Short:   "Starts the approver component",
 	Long:    "Starts the approver component which serves as a background job that communicates with the configured component",
 	RunE: func(cmd *cobra.Command, args []string) error {
+
+		serviceLogs := make(chan common.ServiceLog, 64)
+		common.StartServiceLogLoop(serviceLogs)
+
 		isRedisEnabled := viper.GetBool("redis-enabled")
 		if isRedisEnabled {
 			if err := approver.InitRedisCache(approver.InitRedisCacheOpts{
@@ -83,7 +87,9 @@ var Command = &cobra.Command{
 			}
 			logrus.Infof("redis client initialised")
 		}
+
 		isTelegramEnabled := viper.GetBool("telegram-enabled")
+		telegramDone := make(chan common.Done)
 		if isTelegramEnabled {
 			telegramBotToken := viper.GetString("telegram-bot-token")
 			if telegramBotToken == "" {
@@ -91,16 +97,25 @@ var Command = &cobra.Command{
 			}
 			if err := approver.InitTelegramApprover(approver.InitTelegramApproverOpts{
 				BotToken: telegramBotToken,
-				ChatMap: map[string]string{
-					"main": "",
+				ChatMap: map[string]int64{
+					"main": 267230627,
 				},
+				ServiceLogs: serviceLogs,
 			}); err != nil {
 				return fmt.Errorf("failed to initialise telegram client: %s", err)
 			}
-			logrus.Infof("telegram client initialised")
-			done := make(chan common.Done)
-			approver.TelegramApprover.Start(done)
+			logrus.Infof("starting telegram client...")
+			go approver.TelegramApprover.Start(telegramDone)
 		}
+
+		httpServerDone := make(chan common.Done)
+		logrus.Infof("starting http client...")
+		approver.StartHttpServer(approver.StartHttpServerOpts{
+			Addr:        "0.0.0.0:12345",
+			Done:        httpServerDone,
+			ServiceLogs: serviceLogs,
+		})
+
 		return cmd.Help()
 	},
 }

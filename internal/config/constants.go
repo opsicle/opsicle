@@ -1,5 +1,11 @@
 package config
 
+import "time"
+
+const (
+	DefaultDurationConnectionTimeout = 10 * time.Second
+)
+
 const (
 	LogLevelTrace = "trace"
 	LogLevelDebug = "debug"

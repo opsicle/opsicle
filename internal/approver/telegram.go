@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"opsicle/internal/common"
-	"strconv"
+	"opsicle/internal/config"
+	"opsicle/internal/integrations/telegram"
 	"strings"
 
 	"github.com/go-telegram/bot"
@@ -17,20 +17,18 @@ import (
 var TelegramApprover *telegramApprover
 
 type telegramApprover struct {
-	Client  *bot.Bot
-	ChatMap map[string]string
+	Client      *telegram.Bot
+	ChatMap     map[string]int64
+	ServiceLogs chan<- common.ServiceLog
 }
 
 func (t *telegramApprover) Start(done chan common.Done) {
-	ctx := context.Background()
 	go func() {
 		<-done
-		if _, err := t.Client.Close(ctx); err != nil {
-			logrus.Errorf("failed to close telegram bot: %s", err)
-		}
+		t.Client.Done <- common.Done{}
 	}()
 	logrus.Infof("started telegram client")
-	t.Client.Start(ctx)
+	t.Client.Start()
 }
 
 type SendApprovalOpts struct {
@@ -38,13 +36,9 @@ type SendApprovalOpts struct {
 }
 
 func (t *telegramApprover) SendApproval(req ApprovalRequest, opts SendApprovalOpts) error {
-	chatIdValue, ok := t.ChatMap[opts.Chat]
+	chatId, ok := t.ChatMap[opts.Chat]
 	if !ok {
 		return fmt.Errorf("failed to find chat[%s]", opts.Chat)
-	}
-	chatId, err := strconv.ParseInt(chatIdValue, 10, 64)
-	if err != nil {
-		return err
 	}
 
 	text := fmt.Sprintf("%s is requesting approval from %s to run automation: %s", req.Requester, req.Approver, req.AutomationName)
@@ -63,7 +57,10 @@ func (t *telegramApprover) SendApproval(req ApprovalRequest, opts SendApprovalOp
 	}
 
 	ctx := context.Background()
-	_, err = t.Client.SendMessage(ctx, &bot.SendMessageParams{
+	fmt.Println(t.Client.Raw)
+	fmt.Printf("sending message to chat[%v]\n", chatId)
+	fmt.Printf("sending text['%s']\n", text)
+	_, err := t.Client.Client.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:      chatId,
 		Text:        text,
 		ReplyMarkup: markup,
@@ -77,56 +74,60 @@ type InitTelegramApproverOpts struct {
 	BotToken string `json:"botToken" yaml:"botToken"`
 
 	// ChatMap maps a logical chat name to it's ID in Telegram
-	ChatMap map[string]string `json:"chatMap" yaml:"chatMap"`
+	ChatMap map[string]int64 `json:"chatMap" yaml:"chatMap"`
+
+	// ServiceLogs is the channel to send logs to for logging via
+	// the centralised logger
+	ServiceLogs chan<- common.ServiceLog
 }
 
 func InitTelegramApprover(opts InitTelegramApproverOpts) error {
-	client, err := bot.New(opts.BotToken, bot.WithDefaultHandler(handleTelegramCallback))
+	var err error
+	telegramBot, err := telegram.New(telegram.NewOpts{
+		BotToken:       opts.BotToken,
+		DefaultHandler: getHandler(opts.ServiceLogs),
+		ServiceLogs:    opts.ServiceLogs,
+	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize Telegram bot: %v", err)
+		return fmt.Errorf("failed to create telegram bot: %s", err)
 	}
 	TelegramApprover = &telegramApprover{
-		Client:  client,
-		ChatMap: opts.ChatMap,
+		Client:      telegramBot,
+		ChatMap:     opts.ChatMap,
+		ServiceLogs: opts.ServiceLogs,
 	}
 	return nil
 }
 
-func handleTelegramCallback(ctx context.Context, b *bot.Bot, update *models.Update) {
-	logrus.Infof("%v", update.Message.Chat.ID)
-	if update.CallbackQuery == nil {
-		return
-	}
+func getHandler(serviceLogs chan<- common.ServiceLog) func(context.Context, *telegram.Bot, telegram.BotUpdate) {
+	return func(ctx context.Context, b *telegram.Bot, update telegram.BotUpdate) {
+		serviceLogs <- common.ServiceLog{config.LogLevelInfo, fmt.Sprintf("chat[%v] << %s", update.ChatId, update.Message)}
+		data := update.CallbackData
+		parts := strings.SplitN(data, ":", 2)
+		if len(parts) != 2 {
+			serviceLogs <- common.ServiceLog{config.LogLevelError, fmt.Sprintf("invalid callback data: %s", data)}
+			return
+		}
 
-	data := update.CallbackQuery.Data
-	parts := strings.SplitN(data, ":", 2)
-	if len(parts) != 2 {
-		log.Printf("invalid callback data: %s", data)
-		return
-	}
+		action := parts[0]
+		requestId := parts[1]
 
-	action := parts[0]
-	requestId := parts[1]
+		val, err := RedisCache.Client.Get(requestId).Result()
+		if err != nil {
+			serviceLogs <- common.ServiceLog{config.LogLevelError, fmt.Sprintf("failed to fetch request from Redis: %v", err)}
+			return
+		}
 
-	val, err := RedisCache.Client.Get(requestId).Result()
-	if err != nil {
-		log.Printf("failed to fetch request from Redis: %v", err)
-		return
-	}
+		var req ApprovalRequest
+		if err := json.Unmarshal([]byte(val), &req); err != nil {
+			serviceLogs <- common.ServiceLog{config.LogLevelError, fmt.Sprintf("failed to unmarshal request: %v", err)}
+			return
+		}
 
-	var req ApprovalRequest
-	if err := json.Unmarshal([]byte(val), &req); err != nil {
-		log.Printf("failed to unmarshal request: %v", err)
-		return
-	}
+		response := fmt.Sprintf("%s has %sd the request to run automation: %s", req.Approver, action, req.AutomationName)
 
-	response := fmt.Sprintf("%s has %sd the request to run automation: %s", req.Approver, action, req.AutomationName)
-
-	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: update.CallbackQuery.ChatInstance,
-		Text:   response,
-	})
-	if err != nil {
-		log.Printf("failed to send confirmation message: %v", err)
+		if err := b.SendMessage(update.ChatId, response); err != nil {
+			serviceLogs <- common.ServiceLog{config.LogLevelError, fmt.Sprintf("failed to send confirmation message: %v", err)}
+		}
 	}
 }
