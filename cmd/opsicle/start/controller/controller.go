@@ -2,7 +2,7 @@ package controller
 
 import (
 	"fmt"
-	"opsicle/internal/config"
+	"opsicle/internal/common"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -18,6 +18,7 @@ func init() {
 		"specifies the path to a directory where Opsicle data resides",
 	)
 	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 
 	currentFlag = "db-host"
 	Command.PersistentFlags().StringP(
@@ -27,6 +28,7 @@ func init() {
 		"specifies the hostname (including port) of the database",
 	)
 	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 
 	currentFlag = "db-name"
 	Command.PersistentFlags().StringP(
@@ -36,6 +38,7 @@ func init() {
 		"specifies the name of the central database schema",
 	)
 	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 
 	currentFlag = "db-user"
 	Command.PersistentFlags().StringP(
@@ -45,6 +48,7 @@ func init() {
 		"specifies the username to use to login",
 	)
 	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 
 	currentFlag = "db-password"
 	Command.PersistentFlags().StringP(
@@ -54,16 +58,18 @@ func init() {
 		"specifies the password to use to login",
 	)
 	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 
 	currentFlag = "storage-mode"
 	Command.PersistentFlags().StringP(
 		currentFlag,
 		"s",
-		config.StorageFilesystem,
-		fmt.Sprintf("specifies what type of storage we are using, one of ['%s']", strings.Join(config.Storages, "'")),
+		common.StorageFilesystem,
+		fmt.Sprintf("specifies what type of storage we are using, one of ['%s']", strings.Join(common.Storages, "'")),
 	)
 
 	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 }
 
 var Command = &cobra.Command{

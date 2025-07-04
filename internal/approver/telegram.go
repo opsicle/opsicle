@@ -2,10 +2,8 @@ package approver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"opsicle/internal/common"
-	"opsicle/internal/config"
 	"opsicle/internal/integrations/telegram"
 	"strings"
 
@@ -31,25 +29,22 @@ func (t *telegramApprover) Start(done chan common.Done) {
 	t.Client.Start()
 }
 
-type SendApprovalOpts struct {
-	Chat string
-}
-
-func (t *telegramApprover) SendApproval(req ApprovalRequest, opts SendApprovalOpts) error {
-	chatId, ok := t.ChatMap[opts.Chat]
-	if !ok {
-		return fmt.Errorf("failed to find chat[%s]", opts.Chat)
-	}
-
-	text := fmt.Sprintf("%s is requesting approval from %s to run automation: %s", req.Requester, req.Approver, req.AutomationName)
+func (t *telegramApprover) SendApproval(req ApprovalRequest) error {
+	text := fmt.Sprintf(
+		"⚠️ Approval request\nID: `%s`\nMessage: `%s`\nRequester: %s \\(`%s`\\)",
+		bot.EscapeMarkdown(req.Id),
+		bot.EscapeMarkdown(req.Message),
+		bot.EscapeMarkdown(req.RequesterName),
+		bot.EscapeMarkdown(req.RequesterId),
+	)
 
 	approveBtn := &models.InlineKeyboardButton{
 		Text:         "Approve",
-		CallbackData: fmt.Sprintf("approve:%s", req.Id),
+		CallbackData: fmt.Sprintf("%s:%s", actionApprove, req.Id),
 	}
 	rejectBtn := &models.InlineKeyboardButton{
 		Text:         "Reject",
-		CallbackData: fmt.Sprintf("reject:%s", req.Id),
+		CallbackData: fmt.Sprintf("%s:%s", actionReject, req.Id),
 	}
 
 	markup := &models.InlineKeyboardMarkup{
@@ -57,15 +52,20 @@ func (t *telegramApprover) SendApproval(req ApprovalRequest, opts SendApprovalOp
 	}
 
 	ctx := context.Background()
-	fmt.Println(t.Client.Raw)
-	fmt.Printf("sending message to chat[%v]\n", chatId)
-	fmt.Printf("sending text['%s']\n", text)
-	_, err := t.Client.Client.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:      chatId,
-		Text:        text,
-		ReplyMarkup: markup,
-	})
-	return err
+	t.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "sending via telegram...")
+	for _, target := range req.Telegram {
+		t.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "sending message to chat[%v]: %s", target.ChatId, text)
+		_, err := t.Client.Client.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID:      target.ChatId,
+			Text:        text,
+			ParseMode:   "MarkdownV2",
+			ReplyMarkup: markup,
+		})
+		if err != nil {
+			t.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "req[%v] failed to send message to chat[%v]: %s", req.Id, target.ChatId, err)
+		}
+	}
+	return nil
 }
 
 type InitTelegramApproverOpts struct {
@@ -99,35 +99,45 @@ func InitTelegramApprover(opts InitTelegramApproverOpts) error {
 	return nil
 }
 
-func getHandler(serviceLogs chan<- common.ServiceLog) func(context.Context, *telegram.Bot, telegram.BotUpdate) {
-	return func(ctx context.Context, b *telegram.Bot, update telegram.BotUpdate) {
-		serviceLogs <- common.ServiceLog{config.LogLevelInfo, fmt.Sprintf("chat[%v] << %s", update.ChatId, update.Message)}
+func getHandler(serviceLogs chan<- common.ServiceLog) func(context.Context, *telegram.Bot, *telegram.Update) {
+	return func(ctx context.Context, b *telegram.Bot, update *telegram.Update) {
+		serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "chat[%v] << %s", update.ChatId, update.Message)
 		data := update.CallbackData
 		parts := strings.SplitN(data, ":", 2)
 		if len(parts) != 2 {
-			serviceLogs <- common.ServiceLog{config.LogLevelError, fmt.Sprintf("invalid callback data: %s", data)}
+			serviceLogs <- common.ServiceLogf(common.LogLevelError, "invalid callback data: %s", data)
 			return
 		}
 
 		action := parts[0]
 		requestId := parts[1]
 
-		val, err := RedisCache.Client.Get(requestId).Result()
+		val, err := Cache.Get(approvalRequestCachePrefix + requestId)
 		if err != nil {
-			serviceLogs <- common.ServiceLog{config.LogLevelError, fmt.Sprintf("failed to fetch request from Redis: %v", err)}
+			serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to fetch request from cache: %v", err)
 			return
 		}
-
-		var req ApprovalRequest
-		if err := json.Unmarshal([]byte(val), &req); err != nil {
-			serviceLogs <- common.ServiceLog{config.LogLevelError, fmt.Sprintf("failed to unmarshal request: %v", err)}
-			return
+		var response string
+		if val == "" {
+			response = "this request was not found"
+		} else if val == "approved" {
+			response = fmt.Sprintf("this request has already been approved")
+		} else if val == "rejected" {
+			response = fmt.Sprintf("this request has already been rejected")
+		} else if action == actionApprove {
+			if err := Cache.Set(approvalRequestCachePrefix+requestId, "approved", 0); err != nil {
+				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to set cache value: %v", err)
+			}
+			response = "this request has been approved"
+		} else if action == actionReject {
+			if err := Cache.Set(approvalRequestCachePrefix+requestId, "rejected", 0); err != nil {
+				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to set cache value: %v", err)
+			}
+			response = "this request has been rejected"
 		}
-
-		response := fmt.Sprintf("%s has %sd the request to run automation: %s", req.Approver, action, req.AutomationName)
 
 		if err := b.SendMessage(update.ChatId, response); err != nil {
-			serviceLogs <- common.ServiceLog{config.LogLevelError, fmt.Sprintf("failed to send confirmation message: %v", err)}
+			serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send confirmation message: %v", err)
 		}
 	}
 }

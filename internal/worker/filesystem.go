@@ -3,7 +3,6 @@ package worker
 import (
 	"fmt"
 	"opsicle/internal/common"
-	"opsicle/internal/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +20,7 @@ type startFilesystemQueueLoopOpts struct {
 	ProcessedPath      string
 	PollInterval       time.Duration
 	AutomationLogs     chan string
-	ServiceLogs        chan LogEntry
+	ServiceLogs        chan common.ServiceLog
 }
 
 func startFilesystemQueueLoop(opts startFilesystemQueueLoopOpts) error {
@@ -37,24 +36,24 @@ func startFilesystemQueueLoop(opts startFilesystemQueueLoopOpts) error {
 	isDone := false
 	go func() {
 		<-opts.Done
-		opts.ServiceLogs <- LogEntry{config.LogLevelInfo, "triggering exit sequence..."}
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "triggering exit sequence...")
 		isDone = true
 	}()
 	for !isDone {
-		opts.ServiceLogs <- LogEntry{config.LogLevelTrace, fmt.Sprintf("checking path[%s] for new automations...", opts.Path)}
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "checking path[%s] for new automations...", opts.Path)
 		latestFilename, err := getLatestFilename(opts.Path)
 		if err != nil {
-			opts.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to get the latest file: %s", err)}
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to get the latest file: %s", err)
 		} else {
 			if latestFilename == "" {
-				opts.ServiceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("no pending automations found at path[%s]", opts.Path)}
+				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "no pending automations found at path[%s]", opts.Path)
 			} else {
 				currentFile := filepath.Join(opts.Path, latestFilename)
 				fileToProcess := filepath.Join(opts.ProcessingPath, latestFilename)
 				fileAfterProcessing := filepath.Join(opts.ProcessedPath, latestFilename)
 				opts.AutomationsCounter.Add(1)
 				if err := os.Rename(currentFile, fileToProcess); err != nil {
-					opts.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to move file from path[%s] to path[%s]: %s", currentFile, fileToProcess, err)}
+					opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to move file from path[%s] to path[%s]: %s", currentFile, fileToProcess, err)
 					opts.AutomationsCounter.Done()
 				} else {
 					go func() {
@@ -62,24 +61,24 @@ func startFilesystemQueueLoop(opts startFilesystemQueueLoopOpts) error {
 						if err := opts.Handler(fileToProcess, opts.LogsPath); err == nil {
 							fmt.Println("no error")
 							if err := os.Rename(fileToProcess, fileAfterProcessing); err != nil {
-								opts.ServiceLogs <- LogEntry{config.LogLevelWarn, fmt.Sprintf("failed to move file at path[%s] to path[%s]", fileToProcess, fileAfterProcessing)}
+								opts.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "failed to move file at path[%s] to path[%s]", fileToProcess, fileAfterProcessing)
 							} else {
-								opts.ServiceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("moved file at path[%s] to path[%s]", fileToProcess, fileAfterProcessing)}
+								opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "moved file at path[%s] to path[%s]", fileToProcess, fileAfterProcessing)
 							}
 						} else {
 							fmt.Println("errored out")
 							if err := os.Rename(fileToProcess, currentFile); err != nil {
-								opts.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to move file from path[%s] to path[%s]: %s", fileToProcess, currentFile, err)}
+								opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to move file from path[%s] to path[%s]: %s", fileToProcess, currentFile, err)
 							}
 						}
 					}()
 				}
 			}
 		}
-		opts.ServiceLogs <- LogEntry{config.LogLevelDebug, fmt.Sprintf("waiting %v before next poll...", opts.PollInterval)}
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "waiting %v before next poll...", opts.PollInterval)
 		<-time.After(opts.PollInterval)
 	}
-	opts.ServiceLogs <- LogEntry{config.LogLevelInfo, "exitted execution loop gracefully"}
+	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "exitted execution loop gracefully")
 	return nil
 }
 

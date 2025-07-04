@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"opsicle/internal/common"
-	"opsicle/internal/config"
 	"opsicle/internal/integrations/telegram"
 
+	"github.com/go-telegram/bot/models"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -37,11 +37,21 @@ var Command = &cobra.Command{
 
 		telegramBot, err := telegram.New(telegram.NewOpts{
 			BotToken: telegramBotToken,
-			DefaultHandler: func(context context.Context, bot *telegram.Bot, update telegram.BotUpdate) {
-				serviceLogs <- common.ServiceLog{config.LogLevelInfo, fmt.Sprintf("received message['%s'] from chat[%v]", update.Message, update.ChatId)}
+			DefaultHandler: func(context context.Context, bot *telegram.Bot, update *telegram.Update) {
+				serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "received message['%s'] from chat[%v]", update.Message, update.ChatId)
+
+				okButton := &models.InlineKeyboardButton{
+					Text:         "Ok",
+					CallbackData: "ok",
+				}
+
+				markup := &models.InlineKeyboardMarkup{
+					InlineKeyboard: [][]models.InlineKeyboardButton{{*okButton}},
+				}
 				if err := bot.SendMessage(
 					update.ChatId,
 					fmt.Sprintf("hello, you are in chat `%v`", update.ChatId),
+					markup,
 				); err != nil {
 					logrus.Errorf("failed to send message: %s", err)
 				}

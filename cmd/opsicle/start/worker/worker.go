@@ -3,7 +3,6 @@ package worker
 import (
 	"fmt"
 	"opsicle/internal/common"
-	"opsicle/internal/config"
 	"opsicle/internal/worker"
 	"os"
 	"os/signal"
@@ -25,6 +24,7 @@ func init() {
 		"the url of the controller",
 	)
 	viper.BindPFlag(currentFlag, Command.Flags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 
 	currentFlag = "filesystem-path"
 	Command.Flags().StringP(
@@ -34,13 +34,14 @@ func init() {
 		"path to a directory containing automations",
 	)
 	viper.BindPFlag(currentFlag, Command.Flags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 
 	currentFlag = "runtime"
 	Command.Flags().StringP(
 		currentFlag,
 		"r",
-		config.RuntimeDocker,
-		fmt.Sprintf("runtime to use, one of ['%s']", strings.Join(config.Runtimes, "', '")),
+		common.RuntimeDocker,
+		fmt.Sprintf("runtime to use, one of ['%s']", strings.Join(common.Runtimes, "', '")),
 	)
 
 	currentFlag = "poll-interval"
@@ -51,6 +52,7 @@ func init() {
 		"interval between polls",
 	)
 	viper.BindPFlag(currentFlag, Command.Flags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 }
 
 var Command = &cobra.Command{
@@ -74,27 +76,27 @@ var Command = &cobra.Command{
 		if source == "" {
 			return fmt.Errorf("failed to identify a worker mode, specify only the controller url or the filesystem path")
 		}
-		logChannel := make(chan worker.LogEntry, 64)
+		serviceLogs := make(chan common.ServiceLog, 64)
 		go func() {
 			for {
-				logEntry, ok := <-logChannel
+				serviceLog, ok := <-serviceLogs
 				if !ok {
 					return
 				}
 				log := logrus.Info
-				switch logEntry.Level {
-				case config.LogLevelTrace:
+				switch serviceLog.Level {
+				case common.LogLevelTrace:
 					log = logrus.Trace
-				case config.LogLevelDebug:
+				case common.LogLevelDebug:
 					log = logrus.Debug
-				case config.LogLevelInfo:
+				case common.LogLevelInfo:
 					log = logrus.Info
-				case config.LogLevelWarn:
+				case common.LogLevelWarn:
 					log = logrus.Warn
-				case config.LogLevelError:
+				case common.LogLevelError:
 					log = logrus.Error
 				}
-				log(logEntry.Message)
+				log(serviceLog.Message)
 			}
 		}()
 		automationLogs := make(chan string, 64)
@@ -118,7 +120,7 @@ var Command = &cobra.Command{
 		workerInstance := worker.NewWorker(worker.NewWorkerOpts{
 			AutomationLogs: &automationLogs,
 			DoneChannel:    doneChannel,
-			ServiceLogs:    &logChannel,
+			ServiceLogs:    &serviceLogs,
 			Mode:           mode,
 			PollInterval:   pollInterval,
 			Runtime:        runtime,

@@ -14,6 +14,7 @@ func init() {
 		"specifies the path to the database migrations",
 	)
 	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 }
 
 var Command = &cobra.Command{

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"opsicle/internal/automations"
 	"opsicle/internal/common"
-	"opsicle/internal/config"
 	"os"
 	"path"
 	"path/filepath"
@@ -23,7 +22,7 @@ type RunAutomationOpts struct {
 	DockerApiVersion *string
 	Spec             *automations.Automation
 	AutomationLogs   chan string
-	ServiceLogs      chan LogEntry
+	ServiceLogs      chan common.ServiceLog
 	Done             *chan common.Done
 }
 
@@ -98,7 +97,7 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 	}
 
 	for _, phase := range spec.Phases {
-		spec.ServiceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("phase[%s]: starting", phase.Name)}
+		spec.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "phase[%s]: starting", phase.Name)
 
 		var timeout time.Duration
 		if phase.Timeout == 0 {
@@ -141,7 +140,7 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 				DockerClient:   dockerClient,
 				DoneChannel:    done,
 			}); err != nil {
-				spec.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("phase[%s]: failed to stream logs for container[%s]: %s", phase.Name, displayContainerId, err)}
+				spec.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "phase[%s]: failed to stream logs for container[%s]: %s", phase.Name, displayContainerId, err)
 			}
 		}()
 
@@ -155,7 +154,7 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 		waiter.Add(1)
 		go func() {
 			defer waiter.Done()
-			spec.ServiceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("phase[%s]: started streaming logs for container[%s]", phase.Name, displayContainerId)}
+			spec.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "phase[%s]: started streaming logs for container[%s]", phase.Name, displayContainerId)
 			var phaseLogsMutex sync.Mutex
 			for {
 				containerLog, ok := <-containerLogs
@@ -178,26 +177,26 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 			for !isDone {
 				select {
 				case <-phaseCtx.Done():
-					spec.ServiceLogs <- LogEntry{config.LogLevelWarn, fmt.Sprintf("phase[%s]: timed out, killing container[%s]...", phase.Name, displayContainerId)}
+					spec.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "phase[%s]: timed out, killing container[%s]...", phase.Name, displayContainerId)
 					if err := dockerClient.ContainerKill(context.Background(), containerInfo.ID, "SIGKILL"); err != nil {
-						spec.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("phase[%s]: timed out but container[%s] failed to be killed", phase.Name, displayContainerId)}
+						spec.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "phase[%s]: timed out but container[%s] failed to be killed", phase.Name, displayContainerId)
 					} else {
-						spec.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("phase[%s] timed out and container[%s] was killed", phase.Name, displayContainerId)}
+						spec.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "phase[%s] timed out and container[%s] was killed", phase.Name, displayContainerId)
 					}
 				case err := <-containerErrors:
 					if err != nil {
-						spec.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("container[%s]: encountered error: %s", displayContainerId, err)}
+						spec.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "container[%s]: encountered error: %s", displayContainerId, err)
 					}
 				case <-done:
 					isDone = true
 				case status := <-containerResponses:
 					if status.StatusCode != 0 {
-						spec.ServiceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("container[%s]: exited with status %d", displayContainerId, status.StatusCode)}
+						spec.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "container[%s]: exited with status %d", displayContainerId, status.StatusCode)
 						isDone = true
 					}
 				}
 			}
-			spec.ServiceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("phase[%s]: container[%s] is done", phase.Name, displayContainerId)}
+			spec.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "phase[%s]: container[%s] is done", phase.Name, displayContainerId)
 			time.After(100 * time.Second)
 			close(containerLogs)
 		}()

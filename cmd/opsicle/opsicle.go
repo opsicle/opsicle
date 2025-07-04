@@ -6,6 +6,7 @@ import (
 	"opsicle/cmd/opsicle/run"
 	"opsicle/cmd/opsicle/start"
 	"opsicle/cmd/opsicle/validate"
+	"opsicle/internal/common"
 	"opsicle/internal/config"
 	"os"
 	"strings"
@@ -26,9 +27,10 @@ func init() {
 		currentFlag,
 		"l",
 		"info",
-		fmt.Sprintf("sets the log level (one of [%s])", strings.Join(config.LogLevels, ", ")),
+		fmt.Sprintf("sets the log level (one of [%s])", strings.Join(common.LogLevels, ", ")),
 	)
 	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 
 	currentFlag = "config-path"
 	Command.PersistentFlags().StringP(
@@ -38,20 +40,21 @@ func init() {
 		"defines the location of the global configuration used",
 	)
 	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 
 	logrus.SetOutput(os.Stderr)
 	cobra.OnInitialize(func() {
 		logLevel := viper.GetString("log-level")
 		switch logLevel {
-		case config.LogLevelTrace:
+		case common.LogLevelTrace:
 			logrus.SetLevel(logrus.TraceLevel)
-		case config.LogLevelDebug:
+		case common.LogLevelDebug:
 			logrus.SetLevel(logrus.DebugLevel)
-		case config.LogLevelInfo:
+		case common.LogLevelInfo:
 			logrus.SetLevel(logrus.InfoLevel)
-		case config.LogLevelWarn:
+		case common.LogLevelWarn:
 			logrus.SetLevel(logrus.WarnLevel)
-		case config.LogLevelError:
+		case common.LogLevelError:
 			logrus.SetLevel(logrus.ErrorLevel)
 		}
 		logrus.SetFormatter(&logrus.TextFormatter{

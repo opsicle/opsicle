@@ -1,7 +1,8 @@
 package common
 
 import (
-	"opsicle/internal/config"
+	"fmt"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -20,6 +21,13 @@ type Metadata struct {
 	Labels      map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 }
 
+type Cache interface {
+	Set(key string, value string, ttl time.Duration) (err error)
+	Get(key string) (value string, err error)
+	Scan(prefix string) (keys []string, err error)
+	Del(key string) (err error)
+}
+
 type AutomationLog struct {
 	Source  string `json:"source"`
 	Message string `json:"message"`
@@ -30,27 +38,34 @@ type ServiceLog struct {
 	Message string `json:"message"`
 }
 
+func ServiceLogf(level, text string, f ...any) ServiceLog {
+	return ServiceLog{
+		Level:   level,
+		Message: fmt.Sprintf(text, f...),
+	}
+}
+
 func StartServiceLogLoop(serviceLogs chan ServiceLog) {
 	go func() {
 		for {
-			logEntry, ok := <-serviceLogs
+			serviceLog, ok := <-serviceLogs
 			if !ok {
 				return
 			}
 			log := logrus.Info
-			switch logEntry.Level {
-			case config.LogLevelTrace:
+			switch serviceLog.Level {
+			case LogLevelTrace:
 				log = logrus.Trace
-			case config.LogLevelDebug:
+			case LogLevelDebug:
 				log = logrus.Debug
-			case config.LogLevelInfo:
+			case LogLevelInfo:
 				log = logrus.Info
-			case config.LogLevelWarn:
+			case LogLevelWarn:
 				log = logrus.Warn
-			case config.LogLevelError:
+			case LogLevelError:
 				log = logrus.Error
 			}
-			log(logEntry.Message)
+			log(serviceLog.Message)
 		}
 	}()
 }

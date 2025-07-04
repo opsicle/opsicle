@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"opsicle/internal/automations"
 	"opsicle/internal/common"
-	"opsicle/internal/config"
 	"os"
 	"path"
 	"path/filepath"
@@ -35,7 +34,7 @@ type Worker struct {
 	FilesystemPath string
 
 	// ServiceLogs is a channel where service-level logs are emitted to
-	ServiceLogs *chan LogEntry
+	ServiceLogs *chan common.ServiceLog
 
 	// AutomationLogs is a channel where logs from the executed automation are
 	// emitted to
@@ -52,10 +51,10 @@ type Worker struct {
 }
 
 func (w *Worker) Start() error {
-	var serviceLogs chan LogEntry
+	var serviceLogs chan common.ServiceLog
 	if w.ServiceLogs == nil {
-		serviceLogs <- LogEntry{config.LogLevelWarn, "worker is starting with a noop service log, messages may be missed"}
-		serviceLogs = make(chan LogEntry, 128)
+		serviceLogs <- common.ServiceLogf(common.LogLevelWarn, "worker is starting with a noop service log, messages may be missed")
+		serviceLogs = make(chan common.ServiceLog, 128)
 		defer close(serviceLogs)
 		go func() { // noop loop if log channel isn't specified
 			for {
@@ -70,7 +69,7 @@ func (w *Worker) Start() error {
 	}
 	var automationLogs chan string
 	if w.AutomationLogs == nil {
-		serviceLogs <- LogEntry{config.LogLevelWarn, "worker is starting with a noop automation log, messages may be missed"}
+		serviceLogs <- common.ServiceLogf(common.LogLevelWarn, "worker is starting with a noop automation log, messages may be missed")
 		automationLogs = make(chan string, 128)
 		defer close(automationLogs)
 		go func() { // noop loop if log channel isn't specified
@@ -89,7 +88,7 @@ func (w *Worker) Start() error {
 	lifecycleWaiter.Add(1)
 	go func() {
 		defer lifecycleWaiter.Done()
-		serviceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("worker is starting in mode[%s] using runtime[%s]", w.Mode, w.Runtime)}
+		serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "worker is starting in mode[%s] using runtime[%s]", w.Mode, w.Runtime)
 		switch w.Mode {
 		case ModeController:
 			if strings.Index(w.ControllerUrl, "://") < 0 {
@@ -101,9 +100,9 @@ func (w *Worker) Start() error {
 			if err != nil {
 				return
 			}
-			serviceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("starting polling from url[%s]", controllerUrl.String())}
+			serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "starting polling from url[%s]", controllerUrl.String())
 			for {
-				serviceLogs <- LogEntry{config.LogLevelDebug, fmt.Sprintf("querying url[%s] for new automations...", controllerUrl.String())}
+				serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "querying url[%s] for new automations...", controllerUrl.String())
 
 				<-time.After(w.PollInterval)
 			}
@@ -126,20 +125,20 @@ func (w *Worker) Start() error {
 				}
 				directoryToWatch = filepath.Join(baseDir, directoryToWatch)
 			}
-			serviceLogs <- LogEntry{config.LogLevelInfo, fmt.Sprintf("using path[%s] as the queue", directoryToWatch)}
+			serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "using path[%s] as the queue", directoryToWatch)
 			directoryOfProcessedFiles := filepath.Join(directoryToWatch, "/.opsicle.done")
 			if err := os.MkdirAll(directoryOfProcessedFiles, os.ModePerm); err != nil {
-				serviceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to ensure directory at path[%s]: %s", directoryOfProcessedFiles, err)}
+				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to ensure directory at path[%s]: %s", directoryOfProcessedFiles, err)
 				break
 			}
 			directoryOfProcessingFiles := filepath.Join(directoryToWatch, "/.opsicle.doing")
 			if err := os.MkdirAll(directoryOfProcessingFiles, os.ModePerm); err != nil {
-				serviceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to ensure directory at path[%s]: %s", directoryOfProcessingFiles, err)}
+				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to ensure directory at path[%s]: %s", directoryOfProcessingFiles, err)
 				break
 			}
 			directoryOfLogs := filepath.Join(directoryToWatch, "/.opsicle.logs")
 			if err := os.MkdirAll(directoryOfLogs, os.ModePerm); err != nil {
-				serviceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to ensure directory at path[%s]: %s", directoryOfProcessingFiles, err)}
+				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to ensure directory at path[%s]: %s", directoryOfProcessingFiles, err)
 				break
 			}
 
@@ -149,26 +148,26 @@ func (w *Worker) Start() error {
 				AutomationsCounter: &ongoingAutomations,
 				Done:               w.DoneChannel,
 				Handler: func(nextAutomation string, logsPath string) error {
-					serviceLogs <- LogEntry{config.LogLevelDebug, fmt.Sprintf("loading automation from path[%s]...", nextAutomation)}
+					serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "loading automation from path[%s]...", nextAutomation)
 					automationInstance, err := automations.LoadAutomationFromFile(nextAutomation)
 					if err != nil {
-						serviceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to load automation from path[%s]: %s", nextAutomation, err)}
+						serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to load automation from path[%s]: %s", nextAutomation, err)
 						return fmt.Errorf("failed to load automation from path[%s]: %s", nextAutomation, err)
 					}
-					serviceLogs <- LogEntry{config.LogLevelDebug, fmt.Sprintf("running automation from path[%s]...", nextAutomation)}
+					serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "running automation from path[%s]...", nextAutomation)
 					err = RunAutomation(RunAutomationOpts{
 						Spec:           automationInstance,
 						AutomationLogs: automationLogs,
 						ServiceLogs:    serviceLogs,
 					})
 					if err != nil {
-						serviceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failed to run automation from path[%s]: %s", nextAutomation, err)}
+						serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to run automation from path[%s]: %s", nextAutomation, err)
 						return fmt.Errorf("failed to run automation from path[%s]: %s", nextAutomation, err)
 					}
 					// for _, phase := range automationInstance.Spec.Phases {
 
 					// }
-					serviceLogs <- LogEntry{config.LogLevelDebug, fmt.Sprintf("successfully processed automation from path[%s]...", nextAutomation)}
+					serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "successfully processed automation from path[%s]...", nextAutomation)
 					return nil
 				},
 				LogsPath:       directoryOfLogs,
@@ -178,7 +177,7 @@ func (w *Worker) Start() error {
 				PollInterval:   w.PollInterval,
 				ServiceLogs:    serviceLogs,
 			}); err != nil {
-				serviceLogs <- LogEntry{config.LogLevelError, fmt.Sprintf("failure in execution loop: %s", err)}
+				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failure in execution loop: %s", err)
 			}
 
 			ongoingAutomations.Wait()
@@ -209,7 +208,7 @@ type NewWorkerOpts struct {
 
 	// ServiceLogs when defined will be the channel to which
 	// **function** logs are emitted to
-	ServiceLogs *chan LogEntry
+	ServiceLogs *chan common.ServiceLog
 
 	// Source defines the source path/url depending on the
 	// mode the worker is running in
