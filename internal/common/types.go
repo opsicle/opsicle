@@ -2,7 +2,6 @@ package common
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -19,13 +18,6 @@ type Metadata struct {
 	Name        string            `json:"name" yaml:"name"`
 	Annotations map[string]string `json:"annotations,omitempty" yaml:"annotations,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
-}
-
-type Cache interface {
-	Set(key string, value string, ttl time.Duration) (err error)
-	Get(key string) (value string, err error)
-	Scan(prefix string) (keys []string, err error)
-	Del(key string) (err error)
 }
 
 type AutomationLog struct {

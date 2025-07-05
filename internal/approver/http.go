@@ -88,31 +88,41 @@ func StartHttpServer(opts StartHttpServerOpts) error {
 			return
 		}
 
-		log(common.LogLevelDebug, fmt.Sprintf("storing approvalRequest[%s]...", req.Id))
-		if err = Cache.Set(approvalRequestCachePrefix+req.Id, "0", 0); err != nil {
-			log(common.LogLevelError, fmt.Sprintf("failed to store approvalRequest[%s]: %s", req.Id, err))
+		if err := CreateApprovalRequest(req); err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to create approval request: %s", err))
 			res, _ := json.Marshal(httpResponse{
-				Message: "failed to storing approval request",
+				Message: "failed to create approval request in persistent data",
+				Success: false,
+			})
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(res)
+			return
+		}
+
+		log(common.LogLevelDebug, fmt.Sprintf("sending approvalRequest[%s]...", req.Spec.Id))
+		notificationId, notifications, err := Notifier.SendApproval(req)
+		if err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to send messages for approvalRequest[%v]: %s", req.Spec.Id, err))
+			res, _ := json.Marshal(httpResponse{
+				Message: "failed to send approval request message to telegram",
 				Success: false,
 			})
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write(res)
 			return
 		}
+		log(common.LogLevelInfo, fmt.Sprintf("sent %v notifications for approvalRequest[%s]", len(notifications), req.Spec.Id))
 
-		for _, target := range req.Telegram {
-			log(common.LogLevelDebug, fmt.Sprintf("sending approval to chat[%v]...", target.ChatId))
-			err = TelegramApprover.SendApproval(req)
-			if err != nil {
-				log(common.LogLevelError, fmt.Sprintf("failed to send approval request message[%v]: %s", target.ChatId, err))
-				res, _ := json.Marshal(httpResponse{
-					Message: "failed to send approval request message to telegram",
-					Success: false,
-				})
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write(res)
-				return
-			}
+		req.Spec.NotificationId = &notificationId
+		if err := UpdateApprovalRequest(req); err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to update approval request: %s", err))
+			res, _ := json.Marshal(httpResponse{
+				Message: "failed to update approval request in persistent data",
+				Success: false,
+			})
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(res)
+			return
 		}
 
 		res, _ := json.Marshal(httpResponse{

@@ -73,6 +73,7 @@ func isTextMessage(update *models.Update) bool {
 
 func serializeCallbackQuery(update *models.Update) *Update {
 	chatId := update.CallbackQuery.Message.Message.Chat.ID
+	messageId := update.CallbackQuery.Message.Message.ID
 	senderId := update.CallbackQuery.From.ID
 	senderUsername := update.CallbackQuery.From.Username
 	callbackData := update.CallbackQuery.Data
@@ -81,6 +82,7 @@ func serializeCallbackQuery(update *models.Update) *Update {
 		CallbackData:   callbackData,
 		CallbackId:     callbackId,
 		ChatId:         chatId,
+		MessageId:      messageId,
 		SenderId:       senderId,
 		SenderUsername: senderUsername,
 	}

@@ -89,13 +89,12 @@ var Command = &cobra.Command{
 		}
 
 		isTelegramEnabled := viper.GetBool("telegram-enabled")
-		telegramDone := make(chan common.Done)
 		if isTelegramEnabled {
 			telegramBotToken := viper.GetString("telegram-bot-token")
 			if telegramBotToken == "" {
 				return fmt.Errorf("failed to receive a telegram bot token")
 			}
-			if err := approver.InitTelegramApprover(approver.InitTelegramApproverOpts{
+			if err := approver.InitTelegramNotifier(approver.InitTelegramNotifierOpts{
 				BotToken: telegramBotToken,
 				ChatMap: map[string]int64{
 					"main": 267230627,
@@ -104,9 +103,9 @@ var Command = &cobra.Command{
 			}); err != nil {
 				return fmt.Errorf("failed to initialise telegram client: %s", err)
 			}
-			logrus.Infof("starting telegram client...")
-			go approver.TelegramApprover.Start(telegramDone)
 		}
+
+		go approver.Notifier.StartListening()
 
 		httpServerDone := make(chan common.Done)
 		logrus.Infof("starting http client...")

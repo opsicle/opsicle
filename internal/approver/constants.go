@@ -1,7 +1,9 @@
 package approver
 
+type Action string
+
 const (
-	approvalRequestCachePrefix = "approvreq:"
-	actionApprove              = "approve"
-	actionReject               = "reject"
+	approvalRequestCachePrefix        = "approvreq"
+	ActionApprove              Action = "approve"
+	ActionReject               Action = "reject"
 )

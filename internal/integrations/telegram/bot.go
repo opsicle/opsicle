@@ -24,7 +24,62 @@ type Bot struct {
 	// the centralised logger
 	ServiceLogs chan<- common.ServiceLog
 
+	// SubHandlers are
+	SubHandlers []Handler
+
 	Raw *bot.Bot
+}
+
+func (b *Bot) UpdateMessage(chatId int64, messageId int, newMessage string, markup ...*models.ReplyMarkup) error {
+	b.ServiceLogs <- common.ServiceLogf(
+		common.LogLevelDebug,
+		"chat[%v].updateMessage[%v] '%s' (markup: %v)",
+		chatId,
+		messageId,
+		newMessage,
+		len(markup) > 0,
+	)
+	editMessageParameters := &bot.EditMessageTextParams{
+		ChatID:    chatId,
+		MessageID: messageId,
+		ParseMode: "MarkdownV2",
+		Text:      newMessage,
+	}
+	if markup[0] == nil {
+		editMessageParameters.ReplyMarkup = &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{}}
+	} else {
+		editMessageParameters.ReplyMarkup = markup[0]
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := b.Client.EditMessageText(ctx, editMessageParameters); err != nil {
+		return fmt.Errorf("failed to edit text of message[%v] in chat[%v]: %s", messageId, chatId, err)
+	}
+	return nil
+}
+
+func (b *Bot) ReplyMessage(chatId int64, replyMessageId int, message string, markup ...models.ReplyMarkup) error {
+	b.ServiceLogs <- common.ServiceLogf(
+		common.LogLevelDebug,
+		"chat[%v] >> '%s'", chatId, message,
+	)
+	messageParameters := &bot.SendMessageParams{
+		ChatID: chatId,
+		Text:   message,
+		ReplyParameters: &models.ReplyParameters{
+			ChatID:    chatId,
+			MessageID: replyMessageId,
+		},
+		ParseMode: "MarkdownV2",
+	}
+	if len(markup) > 0 {
+		messageParameters.ReplyMarkup = markup[0]
+	}
+	ctx := context.Background()
+	if _, err := b.Client.SendMessage(ctx, messageParameters); err != nil {
+		return fmt.Errorf("failed to send message: %s", err)
+	}
+	return nil
 }
 
 func (b *Bot) SendMessage(chatId int64, message string, markup ...models.ReplyMarkup) error {

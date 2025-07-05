@@ -33,7 +33,7 @@ func (i *Instance) Get(key string) (string, error) {
 		return "", fmt.Errorf("failed to get key[%s]: %s", key, response.Err())
 	}
 	i.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "get key[%s] response: %s", key, response.String())
-	value := response.String()
+	value := response.Val()
 	return value, nil
 }
 
