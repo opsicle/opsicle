@@ -2,9 +2,7 @@ package approver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"opsicle/internal/common"
 	"time"
@@ -25,113 +23,10 @@ func StartHttpServer(opts StartHttpServerOpts) error {
 
 	handler.Use(getRequestLoggerMiddleware(opts.ServiceLogs))
 
-	handler.HandleFunc("/approval", func(w http.ResponseWriter, r *http.Request) {
-		log := r.Context().Value("logger").(requestLogger)
-		keys, err := Cache.Scan(approvalRequestCachePrefix)
-		if err != nil {
-			log(common.LogLevelError, fmt.Sprintf("failed to retrieve approval requests: %s", err))
-			res, _ := json.Marshal(httpResponse{
-				Message: "failed to retrieve approvals",
-				Success: false,
-			})
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(res)
-			return
-		}
-
-		if len(keys) == 0 {
-			res, _ := json.Marshal(httpResponse{
-				Message: "no approval requests found",
-				Success: false,
-			})
-			w.WriteHeader(http.StatusNotFound)
-			w.Write(res)
-			return
-		}
-
-		res, _ := json.Marshal(httpResponse{
-			Data:    keys,
-			Success: true,
-		})
-		w.WriteHeader(http.StatusNotFound)
-		w.Write(res)
-
-	}).Methods(http.MethodGet)
-
-	handler.HandleFunc("/approval", func(w http.ResponseWriter, r *http.Request) {
-		var req ApprovalRequest
-		log := r.Context().Value("logger").(requestLogger)
-
-		log(common.LogLevelDebug, "reading request body...")
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			log(common.LogLevelError, fmt.Sprintf("failed to read request body: %s", err))
-			res, _ := json.Marshal(httpResponse{
-				Message: "failed to read request body",
-				Success: false,
-			})
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write(res)
-			return
-		}
-
-		log(common.LogLevelDebug, "parsing request body...")
-		err = json.Unmarshal(body, &req)
-		if err != nil {
-			log(common.LogLevelError, fmt.Sprintf("failed to parse request body: %s", err))
-			res, _ := json.Marshal(httpResponse{
-				Message: "failed to parse request body",
-				Success: false,
-			})
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write(res)
-			return
-		}
-
-		if err := CreateApprovalRequest(req); err != nil {
-			log(common.LogLevelError, fmt.Sprintf("failed to create approval request: %s", err))
-			res, _ := json.Marshal(httpResponse{
-				Message: "failed to create approval request in persistent data",
-				Success: false,
-			})
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(res)
-			return
-		}
-
-		log(common.LogLevelDebug, fmt.Sprintf("sending approvalRequest[%s]...", req.Spec.Id))
-		notificationId, notifications, err := Notifier.SendApproval(req)
-		if err != nil {
-			log(common.LogLevelError, fmt.Sprintf("failed to send messages for approvalRequest[%v]: %s", req.Spec.Id, err))
-			res, _ := json.Marshal(httpResponse{
-				Message: "failed to send approval request message to telegram",
-				Success: false,
-			})
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write(res)
-			return
-		}
-		log(common.LogLevelInfo, fmt.Sprintf("sent %v notifications for approvalRequest[%s]", len(notifications), req.Spec.Id))
-
-		req.Spec.NotificationId = &notificationId
-		if err := UpdateApprovalRequest(req); err != nil {
-			log(common.LogLevelError, fmt.Sprintf("failed to update approval request: %s", err))
-			res, _ := json.Marshal(httpResponse{
-				Message: "failed to update approval request in persistent data",
-				Success: false,
-			})
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(res)
-			return
-		}
-
-		res, _ := json.Marshal(httpResponse{
-			Message: "ok",
-			Success: true,
-		})
-		w.WriteHeader(http.StatusOK)
-		w.Write(res)
-	}).Methods(http.MethodPost)
+	handler.HandleFunc("/approval-request", getListApprovalRequestsHandler()).Methods(http.MethodGet)
+	handler.HandleFunc("/approval-request/{requestId}/{requestUuid}", getGetApprovalRequestHandler()).Methods(http.MethodGet)
+	handler.HandleFunc("/approval/{approvalId}", getGetApprovalHandler()).Methods(http.MethodGet)
+	handler.HandleFunc("/approval-request", getCreateApprovalRequestHandler()).Methods(http.MethodPost)
 
 	server := http.Server{
 		Addr:              opts.Addr,
@@ -155,14 +50,6 @@ func StartHttpServer(opts StartHttpServerOpts) error {
 	}
 	return nil
 }
-
-type httpResponse struct {
-	Data    any    `json:"data"`
-	Message string `json:"message"`
-	Success bool   `json:"success"`
-}
-
-type requestLogger func(string, string)
 
 func getRequestLoggerMiddleware(serviceLogs chan<- common.ServiceLog) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

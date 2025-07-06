@@ -240,7 +240,7 @@ var Command = &cobra.Command{
 		}
 
 		logrus.Infof("dispatching approval request messages...")
-		notificationId, sentApprovals, err := approver.Notifier.SendApproval(approvalRequest)
+		notificationId, sentApprovals, err := approver.Notifier.SendApprovalRequest(approvalRequest)
 		if err != nil {
 			return fmt.Errorf("failed to send an approval request message: %s", err)
 		}

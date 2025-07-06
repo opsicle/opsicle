@@ -11,7 +11,7 @@ const (
 var Notifier notifier
 
 type notifier interface {
-	SendApproval(req ApprovalRequest) (notificationId string, notifications []notificationMessage, err error)
+	SendApprovalRequest(req ApprovalRequest) (notificationId string, notifications []notificationMessage, err error)
 	StartListening()
 	Stop()
 }

@@ -79,9 +79,10 @@ var Command = &cobra.Command{
 		isRedisEnabled := viper.GetBool("redis-enabled")
 		if isRedisEnabled {
 			if err := approver.InitRedisCache(approver.InitRedisCacheOpts{
-				Addr:     viper.GetString("redis-addr"),
-				Username: viper.GetString("redis-username"),
-				Password: viper.GetString("redis-password"),
+				Addr:        viper.GetString("redis-addr"),
+				Username:    viper.GetString("redis-username"),
+				Password:    viper.GetString("redis-password"),
+				ServiceLogs: serviceLogs,
 			}); err != nil {
 				return fmt.Errorf("failed to initialise redis cache: %s", err)
 			}
@@ -105,6 +106,9 @@ var Command = &cobra.Command{
 			}
 		}
 
+		if approver.Notifier == nil {
+			return fmt.Errorf("failed to identify a notifier")
+		}
 		go approver.Notifier.StartListening()
 
 		httpServerDone := make(chan common.Done)

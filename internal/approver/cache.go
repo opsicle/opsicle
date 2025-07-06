@@ -1,6 +1,7 @@
 package approver
 
 import (
+	"strings"
 	"time"
 )
 
@@ -11,4 +12,16 @@ type cache interface {
 	Get(key string) (value string, err error)
 	Scan(prefix string) (keys []string, err error)
 	Del(key string) (err error)
+}
+
+func CreateApprovalCacheKey(requestIdentifiers ...string) string {
+	cacheKeys := []string{approvalCachePrefix}
+	cacheKeys = append(cacheKeys, requestIdentifiers...)
+	return strings.Join(cacheKeys, ":")
+}
+
+func CreateApprovalRequestCacheKey(requestIdentifiers ...string) string {
+	cacheKeys := []string{approvalRequestCachePrefix}
+	cacheKeys = append(cacheKeys, requestIdentifiers...)
+	return strings.Join(cacheKeys, ":")
 }

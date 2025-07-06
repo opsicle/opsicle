@@ -2,16 +2,13 @@ package approver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"opsicle/internal/common"
 	"opsicle/internal/integrations/telegram"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-telegram/bot"
-	"github.com/go-telegram/bot/models"
 	"github.com/sirupsen/logrus"
 )
 
@@ -36,7 +33,7 @@ func (t *telegramApprover) Stop() {
 	t.Done <- common.Done{}
 }
 
-func (t *telegramApprover) SendApproval(req ApprovalRequest) (string, []notificationMessage, error) {
+func (t *telegramApprover) SendApprovalRequest(req ApprovalRequest) (string, []notificationMessage, error) {
 	text := fmt.Sprintf(
 		"⚠️ Approval request\nID: `%s`\nMessage: `%s`\nRequester: %s \\(`%s`\\)",
 		bot.EscapeMarkdown(req.Spec.Id),
@@ -103,7 +100,7 @@ func InitTelegramNotifier(opts InitTelegramNotifierOpts) error {
 	var err error
 	var defaultHandler telegram.Handler
 	if opts.DefaultHandler == nil {
-		defaultHandler = getHandler(opts.ServiceLogs)
+		defaultHandler = getDefaultHandler(opts.ServiceLogs)
 	} else {
 		defaultHandler = opts.DefaultHandler
 	}
@@ -121,88 +118,4 @@ func InitTelegramNotifier(opts InitTelegramNotifierOpts) error {
 		ServiceLogs: opts.ServiceLogs,
 	}
 	return nil
-}
-
-func getHandler(
-	serviceLogs chan<- common.ServiceLog,
-) func(context.Context, *telegram.Bot, *telegram.Update) {
-	return func(ctx context.Context, b *telegram.Bot, update *telegram.Update) {
-		serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "chat[%v] << %s", update.ChatId, update.Message)
-		if update.CallbackData == "" {
-			o, _ := json.MarshalIndent(update, "", "  ")
-			serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "received non-callback data:\n%s", string(o))
-			if err := b.ReplyMessage(update.ChatId, update.MessageId, "🙇🏼 Apologies, that's beyond my paygrade"); err != nil {
-				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
-			}
-			return
-		}
-		action, notificationId, requestId, err := ParseTelegramApprovalCallbackData(update.CallbackData)
-		if err != nil {
-			serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to parse callback: %s", err)
-			if err := b.ReplyMessage(update.ChatId, update.MessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
-				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
-			}
-			return
-		}
-
-		val, err := Cache.Get(CreateCacheKey(notificationId, requestId))
-		if err != nil {
-			serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to fetch request from cache: %v", err)
-			return
-		}
-		var response string
-		if val == "" {
-			response = "this request was not found"
-		} else if val == "approved" {
-			response = fmt.Sprintf("this request has already been approved")
-		} else if val == "rejected" {
-			response = fmt.Sprintf("this request has already been rejected")
-		} else if action == ActionApprove {
-			if err := Cache.Set(approvalRequestCachePrefix+requestId, "approved", 0); err != nil {
-				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to set cache value: %v", err)
-			}
-			response = "this request has been approved"
-		} else if action == ActionReject {
-			if err := Cache.Set(approvalRequestCachePrefix+requestId, "rejected", 0); err != nil {
-				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to set cache value: %v", err)
-			}
-			response = "this request has been rejected"
-		}
-
-		if err := b.SendMessage(update.ChatId, response); err != nil {
-			serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send confirmation message: %v", err)
-		}
-	}
-}
-
-func createTelegramApprovalKeyboard(approvalData, rejectionData string) models.ReplyMarkup {
-	return &models.InlineKeyboardMarkup{
-		InlineKeyboard: [][]models.InlineKeyboardButton{{
-			models.InlineKeyboardButton{
-				Text:         "Approve",
-				CallbackData: approvalData,
-			},
-			models.InlineKeyboardButton{
-				Text:         "Reject",
-				CallbackData: rejectionData,
-			},
-		}},
-	}
-}
-
-func createTelegramApprovalCallbackData(action Action, notificationId string, requestId string) (callbackData string) {
-	callbackData = fmt.Sprintf("%s:%s:%s", action, notificationId, requestId)
-	return
-}
-
-func ParseTelegramApprovalCallbackData(callbackData string) (action Action, notificationId string, requestId string, err error) {
-	splitCallbackData := strings.Split(callbackData, ":")
-	if len(splitCallbackData) != 3 {
-		return "", "", "", fmt.Errorf("failed to parse callback data: expected [{action}:{notificationId}:{requestId}] but received callbackData[%s]", callbackData)
-	}
-	action = Action(splitCallbackData[0])
-	notificationId = splitCallbackData[1]
-	requestId = splitCallbackData[2]
-	err = nil
-	return
 }

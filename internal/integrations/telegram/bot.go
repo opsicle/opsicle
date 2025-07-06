@@ -30,6 +30,10 @@ type Bot struct {
 	Raw *bot.Bot
 }
 
+func (b *Bot) EscapeMarkdown(input string) string {
+	return bot.EscapeMarkdown(input)
+}
+
 func (b *Bot) UpdateMessage(chatId int64, messageId int, newMessage string, markup ...*models.ReplyMarkup) error {
 	b.ServiceLogs <- common.ServiceLogf(
 		common.LogLevelDebug,

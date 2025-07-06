@@ -26,5 +26,5 @@ type ApprovalSpec struct {
 type TelegramResponseSpec struct {
 	ChatId   int64  `json:"chatId" yaml:"chatId"`
 	Username string `json:"username" yaml:"username"`
-	UserId   string `json:"userId" yaml:"userId"`
+	UserId   int64  `json:"userId" yaml:"userId"`
 }
