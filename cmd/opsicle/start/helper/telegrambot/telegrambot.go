@@ -12,14 +12,16 @@ import (
 	"github.com/spf13/viper"
 )
 
+const cmdCtx = "o-start-helper-telegrambot-"
+
 func init() {
 	currentFlag := "telegram-bot-token"
-	Command.PersistentFlags().String(
+	Command.Flags().String(
 		currentFlag,
 		"",
 		"the telegram bot token to be used when telegram is enabled",
 	)
-	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
 }
 
@@ -28,7 +30,7 @@ var Command = &cobra.Command{
 	Aliases: []string{"tgbot", "tg"},
 	Short:   "Runs a base telegram bot that returns the chat Id",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		telegramBotToken := viper.GetString("telegram-bot-token")
+		telegramBotToken := viper.GetString(cmdCtx + "telegram-bot-token")
 		if telegramBotToken == "" {
 			return fmt.Errorf("failed to receive a telegram bot token")
 		}

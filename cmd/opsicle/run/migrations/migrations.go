@@ -5,6 +5,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+const cmdCtx = "o-run-migrations-"
+
 func init() {
 	currentFlag := "migrations-path"
 	Command.PersistentFlags().StringP(

@@ -34,18 +34,13 @@ func (t *telegramApprover) Stop() {
 }
 
 func (t *telegramApprover) SendApprovalRequest(req ApprovalRequest) (string, []notificationMessage, error) {
-	text := fmt.Sprintf(
-		"⚠️ Approval request\nID: `%s`\nMessage: `%s`\nRequester: %s \\(`%s`\\)",
-		bot.EscapeMarkdown(req.Spec.Id),
-		bot.EscapeMarkdown(req.Spec.Message),
-		bot.EscapeMarkdown(req.Spec.RequesterName),
-		bot.EscapeMarkdown(req.Spec.RequesterId),
-	)
+	text := getApprovalRequestMessage(req)
 
-	notificationId := req.Spec.GetUuid()
+	requestUuid := req.Spec.GetUuid()
+	requestId := req.Spec.Id
 	customKeyboard := createTelegramApprovalKeyboard(
-		createTelegramApprovalCallbackData(ActionApprove, notificationId, req.Spec.Id),
-		createTelegramApprovalCallbackData(ActionReject, notificationId, req.Spec.Id),
+		createTelegramApprovalCallbackData(ActionApprove, requestUuid, requestId),
+		createTelegramApprovalCallbackData(ActionReject, requestUuid, requestId),
 	)
 
 	ctx := context.Background()
@@ -56,7 +51,7 @@ func (t *telegramApprover) SendApprovalRequest(req ApprovalRequest) (string, []n
 	for _, target := range req.Spec.Telegram {
 		t.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "sending message to chat[%v]: %s", target.ChatId, text)
 		notification := notificationMessage{
-			Id:       notificationId,
+			Id:       requestUuid,
 			TargetId: strconv.FormatInt(target.ChatId, 10),
 			Platform: NotifierPlatformTelegram,
 		}
@@ -67,7 +62,7 @@ func (t *telegramApprover) SendApprovalRequest(req ApprovalRequest) (string, []n
 			ReplyMarkup: customKeyboard,
 		})
 		if err != nil {
-			t.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "req[%v] failed to send message to chat[%v]: %s", req.Spec.Id, target.ChatId, err)
+			t.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "req[%v] failed to send message to chat[%v]: %s", requestId, target.ChatId, err)
 			notification.Error = err
 		} else {
 			notification.IsSuccess = true
@@ -77,7 +72,7 @@ func (t *telegramApprover) SendApprovalRequest(req ApprovalRequest) (string, []n
 		notifications = append(notifications, notification)
 	}
 
-	return notificationId, notifications, nil
+	return requestUuid, notifications, nil
 }
 
 type InitTelegramNotifierOpts struct {
@@ -112,10 +107,13 @@ func InitTelegramNotifier(opts InitTelegramNotifierOpts) error {
 	if err != nil {
 		return fmt.Errorf("failed to create telegram bot: %s", err)
 	}
-	Notifier = &telegramApprover{
-		Client:      telegramBot,
-		ChatMap:     opts.ChatMap,
-		ServiceLogs: opts.ServiceLogs,
-	}
+	Notifiers = append(
+		Notifiers,
+		&telegramApprover{
+			Client:      telegramBot,
+			ChatMap:     opts.ChatMap,
+			ServiceLogs: opts.ServiceLogs,
+		},
+	)
 	return nil
 }

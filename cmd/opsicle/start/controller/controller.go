@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+const cmdCtx = "o-start-controller"
+
 func init() {
 	currentFlag := "fs-storage-path"
 	Command.PersistentFlags().StringP(
@@ -17,7 +19,7 @@ func init() {
 		"./.opsicle",
 		"specifies the path to a directory where Opsicle data resides",
 	)
-	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindPFlag(cmdCtx+currentFlag, Command.PersistentFlags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
 
 	currentFlag = "db-host"
@@ -27,7 +29,7 @@ func init() {
 		"localhost:5432",
 		"specifies the hostname (including port) of the database",
 	)
-	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindPFlag(cmdCtx+currentFlag, Command.PersistentFlags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
 
 	currentFlag = "db-name"
@@ -37,7 +39,7 @@ func init() {
 		"opsicle",
 		"specifies the name of the central database schema",
 	)
-	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindPFlag(cmdCtx+currentFlag, Command.PersistentFlags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
 
 	currentFlag = "db-user"
@@ -47,7 +49,7 @@ func init() {
 		"opsicle",
 		"specifies the username to use to login",
 	)
-	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindPFlag(cmdCtx+currentFlag, Command.PersistentFlags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
 
 	currentFlag = "db-password"
@@ -57,7 +59,7 @@ func init() {
 		"opsicle",
 		"specifies the password to use to login",
 	)
-	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindPFlag(cmdCtx+currentFlag, Command.PersistentFlags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
 
 	currentFlag = "storage-mode"
@@ -68,7 +70,7 @@ func init() {
 		fmt.Sprintf("specifies what type of storage we are using, one of ['%s']", strings.Join(common.Storages, "'")),
 	)
 
-	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
+	viper.BindPFlag(cmdCtx+currentFlag, Command.PersistentFlags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
 }
 

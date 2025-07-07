@@ -66,14 +66,14 @@ func getDefaultHandler(
 					RequestId:       currentApprovalRequest.Spec.Id,
 					RequesterId:     currentApprovalRequest.Spec.RequesterId,
 					RequesterName:   currentApprovalRequest.Spec.RequesterName,
-					Status:          string(StatusApproved),
+					Status:          approvals.StatusApproved,
 					StatusUpdatedAt: time.Now(),
 					Telegram: approvals.TelegramResponseSpec{
 						ChatId:   update.ChatId,
 						UserId:   update.SenderId,
 						Username: update.SenderUsername,
 					},
-					Type: PlatformTelegram,
+					Type: approvals.PlatformTelegram,
 				},
 			}
 			if err := CreateApproval(approval); err != nil {
@@ -92,14 +92,7 @@ func getDefaultHandler(
 			if err := bot.UpdateMessage(
 				update.ChatId,
 				update.MessageId,
-				fmt.Sprintf(
-					"✅ Approval request\nID: `%v`\nMessage: `%s`\nRequester: %s \\(`%s`\\)\n\nStatus: *APPROVED*\nApproval ID: `%s`",
-					bot.EscapeMarkdown(currentApprovalRequest.Spec.Id),
-					bot.EscapeMarkdown(currentApprovalRequest.Spec.Message),
-					bot.EscapeMarkdown(currentApprovalRequest.Spec.RequesterName),
-					bot.EscapeMarkdown(currentApprovalRequest.Spec.RequesterId),
-					bot.EscapeMarkdown(currentApprovalRequest.Spec.Approval.Id),
-				),
+				getApprovedMessage(*currentApprovalRequest),
 				nil,
 			); err != nil {
 				logrus.Errorf("failed to update message[%v]: %s", update.MessageId, err)
@@ -117,14 +110,14 @@ func getDefaultHandler(
 					RequestId:       currentApprovalRequest.Spec.Id,
 					RequesterId:     currentApprovalRequest.Spec.RequesterId,
 					RequesterName:   currentApprovalRequest.Spec.RequesterName,
-					Status:          string(StatusRejected),
+					Status:          approvals.StatusRejected,
 					StatusUpdatedAt: time.Now(),
 					Telegram: approvals.TelegramResponseSpec{
 						ChatId:   update.ChatId,
 						UserId:   update.SenderId,
 						Username: update.SenderUsername,
 					},
-					Type: PlatformTelegram,
+					Type: approvals.PlatformTelegram,
 				},
 			}
 			if err := CreateApproval(approval); err != nil {
@@ -143,14 +136,7 @@ func getDefaultHandler(
 			if err := bot.UpdateMessage(
 				update.ChatId,
 				update.MessageId,
-				fmt.Sprintf(
-					"❌ Approval request\nID: `%v`\nMessage: `%s`\nRequester: %s \\(`%s`\\)\n\nStatus: *REJECTED*\nApproval ID: `%s`",
-					bot.EscapeMarkdown(currentApprovalRequest.Spec.Id),
-					bot.EscapeMarkdown(currentApprovalRequest.Spec.Message),
-					bot.EscapeMarkdown(currentApprovalRequest.Spec.RequesterName),
-					bot.EscapeMarkdown(currentApprovalRequest.Spec.RequesterId),
-					bot.EscapeMarkdown(currentApprovalRequest.Spec.Approval.Id),
-				),
+				getRejectedMessage(*currentApprovalRequest),
 				nil,
 			); err != nil {
 				logrus.Errorf("failed to update message[%v]: %s", update.MessageId, err)

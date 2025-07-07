@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+const cmdCtx = "o-start-worker-"
+
 func init() {
 	currentFlag := "controller-url"
 	Command.Flags().StringP(
@@ -23,7 +25,7 @@ func init() {
 		"localhost:12345",
 		"the url of the controller",
 	)
-	viper.BindPFlag(currentFlag, Command.Flags().Lookup(currentFlag))
+	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
 
 	currentFlag = "filesystem-path"
@@ -33,7 +35,7 @@ func init() {
 		"",
 		"path to a directory containing automations",
 	)
-	viper.BindPFlag(currentFlag, Command.Flags().Lookup(currentFlag))
+	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
 
 	currentFlag = "runtime"
@@ -43,6 +45,8 @@ func init() {
 		common.RuntimeDocker,
 		fmt.Sprintf("runtime to use, one of ['%s']", strings.Join(common.Runtimes, "', '")),
 	)
+	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
+	viper.BindEnv(currentFlag)
 
 	currentFlag = "poll-interval"
 	Command.Flags().DurationP(
@@ -51,7 +55,7 @@ func init() {
 		time.Second*5,
 		"interval between polls",
 	)
-	viper.BindPFlag(currentFlag, Command.Flags().Lookup(currentFlag))
+	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
 }
 
@@ -60,10 +64,10 @@ var Command = &cobra.Command{
 	Short: "Starts the worker component",
 	Long:  "Starts the worker component that subscribes to the controller and polls for jobs to start",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		controllerUrl := viper.GetString("controller-url")
-		filesystemPath := viper.GetString("filesystem-path")
-		pollInterval := viper.GetDuration("poll-interval")
-		runtime := viper.GetString("runtime")
+		controllerUrl := viper.GetString(cmdCtx + "controller-url")
+		filesystemPath := viper.GetString(cmdCtx + "filesystem-path")
+		pollInterval := viper.GetDuration(cmdCtx + "poll-interval")
+		runtime := viper.GetString(cmdCtx + "runtime")
 
 		source := ""
 		mode := worker.ModeFilesystem

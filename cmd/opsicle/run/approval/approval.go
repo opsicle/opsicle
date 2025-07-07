@@ -1,13 +1,15 @@
 package approval
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"opsicle/internal/approvals"
 	"opsicle/internal/approver"
 	"opsicle/internal/common"
-	"opsicle/internal/integrations/telegram"
 	"os"
 	"sync"
 	"time"
@@ -20,56 +22,11 @@ import (
 const cmdCtx = "o-run-approval-"
 
 func init() {
-	currentFlag := "redis-enabled"
-	Command.Flags().Bool(
-		currentFlag,
-		true,
-		"when this flag is specified, redis is used as the cache",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "redis-addr"
+	currentFlag := "approver-url"
 	Command.Flags().String(
 		currentFlag,
-		"localhost:6379",
-		"defines the hostname (including port) of the redis server",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "redis-username"
-	Command.Flags().String(
-		currentFlag,
-		"opsicle",
-		"defines the username used to login to redis",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "redis-password"
-	Command.Flags().String(
-		currentFlag,
-		"password",
-		"defines the password used to login to redis",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "telegram-enabled"
-	Command.Flags().Bool(
-		currentFlag,
-		false,
-		"when this flag is specified, the telegram bot is enabled",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "telegram-bot-token"
-	Command.Flags().String(
-		currentFlag,
-		"",
-		"the telegram bot token to be used when telegram is enabled",
+		"http://localhost:12345",
+		"defines the url where the approver service is accessible at",
 	)
 	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
 	viper.BindEnv(currentFlag)
@@ -101,176 +58,111 @@ var Command = &cobra.Command{
 		}
 		o, _ := json.MarshalIndent(approvalRequestInstance, "", "  ")
 		logrus.Infof("loaded approval request as follows:\n%s", string(o))
+
+		approverUrlData := viper.GetString(cmdCtx + "approver-url")
+		approverUrl, err := url.Parse(approverUrlData)
+		if err != nil {
+			return fmt.Errorf("failed to parse approverUrl[%s] as a url: %s", approverUrlData, err)
+		}
+		logrus.Infof("using approver service at url[%s]", approverUrl)
+
 		serviceLogs := make(chan common.ServiceLog, 64)
 		common.StartServiceLogLoop(serviceLogs)
-
 		approvalRequest := approver.ApprovalRequest{
 			Spec: approvalRequestInstance.Spec,
+		}
+		approvalRequestData, err := json.Marshal(approvalRequest.Spec)
+		if err != nil {
+			return fmt.Errorf("failed to marshal approval request: %s", err)
+		}
+
+		approverUrl.Path = "/approval-request"
+		req, err := http.NewRequest(
+			http.MethodPost,
+			approverUrl.String(),
+			bytes.NewBuffer(approvalRequestData),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create request for approver service: %s", err)
+		}
+		common.AddHttpHeaders(req)
+		client := common.NewHttpClient()
+		res, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to execute request to approver service: %s", err)
+		}
+		responseBody, err := io.ReadAll(res.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response from approver service: %s", err)
+		}
+		var response common.HttpResponse
+		if err := json.Unmarshal(responseBody, &response); err != nil {
+			return fmt.Errorf("failed to parse response from approver service: %s", err)
+		}
+		responseData, err := json.Marshal(response.Data)
+		if err != nil {
+			return fmt.Errorf("failed to parse response from approver service: %s", err)
+		}
+		if err := json.Unmarshal(responseBody, &response); err != nil {
+			return fmt.Errorf("failed to parse response from approver service: %s", err)
+		}
+		var requestSpec approvals.RequestSpec
+		if err := json.Unmarshal(responseData, &requestSpec); err != nil {
+			return fmt.Errorf("failed to parse response from approver service: %s", err)
+		}
+		requestId := requestSpec.Id
+		requestUuid := requestSpec.GetUuid()
+		logrus.Infof("submitted request[%s:%s]", requestId, requestUuid)
+
+		isDone := false
+		for !isDone {
+			logrus.Infof("getting status from url[%s]...", approverUrl.String())
+			approverUrl.Path = fmt.Sprintf("/approval-request/%v/%v", requestId, requestUuid)
+			req, err = http.NewRequest(
+				http.MethodGet,
+				approverUrl.String(),
+				bytes.NewBuffer(approvalRequestData),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to create request for approver service: %s", err)
+			}
+			common.AddHttpHeaders(req)
+			res, err = client.Do(req)
+			if err != nil {
+				return fmt.Errorf("failed to execute request to approver service: %s", err)
+			}
+			responseBody, err := io.ReadAll(res.Body)
+			if err != nil {
+				return fmt.Errorf("failed to read response from approver service: %s", err)
+			}
+			var response common.HttpResponse
+			if err := json.Unmarshal(responseBody, &response); err != nil {
+				return fmt.Errorf("failed to parse response from approver service: %s", err)
+			}
+			responseData, err := json.Marshal(response.Data)
+			if err != nil {
+				return fmt.Errorf("failed to parse response from approver service: %s", err)
+			}
+			if err := json.Unmarshal(responseBody, &response); err != nil {
+				return fmt.Errorf("failed to parse response from approver service: %s", err)
+			}
+			var requestSpec approvals.RequestSpec
+			if err := json.Unmarshal(responseData, &requestSpec); err != nil {
+				return fmt.Errorf("failed to parse response from approver service: %s", err)
+			}
+			if requestSpec.Approval == nil {
+				logrus.Infof("request is still not yet approved, waiting another 5 seconds...")
+				<-time.After(5 * time.Second)
+				continue
+			}
+			logrus.Infof("approval request has updated status[%v] (by %v)", requestSpec.Approval.Status, requestSpec.Approval.ApproverId)
+			isDone = true
 		}
 
 		var waiter sync.WaitGroup
 
-		// initialise the caches
-
-		logrus.Infof("initialising caches...")
-		isRedisEnabled := viper.GetBool(cmdCtx + "redis-enabled")
-		if isRedisEnabled {
-			if err := approver.InitRedisCache(approver.InitRedisCacheOpts{
-				Addr:        viper.GetString("redis-addr"),
-				Username:    viper.GetString("redis-username"),
-				Password:    viper.GetString("redis-password"),
-				ServiceLogs: serviceLogs,
-			}); err != nil {
-				return fmt.Errorf("failed to initialise redis cache: %s", err)
-			}
-			logrus.Infof("redis client initialised")
-		}
-
-		logrus.Infof("creating approval request in the cache...")
-		if err := approver.CreateApprovalRequest(approvalRequest); err != nil {
-			return fmt.Errorf("failed to create the approval request: %s", err)
-		}
-		logrus.Infof("approval requested created in the cache")
-
-		// initialise the notifiers
-
-		logrus.Infof("initialising notifiers...")
-		isTelegramEnabled := viper.GetBool(cmdCtx + "telegram-enabled")
-		if isTelegramEnabled {
-			logrus.Infof("initialising telegram notifier...")
-			telegramBotToken := viper.GetString("telegram-bot-token")
-			if telegramBotToken == "" {
-				return fmt.Errorf("failed to receive a telegram bot token")
-			}
-			isDone := false
-			if err := approver.InitTelegramNotifier(approver.InitTelegramNotifierOpts{
-				BotToken: telegramBotToken,
-				DefaultHandler: func(context context.Context, bot *telegram.Bot, update *telegram.Update) {
-					// at the end of this, terminate the function
-					defer func() {
-						if isDone {
-							waiter.Done()
-						}
-					}()
-
-					// if it's not an approve/reject button call, do nothing
-					if update.CallbackData == "" {
-						return
-					}
-					action, notificationId, requestId, err := approver.ParseTelegramApprovalCallbackData(update.CallbackData)
-					if err != nil {
-						logrus.Errorf("failed to parse callback: %s", err)
-						if err := bot.ReplyMessage(update.ChatId, update.MessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
-							logrus.Errorf("failed to send error response to user: %s", err)
-						}
-						isDone = true
-						return
-					}
-					logrus.Infof("received callback with action[%s] on request[%s:%s]", action, notificationId, requestId)
-					currentApprovalRequest, err := approver.LoadApprovalRequest(approver.ApprovalRequest{
-						Spec: approvals.RequestSpec{
-							Id:   requestId,
-							Uuid: &notificationId,
-						},
-					})
-					if err != nil {
-						logrus.Errorf("failed to fetch request from cache: %v", err)
-						if err := bot.ReplyMessage(update.ChatId, update.MessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
-							logrus.Errorf("failed to send error response to user: %s", err)
-						}
-						isDone = true
-						return
-					}
-					o, _ := json.MarshalIndent(currentApprovalRequest, "", "  ")
-					logrus.Infof("retrieved approval request:\n%s", string(o))
-
-					var response = ""
-					if currentApprovalRequest.Spec.Approval != nil {
-						if currentApprovalRequest.Spec.Approval.Status == "approved" {
-							response = "This request has already been approved"
-						} else {
-							response = "This request has already been rejected"
-						}
-					} else if action == approver.ActionApprove {
-						if err := bot.UpdateMessage(
-							update.ChatId,
-							update.MessageId,
-							fmt.Sprintf(
-								"✅ Approval request\nID: `%v`\nMessage: `%s`\nRequester: %s \\(`%s`\\)\n\nStatus: **APPROVED**",
-								currentApprovalRequest.Spec.Id,
-								currentApprovalRequest.Spec.Message,
-								currentApprovalRequest.Spec.RequesterName,
-								currentApprovalRequest.Spec.RequesterId,
-							),
-							nil,
-						); err != nil {
-							logrus.Errorf("failed to update message[%v]: %s", update.MessageId, err)
-						}
-					} else if action == approver.ActionReject {
-						if err := bot.UpdateMessage(
-							update.ChatId,
-							update.MessageId,
-							fmt.Sprintf(
-								"❌ Approval request\nID: `%v`\nMessage: `%s`\nRequester: %s \\(`%s`\\)\n\nStatus: **REJECTED**",
-								currentApprovalRequest.Spec.Id,
-								currentApprovalRequest.Spec.Message,
-								currentApprovalRequest.Spec.RequesterName,
-								currentApprovalRequest.Spec.RequesterId,
-							),
-							nil,
-						); err != nil {
-							logrus.Errorf("failed to update message[%v]: %s", update.MessageId, err)
-						}
-					}
-					if response != "" {
-						if err := bot.ReplyMessage(update.ChatId, update.MessageId, response); err != nil {
-							serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send confirmation message: %v", err)
-						}
-					}
-					<-time.After(1 * time.Second)
-					isDone = true
-				},
-				ServiceLogs: serviceLogs,
-			}); err != nil {
-				return fmt.Errorf("failed to initialise telegram client: %s", err)
-			}
-			logrus.Infof("starting telegram client...")
-			waiter.Add(1)
-			go approver.Notifier.StartListening()
-		}
-
-		logrus.Infof("dispatching approval request messages...")
-		notificationId, sentApprovals, err := approver.Notifier.SendApprovalRequest(approvalRequest)
-		if err != nil {
-			return fmt.Errorf("failed to send an approval request message: %s", err)
-		}
-		approvalRequest.Spec.NotificationId = &notificationId
-		logrus.Infof("updating approval request in the cache...")
-		if err := approver.CreateApprovalRequest(approvalRequest); err != nil {
-			return fmt.Errorf("failed to create the approval request: %s", err)
-		}
-		logrus.Infof("approval requested updated in the cache")
-
-		for _, sentApproval := range sentApprovals {
-			if sentApproval.IsSuccess {
-				logrus.Infof(
-					"sent approvalRequest[%s] to platform[%s] on chat[%v] as message[%s]",
-					sentApproval.Id,
-					sentApproval.Platform,
-					sentApproval.TargetId,
-					sentApproval.MessageId,
-				)
-			} else {
-				logrus.Errorf(
-					"approvalRequest[%s] did not get sent: %s",
-					sentApproval.Id,
-					sentApproval.Error,
-				)
-			}
-		}
-
 		waiter.Wait()
 
-		return cmd.Help()
+		return nil
 	},
 }

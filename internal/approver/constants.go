@@ -9,7 +9,4 @@ const (
 	approvalCachePrefix               = "approval"
 	ActionApprove              Action = "approve"
 	ActionReject               Action = "reject"
-	PlatformTelegram                  = "telegram"
-	StatusApproved             Status = "approved"
-	StatusRejected             Status = "rejected"
 )

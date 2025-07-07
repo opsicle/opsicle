@@ -1,6 +1,7 @@
 package approver
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -8,10 +9,36 @@ const (
 	NotifierPlatformTelegram = "telegram"
 )
 
-var Notifier notifier
+var Notifiers notifiers
+
+type notifiers []notifier
+
+func (n notifiers) SendApprovalRequest(req ApprovalRequest) (requestUuid string, notifications []notificationMessage, err error) {
+	for _, notifierInstance := range n {
+		var notifierInstanceNotifications []notificationMessage
+		requestUuid, notifierInstanceNotifications, err = notifierInstance.SendApprovalRequest(req)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to send all approval requests: %s", err)
+		}
+		notifications = append(notifications, notifierInstanceNotifications...)
+	}
+	return requestUuid, notifications, err
+}
+
+func (n notifiers) StartListening() {
+	for _, notifierInstance := range n {
+		notifierInstance.StartListening()
+	}
+}
+
+func (n notifiers) Stop() {
+	for _, notifierInstance := range n {
+		notifierInstance.Stop()
+	}
+}
 
 type notifier interface {
-	SendApprovalRequest(req ApprovalRequest) (notificationId string, notifications []notificationMessage, err error)
+	SendApprovalRequest(req ApprovalRequest) (requestUuid string, notifications []notificationMessage, err error)
 	StartListening()
 	Stop()
 }

@@ -10,20 +10,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
-func init() {
-	currentFlag := "automation-path"
-	Command.PersistentFlags().StringP(
-		currentFlag,
-		"p",
-		"",
-		"path to the automation manifest",
-	)
-	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-}
+const cmdCtx = "o-run-automation-"
 
 var Command = &cobra.Command{
 	Use:     "automation <path-to-automation>",

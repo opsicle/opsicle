@@ -15,15 +15,37 @@ type Request struct {
 }
 
 type RequestSpec struct {
-	Approval       *ApprovalSpec         `json:"approval" yaml:"approval"`
-	Id             string                `json:"id" yaml:"id"`
-	Uuid           *string               `json:"uuid" yaml:"uuid"`
-	Message        string                `json:"message" yaml:"message"`
-	NotificationId *string               `json:"notificationId" yaml:"notificationId"`
-	RequesterId    string                `json:"requesterId" yaml:"requesterId"`
-	RequesterName  string                `json:"requesterName" yaml:"requesterName"`
-	Telegram       []TelegramRequestSpec `json:"telegram" yaml:"telegram"`
-	Type           string                `json:"type" yaml:"type"`
+	// Approval is populated after an approval/rejection action
+	// happens
+	Approval *ApprovalSpec `json:"approval" yaml:"approval"`
+
+	// AuthorizedApprovers specifies which users are allowed to
+	// perform an approval/rejection
+	AuthorizedApprovers *AuthorizedApproversSpec `json:"authorizedApprovers" yaml:"authorizedApprovers"`
+
+	// Id is the ID of a request which will be the same for all
+	// requests of a given type
+	Id string `json:"id" yaml:"id"`
+
+	// Uuid is populated by the approver service if it's not already
+	// defined and represents the ID of the request instance (instead of
+	// the request)
+	Uuid *string `json:"uuid" yaml:"uuid"`
+
+	// Message is an additiona message describing the request
+	Message string `json:"message" yaml:"message"`
+
+	// RequesterName indicates the requester's system ID
+	RequesterId string `json:"requesterId" yaml:"requesterId"`
+
+	// RequesterName indicates the requester's name
+	RequesterName string `json:"requesterName" yaml:"requesterName"`
+
+	// Telegram specifies the targets in Telegram to send this request to
+	Telegram []TelegramRequestSpec `json:"telegram" yaml:"telegram"`
+
+	// TtlSeconds indicates the duration in seconds until the request expires
+	TtlSeconds int `json:"ttlSeconds" yaml:"ttlSeconds"`
 }
 
 func (rs *RequestSpec) Init() {
@@ -39,6 +61,25 @@ func (rs *RequestSpec) GetUuid() string {
 		rs.Init()
 	}
 	return *rs.Uuid
+}
+
+type AuthorizedApproversSpec struct {
+	Telegram AuthorizedTelegramApprovers `json:"telegram" yaml:"telegram"`
+}
+
+type AuthorizedTelegramApprovers []AuthorizedTelegramApprovers
+type AuthorizedTelegramApprover struct {
+	// UserId specifies the Telegram user ID of the user who is allowed
+	// to approve/reject an approval request
+	UserId int64 `json:"userId" yaml:"userId"`
+
+	// ChatId optionally specifies the ID of the chat which the approval
+	// must come from otherwise the request will be rejected
+	ChatId *int64 `json:"chatId" yaml:"chatId"`
+
+	// Username optionally specifies the username of the approver whom the
+	// approval must come from otherwise the request will be rejected
+	Username *string `json:"username" yaml:"username"`
 }
 
 type TelegramRequestSpec struct {
