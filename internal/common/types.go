@@ -6,13 +6,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type Done struct{}
-
-type Resource struct {
-	ApiVersion string   `json:"apiVersion" yaml:"apiVersion"`
-	Type       string   `json:"type" yaml:"type"`
-	Metadata   Metadata `json:"metadata" yaml:"metadata"`
+type AutomationLog struct {
+	Source  string `json:"source"`
+	Message string `json:"message"`
 }
+
+type Done struct{}
 
 type Metadata struct {
 	Name        string            `json:"name" yaml:"name"`
@@ -20,9 +19,10 @@ type Metadata struct {
 	Labels      map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 }
 
-type AutomationLog struct {
-	Source  string `json:"source"`
-	Message string `json:"message"`
+type Resource struct {
+	ApiVersion string   `json:"apiVersion" yaml:"apiVersion"`
+	Type       string   `json:"type" yaml:"type"`
+	Metadata   Metadata `json:"metadata" yaml:"metadata"`
 }
 
 type ServiceLog struct {

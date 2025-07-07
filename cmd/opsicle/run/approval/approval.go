@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"opsicle/internal/approvals"
 	"opsicle/internal/approver"
+	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"os"
 	"sync"
@@ -19,22 +20,25 @@ import (
 	"github.com/spf13/viper"
 )
 
-const cmdCtx = "o-run-approval-"
+var flags cli.Flags = cli.Flags{
+	{
+		Name:         "approver-url",
+		DefaultValue: "http://localhost:12345",
+		Usage:        "defines the url where the approver service is accessible at",
+		Type:         cli.FlagTypeString,
+	},
+}
 
 func init() {
-	currentFlag := "approver-url"
-	Command.Flags().String(
-		currentFlag,
-		"http://localhost:12345",
-		"defines the url where the approver service is accessible at",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
+	flags.AddToCommand(Command)
 }
 
 var Command = &cobra.Command{
 	Use:   "approval",
 	Short: "Runs an approval manifest",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		flags.BindViper(cmd)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		resourceIsSpecified := false
 		resourcePath := ""
@@ -59,7 +63,7 @@ var Command = &cobra.Command{
 		o, _ := json.MarshalIndent(approvalRequestInstance, "", "  ")
 		logrus.Infof("loaded approval request as follows:\n%s", string(o))
 
-		approverUrlData := viper.GetString(cmdCtx + "approver-url")
+		approverUrlData := viper.GetString("approver-url")
 		approverUrl, err := url.Parse(approverUrlData)
 		if err != nil {
 			return fmt.Errorf("failed to parse approverUrl[%s] as a url: %s", approverUrlData, err)

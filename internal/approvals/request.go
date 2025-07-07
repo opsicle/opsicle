@@ -35,6 +35,12 @@ type RequestSpec struct {
 	// Message is an additiona message describing the request
 	Message string `json:"message" yaml:"message"`
 
+	// MfaSeed is an optional field that when populated, requires the
+	// user to respond with their TOTP MFA number. This seed is recommended
+	// to be a specially provisioned MFA since you will be sending it to
+	// another system
+	MfaSeed *string `json:"mfaSeed" yaml:"mfaSeed"`
+
 	// RequesterName indicates the requester's system ID
 	RequesterId string `json:"requesterId" yaml:"requesterId"`
 

@@ -3,6 +3,7 @@ package approver
 import (
 	"fmt"
 	"opsicle/internal/approver"
+	"opsicle/internal/cli"
 	"opsicle/internal/common"
 
 	"github.com/sirupsen/logrus"
@@ -10,62 +11,49 @@ import (
 	"github.com/spf13/viper"
 )
 
-const cmdCtx = "o-start-approver-"
-
 func init() {
-	currentFlag := "redis-enabled"
-	Command.Flags().Bool(
-		currentFlag,
-		true,
-		"when this flag is specified, redis is used as the cache",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
+	for _, flag := range flags {
+		flag.AddToCommand(Command)
+	}
+}
 
-	currentFlag = "redis-addr"
-	Command.Flags().String(
-		currentFlag,
-		"localhost:6379",
-		"defines the hostname (including port) of the redis server",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "redis-username"
-	Command.Flags().String(
-		currentFlag,
-		"opsicle",
-		"defines the username used to login to redis",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "redis-password"
-	Command.Flags().String(
-		currentFlag,
-		"password",
-		"defines the password used to login to redis",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "telegram-enabled"
-	Command.Flags().Bool(
-		currentFlag,
-		false,
-		"when this flag is specified, the telegram bot is enabled",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "telegram-bot-token"
-	Command.Flags().String(
-		currentFlag,
-		"",
-		"the telegram bot token to be used when telegram is enabled",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag, cmdCtx+currentFlag)
+var flags cli.Flags = cli.Flags{
+	{
+		Name:         "redis-enabled",
+		DefaultValue: true,
+		Usage:        "when this flag is specified, redis is used as the cache",
+		Type:         cli.FlagTypeBool,
+	},
+	{
+		Name:         "redis-addr",
+		DefaultValue: "localhost:6379",
+		Usage:        "defines the hostname (including port) of the redis server",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "redis-username",
+		DefaultValue: "opsicle",
+		Usage:        "defines the username used to login to redis",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "redis-password",
+		DefaultValue: "password",
+		Usage:        "defines the password used to login to redis",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "telegram-enabled",
+		DefaultValue: false,
+		Usage:        "when this flag is specified, the telegram bot is enabled",
+		Type:         cli.FlagTypeBool,
+	},
+	{
+		Name:         "telegram-bot-token",
+		DefaultValue: "",
+		Usage:        "the telegram bot token to be used when telegram is enabled",
+		Type:         cli.FlagTypeString,
+	},
 }
 
 var Command = &cobra.Command{
@@ -73,17 +61,23 @@ var Command = &cobra.Command{
 	Aliases: []string{"a"},
 	Short:   "Starts the approver component",
 	Long:    "Starts the approver component which serves as a background job that communicates with the configured component",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		for _, flag := range flags {
+			viper.BindPFlag(flag.Name, cmd.Flags().Lookup(flag.Name))
+			viper.BindEnv(flag.Name)
+		}
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		serviceLogs := make(chan common.ServiceLog, 64)
 		common.StartServiceLogLoop(serviceLogs)
 
-		isRedisEnabled := viper.GetBool(cmdCtx + "redis-enabled")
+		isRedisEnabled := viper.GetBool("redis-enabled")
 		if isRedisEnabled {
 			if err := approver.InitRedisCache(approver.InitRedisCacheOpts{
-				Addr:        viper.GetString(cmdCtx + "redis-addr"),
-				Username:    viper.GetString(cmdCtx + "redis-username"),
-				Password:    viper.GetString(cmdCtx + "redis-password"),
+				Addr:        viper.GetString("redis-addr"),
+				Username:    viper.GetString("redis-username"),
+				Password:    viper.GetString("redis-password"),
 				ServiceLogs: serviceLogs,
 			}); err != nil {
 				return fmt.Errorf("failed to initialise redis cache: %s", err)
@@ -91,9 +85,9 @@ var Command = &cobra.Command{
 			logrus.Infof("redis client initialised")
 		}
 
-		isTelegramEnabled := viper.GetBool(cmdCtx + "telegram-enabled")
+		isTelegramEnabled := viper.GetBool("telegram-enabled")
 		if isTelegramEnabled {
-			telegramBotToken := viper.GetString(cmdCtx + "telegram-bot-token")
+			telegramBotToken := viper.GetString("telegram-bot-token")
 			if telegramBotToken == "" {
 				return fmt.Errorf("failed to receive a telegram bot token")
 			}

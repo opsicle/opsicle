@@ -3,6 +3,7 @@ package approver
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 func CreateApproval(approval Approval) error {
@@ -20,7 +21,8 @@ func CreateApprovalRequest(req ApprovalRequest) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal approvalRequest: %s", err)
 	}
-	return Cache.Set(cacheKey, string(cacheData), 0)
+	expiryDuration := time.Duration(req.Spec.TtlSeconds)*time.Second + time.Hour
+	return Cache.Set(cacheKey, string(cacheData), expiryDuration)
 }
 
 func UpdateApproval(approval Approval) error {

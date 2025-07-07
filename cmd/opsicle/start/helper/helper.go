@@ -2,12 +2,14 @@ package helper
 
 import (
 	"opsicle/cmd/opsicle/start/helper/telegrambot"
+	"opsicle/cmd/opsicle/start/helper/totpgenerator"
 
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	Command.AddCommand(telegrambot.Command)
+	Command.AddCommand(totpgenerator.Command)
 }
 
 var Command = &cobra.Command{
