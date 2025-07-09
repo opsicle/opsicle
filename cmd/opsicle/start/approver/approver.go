@@ -12,9 +12,7 @@ import (
 )
 
 func init() {
-	for _, flag := range flags {
-		flag.AddToCommand(Command)
-	}
+	flags.AddToCommand(Command)
 }
 
 var flags cli.Flags = cli.Flags{
@@ -43,6 +41,24 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
+		Name:         "slack-enabled",
+		DefaultValue: false,
+		Usage:        "when this flag is specified, the slack bot is enabled",
+		Type:         cli.FlagTypeBool,
+	},
+	{
+		Name:         "slack-app-token",
+		DefaultValue: "",
+		Usage:        "the slack app token to be used when slack is enabled",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "slack-bot-token",
+		DefaultValue: "",
+		Usage:        "the slack bot token to be used when slack is enabled",
+		Type:         cli.FlagTypeString,
+	},
+	{
 		Name:         "telegram-enabled",
 		DefaultValue: false,
 		Usage:        "when this flag is specified, the telegram bot is enabled",
@@ -62,10 +78,7 @@ var Command = &cobra.Command{
 	Short:   "Starts the approver component",
 	Long:    "Starts the approver component which serves as a background job that communicates with the configured component",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		for _, flag := range flags {
-			viper.BindPFlag(flag.Name, cmd.Flags().Lookup(flag.Name))
-			viper.BindEnv(flag.Name)
-		}
+		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 
@@ -73,6 +86,7 @@ var Command = &cobra.Command{
 		common.StartServiceLogLoop(serviceLogs)
 
 		isRedisEnabled := viper.GetBool("redis-enabled")
+		logrus.Debugf("redis-enabled status: %v", isRedisEnabled)
 		if isRedisEnabled {
 			if err := approver.InitRedisCache(approver.InitRedisCacheOpts{
 				Addr:        viper.GetString("redis-addr"),
@@ -85,7 +99,27 @@ var Command = &cobra.Command{
 			logrus.Infof("redis client initialised")
 		}
 
+		isSlackEnabled := viper.GetBool("slack-enabled")
+		logrus.Debugf("slack-enabled status: %v", isSlackEnabled)
+		if isSlackEnabled {
+			slackBotToken := viper.GetString("slack-bot-token")
+			if slackBotToken == "" {
+				return fmt.Errorf("failed to receive a slack bot token")
+			}
+			slackAppToken := viper.GetString("slack-app-token")
+			if slackAppToken == "" {
+				return fmt.Errorf("failed to receive a slack app token")
+			}
+			approver.InitSlackNotifier(approver.InitSlackNotifierOpts{
+				AppToken:    slackAppToken,
+				BotToken:    slackBotToken,
+				ServiceLogs: serviceLogs,
+			})
+			logrus.Infof("slack notifier initialised")
+		}
+
 		isTelegramEnabled := viper.GetBool("telegram-enabled")
+		logrus.Debugf("telegram-enabled status: %v", isTelegramEnabled)
 		if isTelegramEnabled {
 			telegramBotToken := viper.GetString("telegram-bot-token")
 			if telegramBotToken == "" {
@@ -100,15 +134,18 @@ var Command = &cobra.Command{
 			}); err != nil {
 				return fmt.Errorf("failed to initialise telegram client: %s", err)
 			}
+			logrus.Infof("telegram notifier initialised")
 		}
 
+		logrus.Debugf("verifying notifiers...")
 		if approver.Notifiers == nil {
 			return fmt.Errorf("failed to identify a notifier")
 		}
+		logrus.Debugf("starting notifiers...")
 		go approver.Notifiers.StartListening()
 
+		logrus.Debugf("starting http server...")
 		httpServerDone := make(chan common.Done)
-		logrus.Infof("starting http client...")
 		approver.StartHttpServer(approver.StartHttpServerOpts{
 			Addr:        "0.0.0.0:12345",
 			Done:        httpServerDone,

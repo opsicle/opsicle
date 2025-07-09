@@ -6,6 +6,7 @@ import (
 	"opsicle/cmd/opsicle/run"
 	"opsicle/cmd/opsicle/start"
 	"opsicle/cmd/opsicle/validate"
+	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/config"
 	"os"
@@ -16,58 +17,43 @@ import (
 	"github.com/spf13/viper"
 )
 
+var flags cli.Flags = cli.Flags{
+	{
+		Name:         "log-level",
+		Short:        'l',
+		DefaultValue: "info",
+		Usage:        fmt.Sprintf("sets the log level (one of [%s])", strings.Join(common.LogLevels, ", ")),
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "config-path",
+		Short:        'c',
+		DefaultValue: "~/.opsicle/config",
+		Usage:        "defines the location of the global configuration used",
+		Type:         cli.FlagTypeString,
+	},
+}
+
 func init() {
 	Command.AddCommand(add.Command)
 	Command.AddCommand(run.Command)
 	Command.AddCommand(start.Command)
 	Command.AddCommand(validate.Command)
 
-	currentFlag := "log-level"
-	Command.PersistentFlags().StringP(
-		currentFlag,
-		"l",
-		"info",
-		fmt.Sprintf("sets the log level (one of [%s])", strings.Join(common.LogLevels, ", ")),
-	)
-	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "config-path"
-	Command.PersistentFlags().StringP(
-		currentFlag,
-		"c",
-		"~/.opsicle/config",
-		"defines the location of the global configuration used",
-	)
-	viper.BindPFlag(currentFlag, Command.PersistentFlags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
+	flags.AddToCommand(Command, true)
 
 	logrus.SetOutput(os.Stderr)
 	cobra.OnInitialize(func() {
-		logLevel := viper.GetString("log-level")
-		switch logLevel {
-		case common.LogLevelTrace:
-			logrus.SetLevel(logrus.TraceLevel)
-		case common.LogLevelDebug:
-			logrus.SetLevel(logrus.DebugLevel)
-		case common.LogLevelInfo:
-			logrus.SetLevel(logrus.InfoLevel)
-		case common.LogLevelWarn:
-			logrus.SetLevel(logrus.WarnLevel)
-		case common.LogLevelError:
-			logrus.SetLevel(logrus.ErrorLevel)
+		flags.BindViper(Command, true)
+		cli.InitLogging(viper.GetString("log-level"))
+		configPath := viper.GetString("config-path")
+		logrus.Debugf("using configuration at path[%s]", configPath)
+		if err := config.LoadGlobal(configPath); err != nil {
+			logrus.Errorf("failed to load global configuration: %s", err)
 		}
-		logrus.SetFormatter(&logrus.TextFormatter{
-			FullTimestamp: true,
-		})
-
-		configPath := viper.GetString("config")
-
-		config.LoadGlobal(configPath)
 	})
 
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	viper.AutomaticEnv()
+	cli.InitConfig()
 }
 
 var Command = &cobra.Command{

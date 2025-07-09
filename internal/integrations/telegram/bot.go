@@ -34,10 +34,10 @@ func (b *Bot) EscapeMarkdown(input string) string {
 	return bot.EscapeMarkdown(input)
 }
 
-func (b *Bot) UpdateMessage(chatId int64, messageId int, newMessage string, markup ...*models.ReplyMarkup) error {
+func (b *Bot) UpdateMessage(chatId int64, messageId int, newMessage string, markup ...models.ReplyMarkup) error {
 	b.ServiceLogs <- common.ServiceLogf(
 		common.LogLevelDebug,
-		"chat[%v].updateMessage[%v] '%s' (markup: %v)",
+		"chat[%v].UpdateMessage[%v] '%s' (markup: %v)",
 		chatId,
 		messageId,
 		newMessage,
@@ -49,7 +49,7 @@ func (b *Bot) UpdateMessage(chatId int64, messageId int, newMessage string, mark
 		ParseMode: "MarkdownV2",
 		Text:      newMessage,
 	}
-	if markup[0] == nil {
+	if markup == nil || markup[0] == nil {
 		editMessageParameters.ReplyMarkup = &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{}}
 	} else {
 		editMessageParameters.ReplyMarkup = markup[0]
@@ -58,6 +58,28 @@ func (b *Bot) UpdateMessage(chatId int64, messageId int, newMessage string, mark
 	defer cancel()
 	if _, err := b.Client.EditMessageText(ctx, editMessageParameters); err != nil {
 		return fmt.Errorf("failed to edit text of message[%v] in chat[%v]: %s", messageId, chatId, err)
+	}
+	return nil
+}
+
+func (b *Bot) UpdateMarkup(chatId int64, messageId int, markup models.ReplyMarkup) error {
+	b.ServiceLogs <- common.ServiceLogf(
+		common.LogLevelDebug,
+		"chat[%v].UpdateMarkup[%v]",
+		chatId,
+		messageId,
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := b.Client.EditMessageReplyMarkup(
+		ctx, &bot.EditMessageReplyMarkupParams{
+			ChatID:      chatId,
+			MessageID:   messageId,
+			ReplyMarkup: markup,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to edit reply markup of message[%v] in chat[%v]: %s", messageId, chatId, err)
 	}
 	return nil
 }

@@ -12,8 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const cmdCtx = "o-run-automation-"
-
 var Command = &cobra.Command{
 	Use:     "automation <path-to-automation>",
 	Aliases: []string{"a"},

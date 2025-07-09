@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/worker"
 	"os"
@@ -15,59 +16,56 @@ import (
 	"github.com/spf13/viper"
 )
 
-const cmdCtx = "o-start-worker-"
+var flags cli.Flags = cli.Flags{
+	{
+		Name:         "controller-url",
+		Short:        'u',
+		DefaultValue: "localhost:12345",
+		Usage:        "the url of the controller",
+		Type:         cli.FlagTypeString,
+	},
+
+	{
+		Name:         "filesystem-path",
+		Short:        'p',
+		DefaultValue: "",
+		Usage:        "path to a directory containing automations",
+		Type:         cli.FlagTypeString,
+	},
+
+	{
+		Name:         "runtime",
+		Short:        'r',
+		DefaultValue: common.RuntimeDocker,
+		Usage:        fmt.Sprintf("runtime to use, one of ['%s']", strings.Join(common.Runtimes, "', '")),
+		Type:         cli.FlagTypeString,
+	},
+
+	{
+		Name:         "poll-interval",
+		Short:        'i',
+		DefaultValue: time.Second * 5,
+		Usage:        "interval between polls",
+		Type:         cli.FlagTypeDuration,
+	},
+}
 
 func init() {
-	currentFlag := "controller-url"
-	Command.Flags().StringP(
-		currentFlag,
-		"u",
-		"localhost:12345",
-		"the url of the controller",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "filesystem-path"
-	Command.Flags().StringP(
-		currentFlag,
-		"p",
-		"",
-		"path to a directory containing automations",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "runtime"
-	Command.Flags().StringP(
-		currentFlag,
-		"r",
-		common.RuntimeDocker,
-		fmt.Sprintf("runtime to use, one of ['%s']", strings.Join(common.Runtimes, "', '")),
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
-
-	currentFlag = "poll-interval"
-	Command.Flags().DurationP(
-		currentFlag,
-		"i",
-		time.Second*5,
-		"interval between polls",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
+	flags.AddToCommand(Command)
 }
 
 var Command = &cobra.Command{
 	Use:   "worker",
 	Short: "Starts the worker component",
 	Long:  "Starts the worker component that subscribes to the controller and polls for jobs to start",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		flags.BindViper(cmd)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		controllerUrl := viper.GetString(cmdCtx + "controller-url")
-		filesystemPath := viper.GetString(cmdCtx + "filesystem-path")
-		pollInterval := viper.GetDuration(cmdCtx + "poll-interval")
-		runtime := viper.GetString(cmdCtx + "runtime")
+		controllerUrl := viper.GetString("controller-url")
+		filesystemPath := viper.GetString("filesystem-path")
+		pollInterval := viper.GetDuration("poll-interval")
+		runtime := viper.GetString("runtime")
 
 		source := ""
 		mode := worker.ModeFilesystem

@@ -3,6 +3,7 @@ package telegrambot
 import (
 	"context"
 	"fmt"
+	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/integrations/telegram"
 
@@ -12,25 +13,28 @@ import (
 	"github.com/spf13/viper"
 )
 
-const cmdCtx = "o-start-helper-telegrambot-"
+var flags cli.Flags = cli.Flags{
+	{
+		Name:         "telegram-bot-token",
+		DefaultValue: "",
+		Usage:        "the telegram bot token to be used when telegram is enabled",
+		Type:         cli.FlagTypeString,
+	},
+}
 
 func init() {
-	currentFlag := "telegram-bot-token"
-	Command.Flags().String(
-		currentFlag,
-		"",
-		"the telegram bot token to be used when telegram is enabled",
-	)
-	viper.BindPFlag(cmdCtx+currentFlag, Command.Flags().Lookup(currentFlag))
-	viper.BindEnv(currentFlag)
+	flags.AddToCommand(Command)
 }
 
 var Command = &cobra.Command{
 	Use:     "telegrambot",
 	Aliases: []string{"tgbot", "tg"},
 	Short:   "Runs a base telegram bot that returns the chat Id",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		flags.BindViper(cmd)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		telegramBotToken := viper.GetString(cmdCtx + "telegram-bot-token")
+		telegramBotToken := viper.GetString("telegram-bot-token")
 		if telegramBotToken == "" {
 			return fmt.Errorf("failed to receive a telegram bot token")
 		}

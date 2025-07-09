@@ -19,10 +19,6 @@ type RequestSpec struct {
 	// happens
 	Approval *ApprovalSpec `json:"approval" yaml:"approval"`
 
-	// AuthorizedApprovers specifies which users are allowed to
-	// perform an approval/rejection
-	AuthorizedApprovers *AuthorizedApproversSpec `json:"authorizedApprovers" yaml:"authorizedApprovers"`
-
 	// Id is the ID of a request which will be the same for all
 	// requests of a given type
 	Id string `json:"id" yaml:"id"`
@@ -35,17 +31,14 @@ type RequestSpec struct {
 	// Message is an additiona message describing the request
 	Message string `json:"message" yaml:"message"`
 
-	// MfaSeed is an optional field that when populated, requires the
-	// user to respond with their TOTP MFA number. This seed is recommended
-	// to be a specially provisioned MFA since you will be sending it to
-	// another system
-	MfaSeed *string `json:"mfaSeed" yaml:"mfaSeed"`
-
 	// RequesterName indicates the requester's system ID
 	RequesterId string `json:"requesterId" yaml:"requesterId"`
 
 	// RequesterName indicates the requester's name
 	RequesterName string `json:"requesterName" yaml:"requesterName"`
+
+	// Slack specifies the targets in Slack to send this request to
+	Slack []SlackRequestSpec `json:"slack" yaml:"slack"`
 
 	// Telegram specifies the targets in Telegram to send this request to
 	Telegram []TelegramRequestSpec `json:"telegram" yaml:"telegram"`
@@ -69,27 +62,41 @@ func (rs *RequestSpec) GetUuid() string {
 	return *rs.Uuid
 }
 
-type AuthorizedApproversSpec struct {
-	Telegram AuthorizedTelegramApprovers `json:"telegram" yaml:"telegram"`
+type SlackRequestSpec struct {
+	// ChannelName defines the name of the channel to send to
+	ChannelName string `json:"channelName" yaml:"channelName"`
+
+	// MfaSeed is an optional field that when populated, requires the
+	// user to respond with their TOTP MFA number. This seed is recommended
+	// to be a specially provisioned MFA since you will be sending it to
+	// another system
+	MfaSeed *string `json:"mfaSeed" yaml:"mfaSeed"`
+
+	// UserId optionally specifies the Slack user ID of the user who is
+	// allowed to approve/reject an approval request
+	UserId *int64 `json:"userId" yaml:"userId"`
+
+	SentAt *time.Time `json:"sentAt" yaml:"sentAt"`
 }
 
-type AuthorizedTelegramApprovers []AuthorizedTelegramApprovers
-type AuthorizedTelegramApprover struct {
-	// UserId specifies the Telegram user ID of the user who is allowed
-	// to approve/reject an approval request
-	UserId int64 `json:"userId" yaml:"userId"`
+type TelegramRequestSpec struct {
+	// ChatId defines the ID of the chat where the message should be sent
+	ChatId int64 `json:"chatId" yaml:"chatId"`
 
-	// ChatId optionally specifies the ID of the chat which the approval
-	// must come from otherwise the request will be rejected
-	ChatId *int64 `json:"chatId" yaml:"chatId"`
+	// MfaSeed is an optional field that when populated, requires the
+	// user to respond with their TOTP MFA number. This seed is recommended
+	// to be a specially provisioned MFA since you will be sending it to
+	// another system
+	MfaSeed *string `json:"mfaSeed" yaml:"mfaSeed"`
+
+	// UserId optionally specifies the Telegram user ID of the user who is
+	// allowed to approve/reject an approval request
+	UserId *int64 `json:"userId" yaml:"userId"`
 
 	// Username optionally specifies the username of the approver whom the
 	// approval must come from otherwise the request will be rejected
 	Username *string `json:"username" yaml:"username"`
-}
 
-type TelegramRequestSpec struct {
-	ChatId int64      `json:"chatId" yaml:"chatId"`
 	SentAt *time.Time `json:"sentAt" yaml:"sentAt"`
 }
 

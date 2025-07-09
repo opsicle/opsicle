@@ -6,6 +6,7 @@ import (
 )
 
 const (
+	NotifierPlatformSlack    = "slack"
 	NotifierPlatformTelegram = "telegram"
 )
 
@@ -38,7 +39,7 @@ func (n notifiers) Stop() {
 }
 
 type notifier interface {
-	SendApprovalRequest(req ApprovalRequest) (requestUuid string, notifications []notificationMessage, err error)
+	SendApprovalRequest(req ApprovalRequest) (requestUuid string, notifications notificationMessages, err error)
 	StartListening()
 	Stop()
 }

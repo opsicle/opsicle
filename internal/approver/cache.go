@@ -14,6 +14,15 @@ type cache interface {
 	Del(key string) (err error)
 }
 
+type pendingMfa struct {
+	ApprovalRequestMessageId string `json:"approvalRequestMessageId"`
+	ChatId                   string `json:"chatId"`
+	MfaSeed                  string `json:"mfaSeed"`
+	RequestId                string `json:"requestId"`
+	RequestUuid              string `json:"requestUuid"`
+	UserId                   string `json:"userId"`
+}
+
 func CreateApprovalCacheKey(requestIdentifiers ...string) string {
 	cacheKeys := []string{approvalCachePrefix}
 	cacheKeys = append(cacheKeys, requestIdentifiers...)
@@ -22,6 +31,12 @@ func CreateApprovalCacheKey(requestIdentifiers ...string) string {
 
 func CreateApprovalRequestCacheKey(requestIdentifiers ...string) string {
 	cacheKeys := []string{approvalRequestCachePrefix}
+	cacheKeys = append(cacheKeys, requestIdentifiers...)
+	return strings.Join(cacheKeys, ":")
+}
+
+func CreatePendingMfaCacheKey(requestIdentifiers ...string) string {
+	cacheKeys := []string{pendingMfaCachePrefix}
 	cacheKeys = append(cacheKeys, requestIdentifiers...)
 	return strings.Join(cacheKeys, ":")
 }
