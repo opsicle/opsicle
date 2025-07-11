@@ -14,13 +14,12 @@ import (
 
 type telegramNotifier struct {
 	Client      *telegram.Bot
-	ChatMap     map[string]int64
 	Done        chan common.Done
 	ServiceLogs chan<- common.ServiceLog
 }
 
-func (t *telegramNotifier) SendApprovalRequest(req ApprovalRequest) (string, notificationMessages, error) {
-	text := getApprovalRequestMessage(req)
+func (t *telegramNotifier) SendApprovalRequest(req *ApprovalRequest) (string, notificationMessages, error) {
+	text := getTelegramApprovalRequestMessage(*req)
 
 	requestUuid := req.Spec.GetUuid()
 	requestId := req.Spec.Id
@@ -80,9 +79,6 @@ type InitTelegramNotifierOpts struct {
 	// Telegram - get yours at https://t.me/BotFather
 	BotToken string `json:"botToken" yaml:"botToken"`
 
-	// ChatMap maps a logical chat name to it's ID in Telegram
-	ChatMap map[string]int64 `json:"chatMap" yaml:"chatMap"`
-
 	// DefaultHandler enables overriding the default handler
 	DefaultHandler telegram.Handler
 
@@ -111,7 +107,6 @@ func InitTelegramNotifier(opts InitTelegramNotifierOpts) error {
 		Notifiers,
 		&telegramNotifier{
 			Client:      telegramBot,
-			ChatMap:     opts.ChatMap,
 			ServiceLogs: opts.ServiceLogs,
 		},
 	)

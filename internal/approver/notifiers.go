@@ -14,7 +14,7 @@ var Notifiers notifiers
 
 type notifiers []notifier
 
-func (n notifiers) SendApprovalRequest(req ApprovalRequest) (requestUuid string, notifications []notificationMessage, err error) {
+func (n notifiers) SendApprovalRequest(req *ApprovalRequest) (requestUuid string, notifications []notificationMessage, err error) {
 	for _, notifierInstance := range n {
 		var notifierInstanceNotifications []notificationMessage
 		requestUuid, notifierInstanceNotifications, err = notifierInstance.SendApprovalRequest(req)
@@ -39,7 +39,7 @@ func (n notifiers) Stop() {
 }
 
 type notifier interface {
-	SendApprovalRequest(req ApprovalRequest) (requestUuid string, notifications notificationMessages, err error)
+	SendApprovalRequest(req *ApprovalRequest) (requestUuid string, notifications notificationMessages, err error)
 	StartListening()
 	Stop()
 }

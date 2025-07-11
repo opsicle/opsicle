@@ -1,6 +1,7 @@
 package approvals
 
 const (
+	PlatformSlack    Platform = "slack"
 	PlatformTelegram Platform = "telegram"
 )
 

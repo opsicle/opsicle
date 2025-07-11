@@ -17,6 +17,7 @@ type ApprovalSpec struct {
 	RequestId       string               `json:"requestId" yaml:"requestId"`
 	RequesterId     string               `json:"requesterId" yaml:"requesterId"`
 	RequesterName   string               `json:"requesterName" yaml:"requesterName"`
+	Slack           SlackResponseSpec    `json:"slack" yaml:"slack"`
 	Status          Status               `json:"status" yaml:"status"`
 	StatusUpdatedAt time.Time            `json:"statusUpdatedAt" yaml:"statusUpdatedAt"`
 	Telegram        TelegramResponseSpec `json:"telegram" yaml:"telegram"`
@@ -27,4 +28,10 @@ type TelegramResponseSpec struct {
 	ChatId   int64  `json:"chatId" yaml:"chatId"`
 	Username string `json:"username" yaml:"username"`
 	UserId   int64  `json:"userId" yaml:"userId"`
+}
+
+type SlackResponseSpec struct {
+	ChannelId string `json:"channelId" yaml:"channelId"`
+	UserId    string `json:"userId" yaml:"userId"`
+	UserName  string `json:"userName" yaml:"userName"`
 }

@@ -28,7 +28,7 @@ type RequestSpec struct {
 	// the request)
 	Uuid *string `json:"uuid" yaml:"uuid"`
 
-	// Message is an additiona message describing the request
+	// Message is an additional message describing the request
 	Message string `json:"message" yaml:"message"`
 
 	// RequesterName indicates the requester's system ID
@@ -43,8 +43,21 @@ type RequestSpec struct {
 	// Telegram specifies the targets in Telegram to send this request to
 	Telegram []TelegramRequestSpec `json:"telegram" yaml:"telegram"`
 
+	// Title is an optional field that when sepcified, is used as the first
+	// line of the approval request message
+	Title *string `json:"title" yaml:"title"`
+
 	// TtlSeconds indicates the duration in seconds until the request expires
 	TtlSeconds int `json:"ttlSeconds" yaml:"ttlSeconds"`
+
+	// Url is an optional additional link to view the request in a browser or
+	// other application,
+	Url *string `json:"url" yaml:"url"`
+
+	// WebhookUrl is an optional field that when specified, will be called with
+	// a HTTP POST request with the full approval request details when a request
+	// is approved/rejected
+	WebhookUrl *string `json:"webhookUrl" yaml:"webhookUrl"`
 }
 
 func (rs *RequestSpec) Init() {
@@ -66,6 +79,16 @@ type SlackRequestSpec struct {
 	// ChannelName defines the name of the channel to send to
 	ChannelName string `json:"channelName" yaml:"channelName"`
 
+	// ChannelId defines the ID of the channel to send to, if this
+	// is populated, this will be used, otherwise this will be
+	// populated when the `.ChannelName` is evaluated
+	ChannelId *string `json:"channelId" yaml:"channelId"`
+
+	// MessageId is not meant to be specified in the approval request
+	// manifest, it is populated after the approval request message
+	// is sent so that responses can be threaded
+	MessageId *string `json:"-" yaml:"-"`
+
 	// MfaSeed is an optional field that when populated, requires the
 	// user to respond with their TOTP MFA number. This seed is recommended
 	// to be a specially provisioned MFA since you will be sending it to
@@ -74,7 +97,7 @@ type SlackRequestSpec struct {
 
 	// UserId optionally specifies the Slack user ID of the user who is
 	// allowed to approve/reject an approval request
-	UserId *int64 `json:"userId" yaml:"userId"`
+	UserId *string `json:"userId" yaml:"userId"`
 
 	SentAt *time.Time `json:"sentAt" yaml:"sentAt"`
 }

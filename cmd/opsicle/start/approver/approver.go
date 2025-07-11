@@ -126,10 +126,7 @@ var Command = &cobra.Command{
 				return fmt.Errorf("failed to receive a telegram bot token")
 			}
 			if err := approver.InitTelegramNotifier(approver.InitTelegramNotifierOpts{
-				BotToken: telegramBotToken,
-				ChatMap: map[string]int64{
-					"main": 267230627,
-				},
+				BotToken:    telegramBotToken,
 				ServiceLogs: serviceLogs,
 			}); err != nil {
 				return fmt.Errorf("failed to initialise telegram client: %s", err)

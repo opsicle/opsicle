@@ -50,7 +50,7 @@ func getCreateApprovalRequestHandler() http.HandlerFunc {
 		}
 
 		log(common.LogLevelDebug, fmt.Sprintf("sending approvalRequest[%s]...", req.Spec.GetUuid()))
-		requestUuid, notifications, err := Notifiers.SendApprovalRequest(req)
+		requestUuid, notifications, err := Notifiers.SendApprovalRequest(&req)
 		if err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, fmt.Sprintf("failed to send approvalRequest[%v:%s]", req.Spec.Id, requestUuid), err)
 			return

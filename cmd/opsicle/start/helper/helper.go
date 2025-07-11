@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"opsicle/cmd/opsicle/start/helper/httpreceiver"
 	"opsicle/cmd/opsicle/start/helper/telegrambot"
 	"opsicle/cmd/opsicle/start/helper/totpgenerator"
 
@@ -8,6 +9,7 @@ import (
 )
 
 func init() {
+	Command.AddCommand(httpreceiver.Command)
 	Command.AddCommand(telegrambot.Command)
 	Command.AddCommand(totpgenerator.Command)
 }

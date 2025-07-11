@@ -1,11 +1,10 @@
 package approver
 
 import (
-	"fmt"
 	"opsicle/internal/integrations/telegram"
 )
 
-func getApprovalRequestMessage(req ApprovalRequest) string {
+func getTelegramApprovalRequestMessage(req ApprovalRequest) string {
 	return telegram.FormatInputf(
 		"⚠️ Approval request\nID: `%s`\nMessage: `%s`\nRequester: %s \\(`%s`\\)",
 		req.Spec.Id,
@@ -15,8 +14,8 @@ func getApprovalRequestMessage(req ApprovalRequest) string {
 	)
 }
 
-func getApprovedMessage(req ApprovalRequest) string {
-	return fmt.Sprintf(
+func getTelegramApprovedMessage(req ApprovalRequest) string {
+	return telegram.FormatInputf(
 		"✅ Approval request\nID: `%v`\nMessage: `%s`\nRequester: %s \\(`%s`\\)\n\nStatus: *APPROVED*\nApproval ID: `%s`\nRequest ID: `%s`",
 		req.Spec.Id,
 		req.Spec.Message,
@@ -27,15 +26,15 @@ func getApprovedMessage(req ApprovalRequest) string {
 	)
 }
 
-func getMfaRequestMessage(req ApprovalRequest) string {
-	return fmt.Sprintf(
+func getTelegramMfaRequestMessage(req ApprovalRequest) string {
+	return telegram.FormatInputf(
 		"🔓 Reply to this message with your assigned MFA token \\(expires in 60 seconds\\)\nRequest ID: `%s`",
 		req.Spec.GetUuid(),
 	)
 }
 
-func getPendingMfaMessage(req ApprovalRequest) string {
-	return fmt.Sprintf(
+func getTelegramPendingMfaMessage(req ApprovalRequest) string {
+	return telegram.FormatInputf(
 		"⏳ Approval request\nID: `%v`\nMessage: `%s`\nRequester: %s \\(`%s`\\)\n\nStatus: *PENDING MFA*",
 		req.Spec.Id,
 		req.Spec.Message,
@@ -44,8 +43,8 @@ func getPendingMfaMessage(req ApprovalRequest) string {
 	)
 }
 
-func getRejectedMessage(req ApprovalRequest) string {
-	return fmt.Sprintf(
+func getTelegramRejectedMessage(req ApprovalRequest) string {
+	return telegram.FormatInputf(
 		"❌ Approval request\nID: `%v`\nMessage: `%s`\nRequester: %s \\(`%s`\\)\n\nStatus: *REJECTED*\nApproval ID: `%s`",
 		req.Spec.Id,
 		req.Spec.Message,
@@ -55,6 +54,6 @@ func getRejectedMessage(req ApprovalRequest) string {
 	)
 }
 
-func getUnauthorizedMessage() string {
+func getTelegramUnauthorizedMessage() string {
 	return "⚠️ You are not authorised to perform this action"
 }

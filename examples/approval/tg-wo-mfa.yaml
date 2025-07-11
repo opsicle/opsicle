@@ -1,9 +1,9 @@
 apiVersion: v1
 type: ApprovalRequest
 metadata:
-  name: basic-with-mfa
+  name: telegram-wo-mfa
 spec:
-  id: 'basic-with-mfa-001'
+  id: 'telegram-wo-mfa-001'
   requesterId: user@company.co
   requesterName: y0l0
   message: "i can haz cheeseburger?"

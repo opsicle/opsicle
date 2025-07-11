@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"opsicle/internal/common"
-	"strings"
 	"time"
 
 	"github.com/slack-go/slack"
@@ -19,6 +18,8 @@ type slackNotifier struct {
 	Socket      *socketmode.Client
 }
 
+// resolveChannelId is a helper function that resolves the channel ID given
+// the name of the channel
 func (s *slackNotifier) resolveChannelId(channelName string) (string, error) {
 	conversationCursor := ""
 	for {
@@ -46,45 +47,49 @@ func (s *slackNotifier) resolveChannelId(channelName string) (string, error) {
 	return "", fmt.Errorf("channel %s not found", channelName)
 }
 
-func (s *slackNotifier) SendApprovalRequest(req ApprovalRequest) (string, notificationMessages, error) {
-	text := getApprovalRequestMessage(req)
-
+func (s *slackNotifier) SendApprovalRequest(req *ApprovalRequest) (string, notificationMessages, error) {
 	requestUuid := req.Spec.GetUuid()
 	requestId := req.Spec.Id
 	s.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "sending via slack...")
 	notifications := notificationMessages{}
 
-	for _, target := range req.Spec.Slack {
-		channelId, err := s.resolveChannelId(target.ChannelName)
-		if err != nil {
-			s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to resolve the id of channel[%s]: %s", target.ChannelName, err)
-			continue
+	for i, target := range req.Spec.Slack {
+		var channelId string
+		if target.ChannelId != nil {
+			channelId = *target.ChannelId
+		} else {
+			var err error
+			channelId, err = s.resolveChannelId(target.ChannelName)
+			if err != nil {
+				s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to resolve the id of channel[%s]: %s", target.ChannelName, err)
+				continue
+			}
+			req.Spec.Slack[i].ChannelId = &channelId
 		}
+
 		notification := notificationMessage{
 			Id:       requestUuid,
 			TargetId: channelId,
 			Platform: NotifierPlatformSlack,
 		}
 
-		blocks := slack.Blocks{
-			BlockSet: []slack.Block{
-				slack.NewSectionBlock(slack.NewTextBlockObject("mrkdwn", text, false, false), nil, nil),
-				slack.NewActionBlock("approval_actions_"+requestUuid,
-					slack.NewButtonBlockElement(string(ActionApprove), createSlackApprovalCallbackData(channelId, requestUuid, requestId), slack.NewTextBlockObject("plain_text", "Approve", false, false)),
-					slack.NewButtonBlockElement(string(ActionReject), createSlackApprovalCallbackData(channelId, requestUuid, requestId), slack.NewTextBlockObject("plain_text", "Reject", false, false)),
-				),
-			},
-		}
-
-		sentChannelId, messageTimestamp, err := s.Client.PostMessage(
+		callbackData := createSlackApprovalCallbackData(
 			channelId,
-			slack.MsgOptionBlocks(blocks.BlockSet...),
+			target.ChannelName,
+			requestId,
+			requestUuid,
+			target.UserId,
 		)
+
+		blocks := getSlackApprovalRequestBlocks(req, callbackData)
+
+		sentChannelId, messageTimestamp, err := s.Client.PostMessage(channelId, slack.MsgOptionBlocks(blocks.BlockSet...))
 		if err != nil {
 			s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send slack message to channel[%s] with id[%s]: %w", target.ChannelName, channelId, err)
 			notification.Error = err
 			continue
 		} else {
+			req.Spec.Slack[i].MessageId = &messageTimestamp
 			notification.IsSuccess = true
 			notification.MessageId = fmt.Sprintf("%s_%s", sentChannelId, messageTimestamp)
 			notification.SentAt = time.Now()
@@ -96,26 +101,16 @@ func (s *slackNotifier) SendApprovalRequest(req ApprovalRequest) (string, notifi
 }
 
 func (s *slackNotifier) StartListening() {
+	defaultHandler := getDefaultSlackHandler(
+		s.Client,
+		s.Socket,
+		s.ServiceLogs,
+	)
+
 	go func() {
 		for evt := range s.Socket.Events {
-			switch evt.Type {
-			case socketmode.EventTypeInteractive:
-				cb, ok := evt.Data.(slack.InteractionCallback)
-				if !ok {
-					continue
-				}
-				switch cb.Type {
-				case slack.InteractionTypeBlockActions:
-					s.handleInteractive(cb)
-					s.Socket.Ack(*evt.Request)
-				case slack.InteractionTypeViewSubmission:
-					s.handleViewSubmission(cb)
-					s.Socket.Ack(*evt.Request)
-				default:
-					s.Socket.Ack(*evt.Request)
-				}
-			default:
-				// Unhandled event
+			if err := defaultHandler(evt); err != nil {
+				s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to handle slack event: %s", err)
 			}
 		}
 	}()
@@ -125,67 +120,6 @@ func (s *slackNotifier) StartListening() {
 			log.Fatalf("socket mode failed: %v", err)
 		}
 	}()
-}
-
-func (s *slackNotifier) handleInteractive(callback slack.InteractionCallback) {
-	if len(callback.ActionCallback.BlockActions) == 0 {
-		return
-	}
-
-	action := callback.ActionCallback.BlockActions[0]
-	userId := callback.User.ID
-	channelId, requestUuid, _ := parseSlackApprovalCallbackData(action.Value)
-
-	switch action.ActionID {
-	case string(ActionApprove):
-		s.openMfaModal(callback.TriggerID, channelId, requestUuid, userId)
-	case string(ActionReject):
-		msg := fmt.Sprintf(":x: *Rejected* by `%s` (request ID: `%s`)", userId, requestUuid)
-		s.Client.PostMessage(channelId, slack.MsgOptionText(msg, false))
-	}
-}
-
-func (s *slackNotifier) openMfaModal(triggerId, channelId, requestUuid, user string) {
-	mfaInput := slack.NewPlainTextInputBlockElement(slack.NewTextBlockObject("plain_text", "Enter MFA Code", false, false), "mfa_token")
-	mfaBlock := slack.NewInputBlock("mfa_input", slack.NewTextBlockObject("plain_text", "MFA Code (optional)", false, false), nil, mfaInput)
-
-	modalRequest := slack.ModalViewRequest{
-		Type:            slack.VTModal,
-		CallbackID:      "mfa_modal_" + requestUuid,
-		Title:           slack.NewTextBlockObject("plain_text", "MFA Approval", false, false),
-		Close:           slack.NewTextBlockObject("plain_text", "Cancel", false, false),
-		Submit:          slack.NewTextBlockObject("plain_text", "Submit", false, false),
-		PrivateMetadata: fmt.Sprintf("%s|%s|%s", channelId, requestUuid, user),
-		Blocks:          slack.Blocks{BlockSet: []slack.Block{mfaBlock}},
-	}
-
-	_, err := s.Client.OpenView(triggerId, modalRequest)
-	if err != nil {
-		log.Printf("failed to open MFA modal: %v", err)
-	}
-}
-
-func (s *slackNotifier) handleViewSubmission(cb slack.InteractionCallback) {
-	meta := cb.View.PrivateMetadata // format: requestID|username
-	parts := strings.SplitN(meta, "|", 3)
-	if len(parts) != 3 {
-		log.Printf("invalid private metadata: %s", meta)
-		return
-	}
-	channelId := parts[0]
-	requestUuid := parts[1]
-	userId := parts[2]
-
-	mfaToken := cb.View.State.Values["mfa_input"]["mfa_token"].Value
-	msg := fmt.Sprintf(":white_check_mark: *Approved* by `%s` (request ID: `%s`)", userId, requestUuid)
-
-	if mfaToken != "" {
-		msg += fmt.Sprintf("\nMFA token provided: `%s`", mfaToken)
-	} else {
-		msg += "\n_No MFA token provided._"
-	}
-
-	s.Client.PostMessage(channelId, slack.MsgOptionText(msg, false))
 }
 
 func (s *slackNotifier) Stop() {
