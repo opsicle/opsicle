@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/google/uuid"
 )
@@ -21,28 +22,57 @@ func getDefaultHandler(
 ) func(context.Context, *telegram.Bot, *telegram.Update) {
 	return func(ctx context.Context, bot *telegram.Bot, update *telegram.Update) {
 		serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "chat[%v] << %s", update.ChatId, update.Message)
-		// handle potential mfa authentications
-		if update.Message != "" && update.IsReply && update.ReplyMessageId != 0 {
-			serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "processing potential mfa response from chat[%v]", update.ChatId)
-			handleTelegramMfaResponse(handleTelegramMfaResponseOpts{
-				Bot:            bot,
-				ChatId:         update.ChatId,
-				Message:        update.Message,
-				MessageId:      update.MessageId,
-				SenderId:       update.SenderId,
-				SenderUsername: update.SenderUsername,
-				ServiceLogs:    serviceLogs,
-			})
+
+		if update.Message != "" {
+
+			if strings.HasPrefix(update.Message, "/") {
+
+				// handle commands
+
+				serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "processing command from chat[%v]", update.ChatId)
+				handleTelegramCommands(handleTelegramCommandsOpts{
+					Bot:         bot,
+					Update:      update,
+					ServiceLogs: serviceLogs,
+				})
+				return
+
+			} else if update.IsReply && update.ReplyMessageId != 0 {
+
+				// handle potential mfa authentications
+
+				serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "processing potential mfa response from chat[%v]", update.ChatId)
+				handleTelegramMfaResponse(handleTelegramMfaResponseOpts{
+					Bot:                 bot,
+					ChatId:              update.ChatId,
+					Message:             update.Message,
+					MessageId:           update.MessageId,
+					MfaRequestMessageId: update.ReplyMessageId,
+					SenderId:            update.SenderId,
+					SenderUsername:      update.SenderUsername,
+					ServiceLogs:         serviceLogs,
+				})
+				return
+			}
 		}
 
 		// if it's not an approve/reject button call, do nothing
+
 		if update.CallbackData == "" {
-			serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "ignoring message in chat[%v], not a callback", update.ChatId)
+			serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "processing invalid message from chat[%v]", update.ChatId)
+			handleTelegramInvalidEvent(handleTelegramInvalidEventOpts{
+				Bot:         bot,
+				ChatId:      update.ChatId,
+				MessageId:   update.MessageId,
+				SenderId:    update.SenderId,
+				ServiceLogs: serviceLogs,
+			})
 			return
 		}
 
-		// handle callbacks
-		serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "processing callback data from chat[%v]", update.ChatId)
+		// handle user responses via buttons
+
+		serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "processing callback data from chat[%v]", update.ChatId)
 		action, requestUuid, requestId, err := parseTelegramApprovalCallbackData(update.CallbackData)
 		if err != nil {
 			serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to parse callback: %s", err)
@@ -52,7 +82,7 @@ func getDefaultHandler(
 			return
 		}
 		serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "received callback with action[%s] on request[%s:%s]", action, requestUuid, requestId)
-		currentApprovalRequest, err := LoadApprovalRequest(ApprovalRequest{
+		approvalRequest, err := LoadApprovalRequest(ApprovalRequest{
 			Spec: approvals.RequestSpec{
 				Id:   requestId,
 				Uuid: &requestUuid,
@@ -65,11 +95,11 @@ func getDefaultHandler(
 			}
 			return
 		}
-		serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "retrieved approvalRequest[%s:%s]", currentApprovalRequest.Spec.Id, currentApprovalRequest.Spec.GetUuid())
+		serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "retrieved approvalRequest[%s:%s]", approvalRequest.Spec.Id, approvalRequest.Spec.GetUuid())
 
 		var response = ""
-		if currentApprovalRequest.Spec.Approval != nil {
-			switch currentApprovalRequest.Spec.Approval.Status {
+		if approvalRequest.Spec.Approval != nil {
+			switch approvalRequest.Spec.Approval.Status {
 			case approvals.StatusApproved:
 				response = "This request has already been approved"
 			case approvals.StatusRejected:
@@ -77,20 +107,21 @@ func getDefaultHandler(
 			default:
 				response = "We've detected an unknown status, please try again from the start"
 			}
+			serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "responding to chat[%v]: %v", update.ChatId, err)
+			if err := bot.ReplyMessage(update.ChatId, update.MessageId, response); err != nil {
+				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send confirmation message: %v", err)
+			}
 		} else {
-			if isTelegramSenderAuthorized := isTelegramSenderAuthorizedToRespond(isTelegramSenderAuthorizedToRespondOpts{
+			authorizedTargets := getAuthorizedTelegramTargets(getAuthorizedTelegramTargetsOpts{
 				ChatId:         update.ChatId,
-				MessageId:      update.MessageId,
-				Req:            *currentApprovalRequest,
+				Req:            *approvalRequest,
 				SenderId:       update.SenderId,
 				SenderUsername: update.SenderUsername,
 				ServiceLogs:    serviceLogs,
-			}); !isTelegramSenderAuthorized {
-				if err := bot.ReplyMessage(
-					update.ChatId,
-					update.MessageId,
-					getTelegramUnauthorizedMessage(),
-				); err != nil {
+			})
+			isSenderAuthorised := len(authorizedTargets) > 0
+			if !isSenderAuthorised {
+				if err := bot.ReplyMessage(update.ChatId, update.MessageId, getTelegramUnauthorizedMessage()); err != nil {
 					serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update message[%v]: %s", update.MessageId, err)
 					if err := bot.ReplyMessage(update.ChatId, update.MessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
 						serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
@@ -98,63 +129,23 @@ func getDefaultHandler(
 				}
 				return
 			}
-			switch action {
-			case ActionApprove:
-				serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "handling approval action by user[%v/%s] in chat[%v]", update.SenderId, update.SenderUsername, update.ChatId)
-				handleTelegramApproval(handleTelegramApprovalOpts{
-					Bot:            bot,
-					ChatId:         update.ChatId,
-					MessageId:      update.MessageId,
-					Req:            *currentApprovalRequest,
-					SenderId:       update.SenderId,
-					SenderUsername: update.SenderUsername,
-					ServiceLogs:    serviceLogs,
-				})
-			case ActionReject:
-				serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "handling rejection action by user[%v/%s] in chat[%v]", update.SenderId, update.SenderUsername, update.ChatId)
-				handleTelegramRejection(handleTelegramRejectionOpts{
-					Bot:            bot,
-					ChatId:         update.ChatId,
-					MessageId:      update.MessageId,
-					Req:            *currentApprovalRequest,
-					SenderId:       update.SenderId,
-					SenderUsername: update.SenderUsername,
-				})
-			default:
-				serviceLogs <- common.ServiceLogf(common.LogLevelWarn, "unknown action or state reached; callbackData[%s]; approvalRequest[%s:%s]", update.CallbackData, currentApprovalRequest.Spec.Id, currentApprovalRequest.Spec.GetUuid())
-				response = "An unknown action has been triggered, please try again from the start"
-			}
-		}
-		if response != "" {
-			serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "responding to chat[%v]: %v", update.ChatId, err)
-			if err := bot.ReplyMessage(update.ChatId, update.MessageId, response); err != nil {
-				serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send confirmation message: %v", err)
-			}
+			handleTelegramResponse(handleTelegramResponseOpts{
+				Action:         action,
+				Bot:            bot,
+				ChatId:         update.ChatId,
+				MessageId:      update.MessageId,
+				Req:            *approvalRequest,
+				SenderId:       update.SenderId,
+				SenderUsername: update.SenderUsername,
+				ServiceLogs:    serviceLogs,
+			})
+			return
 		}
 	}
 }
 
-func createTelegramApprovalKeyboard(approvalData, rejectionData string) models.ReplyMarkup {
-	return &models.InlineKeyboardMarkup{
-		InlineKeyboard: [][]models.InlineKeyboardButton{{
-			models.InlineKeyboardButton{
-				Text:         "Approve",
-				CallbackData: approvalData,
-			},
-			models.InlineKeyboardButton{
-				Text:         "Reject",
-				CallbackData: rejectionData,
-			},
-		}},
-	}
-}
-
-func createTelegramApprovalCallbackData(action Action, requestUuid string, requestId string) (callbackData string) {
-	callbackData = fmt.Sprintf("%s:%s:%s", action, requestUuid, requestId)
-	return
-}
-
-type handleTelegramApprovalOpts struct {
+type handleTelegramResponseOpts struct {
+	Action         Action
 	Bot            *telegram.Bot
 	ChatId         int64
 	MessageId      int
@@ -164,7 +155,8 @@ type handleTelegramApprovalOpts struct {
 	ServiceLogs    chan<- common.ServiceLog
 }
 
-func handleTelegramApproval(opts handleTelegramApprovalOpts) {
+func handleTelegramResponse(opts handleTelegramResponseOpts) {
+	isTargetAuthorized := false
 	for _, telegramTarget := range opts.Req.Spec.Telegram {
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "evaluating telegram target: user[%v] in chat[%v]", opts.SenderId, opts.ChatId)
 		if isTelegramTargetMatchingSender(isTelegramTargetMatchingSenderOpts{
@@ -173,64 +165,125 @@ func handleTelegramApproval(opts handleTelegramApprovalOpts) {
 			SenderUsername: opts.SenderUsername,
 			Target:         telegramTarget,
 		}) {
-			if telegramTarget.MfaSeed != nil {
-				if err := opts.Bot.UpdateMessage(
-					opts.ChatId,
-					opts.MessageId,
-					getTelegramPendingMfaMessage(opts.Req),
-				); err != nil {
-					opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update message[%v] in chat[%v]: %s", opts.MessageId, opts.ChatId, err)
+			isTargetAuthorized = true
+			switch opts.Action {
+			case ActionApprove:
+				{
+					if telegramTarget.MfaSeed != nil {
+						handleTelegramMfaRequired(opts, telegramTarget)
+					} else {
+						handleTelegramApproval(opts)
+					}
 				}
-				pendingMfaCacheKey := CreatePendingMfaCacheKey(
-					fmt.Sprintf("%v", opts.ChatId),
-					fmt.Sprintf("%v", opts.SenderId),
-				)
-				pendingMfaData := pendingMfa{
-					ApprovalRequestMessageId: fmt.Sprintf("%v", opts.MessageId),
-					ChatId:                   fmt.Sprintf("%v", opts.ChatId),
-					MfaSeed:                  *telegramTarget.MfaSeed,
-					RequestId:                opts.Req.Spec.Id,
-					RequestUuid:              opts.Req.Spec.GetUuid(),
-					UserId:                   fmt.Sprintf("%v", opts.SenderId),
+			case ActionReject:
+				{
+					handleTelegramRejection(opts)
 				}
-				pendingMfaString, _ := json.Marshal(pendingMfaData)
-				Cache.Set(pendingMfaCacheKey, string(pendingMfaString), 60*time.Second)
-				if err := opts.Bot.SendMessage(
-					opts.ChatId,
-					getTelegramMfaRequestMessage(opts.Req),
-					&models.ForceReply{
-						ForceReply: true,
-					},
-				); err != nil {
-					opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update message[%v] in chat[%v]: %s", opts.MessageId, opts.ChatId, err)
-				}
-				return
 			}
-			if err := processApproval(processApprovalOpts{
-				ApprovalMessageId: opts.MessageId,
-				CurrentMessageId:  opts.MessageId,
-				Bot:               opts.Bot,
-				ChatId:            opts.ChatId,
-				Req:               opts.Req,
-				SenderId:          opts.SenderId,
-				SenderUsername:    opts.SenderUsername,
-				ServiceLogs:       opts.ServiceLogs,
-			}); err != nil {
-				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to process approvalRequest[%s]: %s", opts.Req.Spec.GetUuid(), err)
-				return
-			}
+			break
+		}
+	}
+	if !isTargetAuthorized {
+
+	}
+}
+
+func handleTelegramMfaRequired(opts handleTelegramResponseOpts, target approvals.TelegramRequestSpec) {
+	if err := opts.Bot.UpdateMessage(
+		opts.ChatId,
+		opts.MessageId,
+		getTelegramPendingMfaMessage(opts.Req),
+		nil,
+		// getTelegramApprovalKeyboard(
+		// 	createTelegramApprovalCallbackData(ActionApprove, opts.Req.Spec.GetUuid(), opts.Req.Spec.Id),
+		// 	createTelegramApprovalCallbackData(ActionReject, opts.Req.Spec.GetUuid(), opts.Req.Spec.Id),
+		// ),
+	); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update message[%v] in chat[%v]: %s", opts.MessageId, opts.ChatId, err)
+	}
+	pendingMfaCacheKey := CreatePendingMfaCacheKey(
+		fmt.Sprintf("%v", opts.ChatId),
+		fmt.Sprintf("%v", opts.SenderId),
+	)
+	pendingMfaData := pendingMfa{
+		ApprovalRequestMessageId: fmt.Sprintf("%v", opts.MessageId),
+		ChatId:                   fmt.Sprintf("%v", opts.ChatId),
+		MfaSeed:                  *target.MfaSeed,
+		RequestId:                opts.Req.Spec.Id,
+		RequestUuid:              opts.Req.Spec.GetUuid(),
+		UserId:                   fmt.Sprintf("%v", opts.SenderId),
+	}
+	pendingMfaString, _ := json.Marshal(pendingMfaData)
+	Cache.Set(pendingMfaCacheKey, string(pendingMfaString), 60*time.Second)
+	if err := opts.Bot.ReplyMessage(
+		opts.ChatId,
+		opts.MessageId,
+		getTelegramMfaRequestMessage(opts.Req),
+		&models.ForceReply{
+			ForceReply: true,
+		},
+	); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update message[%v] in chat[%v]: %s", opts.MessageId, opts.ChatId, err)
+	}
+}
+
+func handleTelegramApproval(opts handleTelegramResponseOpts) {
+	if err := processTelegramApproval(processTelegramApprovalOpts{
+		ApprovalMessageId: opts.MessageId,
+		Bot:               opts.Bot,
+		ChatId:            opts.ChatId,
+		Req:               opts.Req,
+		SenderId:          opts.SenderId,
+		SenderUsername:    opts.SenderUsername,
+		ServiceLogs:       opts.ServiceLogs,
+	}); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to process approvalRequest[%s]: %s", opts.Req.Spec.GetUuid(), err)
+		return
+	}
+}
+
+type handleTelegramCommandsOpts struct {
+	Bot         *telegram.Bot
+	Update      *telegram.Update
+	ServiceLogs chan<- common.ServiceLog
+}
+
+func handleTelegramCommands(opts handleTelegramCommandsOpts) {
+	if strings.HasPrefix(opts.Update.Message, "/info") {
+		if err := opts.Bot.ReplyMessage(
+			opts.Update.ChatId,
+			opts.Update.MessageId,
+			getTelegramInfoMessage(opts.Update),
+		); err != nil {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to respond to a /info request: %s", err)
 		}
 	}
 }
 
+type handleTelegramInvalidEventOpts struct {
+	Bot         *telegram.Bot
+	ChatId      int64
+	MessageId   int
+	SenderId    int64
+	ServiceLogs chan<- common.ServiceLog
+}
+
+func handleTelegramInvalidEvent(opts handleTelegramInvalidEventOpts) {
+	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "handling invalid message[%v] by user[%v] in chat[%v] which is not an mfa token and not a callback", opts.MessageId, opts.SenderId, opts.ChatId)
+	if err := opts.Bot.ReplyMessage(opts.ChatId, opts.MessageId, "🙇🏼 Apologies, we do not respond to unexpected messages"); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send response to user: %s", err)
+	}
+}
+
 type handleTelegramMfaResponseOpts struct {
-	Bot            *telegram.Bot
-	ChatId         int64
-	Message        string
-	MessageId      int
-	SenderId       int64
-	SenderUsername string
-	ServiceLogs    chan<- common.ServiceLog
+	Bot                 *telegram.Bot
+	ChatId              int64
+	Message             string
+	MessageId           int
+	MfaRequestMessageId int
+	SenderId            int64
+	SenderUsername      string
+	ServiceLogs         chan<- common.ServiceLog
 }
 
 func handleTelegramMfaResponse(opts handleTelegramMfaResponseOpts) {
@@ -272,19 +325,16 @@ func handleTelegramMfaResponse(opts handleTelegramMfaResponseOpts) {
 	}
 	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "successfully retrieved approvalRequest[%s:%s]...", currentApprovalRequest.Spec.Id, currentApprovalRequest.Spec.GetUuid())
 
-	if isSenderAuthorized := isTelegramSenderAuthorizedToRespond(isTelegramSenderAuthorizedToRespondOpts{
+	authorizedTargets := getAuthorizedTelegramTargets(getAuthorizedTelegramTargetsOpts{
 		ChatId:         opts.ChatId,
-		MessageId:      opts.MessageId,
 		Req:            *currentApprovalRequest,
 		SenderId:       opts.SenderId,
 		SenderUsername: opts.SenderUsername,
 		ServiceLogs:    opts.ServiceLogs,
-	}); !isSenderAuthorized {
-		if err := opts.Bot.ReplyMessage(
-			opts.ChatId,
-			opts.MessageId,
-			getTelegramUnauthorizedMessage(),
-		); err != nil {
+	})
+	isSenderAuthorized := len(authorizedTargets) > 0
+	if !isSenderAuthorized {
+		if err := opts.Bot.ReplyMessage(opts.ChatId, opts.MessageId, getTelegramUnauthorizedMessage()); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update message[%v]: %s", opts.MessageId, err)
 			if err := opts.Bot.ReplyMessage(opts.ChatId, opts.MessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
 				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
@@ -292,62 +342,107 @@ func handleTelegramMfaResponse(opts handleTelegramMfaResponseOpts) {
 		}
 		return
 	}
-	for _, telegramTarget := range currentApprovalRequest.Spec.Telegram {
-		if isTelegramTargetMatchingSender(isTelegramTargetMatchingSenderOpts{
-			ChatId:         opts.ChatId,
-			SenderId:       opts.SenderId,
-			SenderUsername: opts.SenderUsername,
-			Target:         telegramTarget,
-		}) {
-			if telegramTarget.MfaSeed != nil {
-				valid, err := auth.ValidateTotpToken(*telegramTarget.MfaSeed, mfaToken)
-				if err != nil {
-					opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to validate totpToken[%v]: %s", mfaToken, err)
-					continue
-				}
-				if !valid {
-					opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "totpToken[%v] was not vavlid", mfaToken)
-					continue
-				}
-				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "user[%v] in chat[%v] approved the transaction", opts.SenderId, opts.ChatId)
-
-				approvalMessageId, err := strconv.ParseInt(pendingMfaData.ApprovalRequestMessageId, 10, 0)
-				if err != nil {
-					opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to parse approvalRequestId[%s]: %s", pendingMfaData.ApprovalRequestMessageId, err)
-					if err := opts.Bot.ReplyMessage(opts.ChatId, opts.MessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
-						opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
-					}
-					continue
-				}
-				if err := processApproval(processApprovalOpts{
-					ApprovalMessageId: int(approvalMessageId),
-					CurrentMessageId:  opts.MessageId,
-					Bot:               opts.Bot,
-					ChatId:            opts.ChatId,
-					Req:               *currentApprovalRequest,
-					SenderId:          opts.SenderId,
-					SenderUsername:    opts.SenderUsername,
-					ServiceLogs:       opts.ServiceLogs,
-				}); err != nil {
-					opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to process approvalRequest[%s]: %s", currentApprovalRequest.Spec.GetUuid(), err)
-					return
-				}
-			}
+	if authorizedTargets[0].MfaSeed == nil {
+		requestSpecification, _ := json.MarshalIndent(authorizedTargets[0], "", "  ")
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to receive an mfa seed where expected, request specification follows:\n%s", requestSpecification)
+		if err := opts.Bot.ReplyMessage(opts.ChatId, opts.MessageId, getTelegramSystemErrorMessage()); err != nil {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
 		}
+		return
+	}
+	approvalMessageId, err := strconv.ParseInt(pendingMfaData.ApprovalRequestMessageId, 10, 0)
+	if err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to parse approvalRequestId[%s]: %s", pendingMfaData.ApprovalRequestMessageId, err)
+		if err := opts.Bot.ReplyMessage(opts.ChatId, opts.MessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
+		}
+		return
+	}
+
+	mfaSeed := *authorizedTargets[0].MfaSeed
+	valid, err := auth.ValidateTotpToken(mfaSeed, mfaToken)
+	if err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to validate totpToken[%v]: %s", mfaToken, err)
+		return
+	}
+	if !valid {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "removing mfa response message with id[%v]", opts.MessageId)
+		if isDeleted, err := opts.Bot.Client.DeleteMessage(context.Background(), &bot.DeleteMessageParams{
+			ChatID:    opts.ChatId,
+			MessageID: opts.MessageId,
+		}); err != nil {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to remove mfa response message with id[%v] due to error: %s", opts.MessageId, err)
+		} else if !isDeleted {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to remove mfa response message with id[%v] for unknown reasons", opts.MessageId)
+		}
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "totpToken[%v] was not vavlid", mfaToken)
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "removing mfa request message with id[%v]", opts.MfaRequestMessageId)
+		if isDeleted, err := opts.Bot.Client.DeleteMessage(context.Background(), &bot.DeleteMessageParams{
+			ChatID:    opts.ChatId,
+			MessageID: opts.MfaRequestMessageId,
+		}); err != nil {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to remove mfa request message with id[%v] due to error: %s", opts.MfaRequestMessageId, err)
+		} else if !isDeleted {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to remove mfa request message with id[%v] for unknown reasons", opts.MfaRequestMessageId)
+		}
+		opts.Bot.ReplyMessage(opts.ChatId, int(approvalMessageId), getTelegramMfaRejectedMessage(*currentApprovalRequest, opts.SenderId, opts.SenderUsername))
+		// if err := opts.Bot.UpdateMessage(
+		// 	opts.ChatId,
+		// 	int(approvalMessageId),
+		// 	getTelegramApprovalRequestMessage(*currentApprovalRequest),
+		// ); err != nil {
+		// 	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update approval message: %s", err)
+		// }
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "updating message[%v] in chat[%v]", int(approvalMessageId), opts.ChatId)
+		if err := opts.Bot.UpdateMessage(
+			opts.ChatId,
+			int(approvalMessageId),
+			getTelegramApprovalRequestMessage(*currentApprovalRequest),
+			getTelegramApprovalKeyboard(
+				createTelegramApprovalCallbackData(ActionApprove, currentApprovalRequest.Spec.GetUuid(), currentApprovalRequest.Spec.Id),
+				createTelegramApprovalCallbackData(ActionReject, currentApprovalRequest.Spec.GetUuid(), currentApprovalRequest.Spec.Id),
+			),
+		); err != nil {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update markup for approval message: %s", err)
+		}
+		return
+	}
+	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "user[%v] in chat[%v] approved the transaction", opts.SenderId, opts.ChatId)
+
+	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "removing mfa response message with id[%v]", opts.MessageId)
+	if isDeleted, err := opts.Bot.Client.DeleteMessage(context.Background(), &bot.DeleteMessageParams{
+		ChatID:    opts.ChatId,
+		MessageID: opts.MessageId,
+	}); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to remove mfa response message with id[%v] due to error: %s", opts.MessageId, err)
+	} else if !isDeleted {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to remove mfa response message with id[%v] for unknown reasons", opts.MessageId)
+	}
+
+	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "removing mfa request message with id[%v]", opts.MfaRequestMessageId)
+	if isDeleted, err := opts.Bot.Client.DeleteMessage(context.Background(), &bot.DeleteMessageParams{
+		ChatID:    opts.ChatId,
+		MessageID: opts.MfaRequestMessageId,
+	}); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to remove mfa request message with id[%v] due to error: %s", opts.MfaRequestMessageId, err)
+	} else if !isDeleted {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to remove mfa request message with id[%v] for unknown reasons", opts.MfaRequestMessageId)
+	}
+	if err := processTelegramApproval(processTelegramApprovalOpts{
+		ApprovalMessageId: int(approvalMessageId),
+		Bot:               opts.Bot,
+		ChatId:            opts.ChatId,
+		Req:               *currentApprovalRequest,
+		SenderId:          opts.SenderId,
+		SenderUsername:    opts.SenderUsername,
+		ServiceLogs:       opts.ServiceLogs,
+	}); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to process approvalRequest[%s]: %s", currentApprovalRequest.Spec.GetUuid(), err)
+		return
 	}
 }
 
-type handleTelegramRejectionOpts struct {
-	Bot            *telegram.Bot
-	ChatId         int64
-	MessageId      int
-	Req            ApprovalRequest
-	SenderId       int64
-	SenderUsername string
-	ServiceLogs    chan common.ServiceLog
-}
-
-func handleTelegramRejection(opts handleTelegramRejectionOpts) {
+func handleTelegramRejection(opts handleTelegramResponseOpts) {
 	approval := Approval{
 		Spec: approvals.ApprovalSpec{
 			ApproverId:      strconv.FormatInt(opts.SenderId, 10),
@@ -391,68 +486,13 @@ func handleTelegramRejection(opts handleTelegramRejectionOpts) {
 		}
 		return
 	}
-}
-
-type isTelegramSenderAuthorizedToRespondOpts struct {
-	ChatId         int64
-	MessageId      int
-	Req            ApprovalRequest
-	SenderId       int64
-	SenderUsername string
-	ServiceLogs    chan<- common.ServiceLog
-}
-
-func isTelegramSenderAuthorizedToRespond(opts isTelegramSenderAuthorizedToRespondOpts) bool {
-	isSenderAuthorized := false
-	for _, telegramTarget := range opts.Req.Spec.Telegram {
-		if isTelegramTargetMatchingSender(isTelegramTargetMatchingSenderOpts{
-			ChatId:         opts.ChatId,
-			SenderId:       opts.SenderId,
-			SenderUsername: opts.SenderUsername,
-			Target:         telegramTarget,
-		}) {
-			isSenderAuthorized = true
-			break
-		}
+	if err := opts.Bot.ReplyMessage(opts.ChatId, opts.MessageId, getTelegramRejectMessage(opts.Req, opts.SenderId, opts.SenderUsername)); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send approval message to chat[%v]: %s", opts.ChatId, err)
 	}
-	return isSenderAuthorized
 }
 
-type isTelegramTargetMatchingSenderOpts struct {
-	ChatId         int64
-	SenderId       int64
-	SenderUsername string
-	Target         approvals.TelegramRequestSpec
-}
-
-func isTelegramTargetMatchingSender(opts isTelegramTargetMatchingSenderOpts) bool {
-	if opts.Target.ChatId == opts.ChatId {
-		if opts.Target.UserId != nil && *opts.Target.UserId != opts.SenderId {
-			return false
-		}
-		if opts.Target.Username != nil && *opts.Target.Username != opts.SenderUsername {
-			return false
-		}
-		return true
-	}
-	return false
-}
-
-func parseTelegramApprovalCallbackData(callbackData string) (action Action, notificationId string, requestId string, err error) {
-	splitCallbackData := strings.Split(callbackData, ":")
-	if len(splitCallbackData) != 3 {
-		return "", "", "", fmt.Errorf("failed to parse callback data: expected [{action}:{notificationId}:{requestId}] but received callbackData[%s]", callbackData)
-	}
-	action = Action(splitCallbackData[0])
-	notificationId = splitCallbackData[1]
-	requestId = splitCallbackData[2]
-	err = nil
-	return
-}
-
-type processApprovalOpts struct {
+type processTelegramApprovalOpts struct {
 	ApprovalMessageId int
-	CurrentMessageId  int
 	Bot               *telegram.Bot
 	ChatId            int64
 	Req               ApprovalRequest
@@ -461,7 +501,8 @@ type processApprovalOpts struct {
 	ServiceLogs       chan<- common.ServiceLog
 }
 
-func processApproval(opts processApprovalOpts) error {
+// processTelegramApproval processes an approval via Telegram
+func processTelegramApproval(opts processTelegramApprovalOpts) error {
 	approval := Approval{
 		Spec: approvals.ApprovalSpec{
 			ApproverId:      strconv.FormatInt(opts.SenderId, 10),
@@ -481,14 +522,14 @@ func processApproval(opts processApprovalOpts) error {
 		},
 	}
 	if err := CreateApproval(approval); err != nil {
-		if err := opts.Bot.ReplyMessage(opts.ChatId, opts.CurrentMessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
+		if err := opts.Bot.ReplyMessage(opts.ChatId, opts.ApprovalMessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
 		}
 		return fmt.Errorf("failed to create approval[%s]: %s", approval.Spec.Id, err)
 	}
 	opts.Req.Spec.Approval = &approval.Spec
 	if err := UpdateApprovalRequest(opts.Req); err != nil {
-		if err := opts.Bot.ReplyMessage(opts.ChatId, opts.CurrentMessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
+		if err := opts.Bot.ReplyMessage(opts.ChatId, opts.ApprovalMessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
 		}
 		return fmt.Errorf("failed to update approvalRequest[%s]: %s", opts.Req.Spec.GetUuid(), err)
@@ -499,10 +540,13 @@ func processApproval(opts processApprovalOpts) error {
 		getTelegramApprovedMessage(opts.Req),
 		nil,
 	); err != nil {
-		if err := opts.Bot.ReplyMessage(opts.ChatId, opts.CurrentMessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
+		if err := opts.Bot.ReplyMessage(opts.ChatId, opts.ApprovalMessageId, "🙇🏼 Apologies, something went wrong internally"); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
 		}
 		return fmt.Errorf("failed to update message[%v]: %s", opts.ApprovalMessageId, err)
+	}
+	if err := opts.Bot.ReplyMessage(opts.ChatId, opts.ApprovalMessageId, getTelegramApproveMessage(opts.Req, opts.SenderId, opts.SenderUsername)); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send approval message to chat[%v]: %s", opts.ChatId, err)
 	}
 	return nil
 }

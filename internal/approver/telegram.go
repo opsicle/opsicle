@@ -23,7 +23,7 @@ func (t *telegramNotifier) SendApprovalRequest(req *ApprovalRequest) (string, no
 
 	requestUuid := req.Spec.GetUuid()
 	requestId := req.Spec.Id
-	customKeyboard := createTelegramApprovalKeyboard(
+	customKeyboard := getTelegramApprovalKeyboard(
 		createTelegramApprovalCallbackData(ActionApprove, requestUuid, requestId),
 		createTelegramApprovalCallbackData(ActionReject, requestUuid, requestId),
 	)

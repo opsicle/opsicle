@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"opsicle/internal/common"
 	"time"
@@ -49,9 +50,12 @@ func (b *Bot) UpdateMessage(chatId int64, messageId int, newMessage string, mark
 		ParseMode: "MarkdownV2",
 		Text:      newMessage,
 	}
-	if markup == nil || markup[0] == nil {
-		editMessageParameters.ReplyMarkup = &models.InlineKeyboardMarkup{InlineKeyboard: [][]models.InlineKeyboardButton{}}
-	} else {
+	if markup != nil && len(markup) > 0 && markup[0] != nil {
+		fmt.Println("-----------------------------------------------")
+		fmt.Println("added la sial")
+		o, _ := json.MarshalIndent(markup[0], "", "  ")
+		fmt.Println(string(o))
+		fmt.Println("-----------------------------------------------")
 		editMessageParameters.ReplyMarkup = markup[0]
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
