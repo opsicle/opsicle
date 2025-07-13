@@ -38,13 +38,11 @@ func New(opts NewOpts) (*Bot, error) {
 			var botUpdate *Update
 			switch true {
 			case isTextMessage(update):
-				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "received update of type[message]")
 				botUpdate = serializeTextMessage(update)
-				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "chat[%v] << '%s'", botUpdate.ChatId, botUpdate.Message)
+				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "received update of type[message] in chat[%v]: message['%s']", botUpdate.ChatId, botUpdate.Message)
 			case isCallbackQuery(update):
-				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "received update of type[callback]")
 				botUpdate = serializeCallbackQuery(update)
-				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "chat[%v] << data[%s]", botUpdate.ChatId, botUpdate.CallbackData)
+				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "received update of type[callback] in chat[%v]: data['%s']", botUpdate.ChatId, botUpdate.CallbackData)
 			}
 			botUpdate.Raw = update
 			o, _ := json.Marshal(botUpdate)

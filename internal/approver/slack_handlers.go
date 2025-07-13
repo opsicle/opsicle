@@ -455,11 +455,12 @@ func processSlackApproval(opts processSlackApprovalOpts) error {
 			ApproverName:    opts.SenderName,
 			Id:              uuid.New().String(),
 			RequestId:       opts.Req.Spec.Id,
+			RequestUuid:     opts.Req.Spec.GetUuid(),
 			RequesterId:     opts.Req.Spec.RequesterId,
 			RequesterName:   opts.Req.Spec.RequesterName,
 			Status:          opts.Status,
 			StatusUpdatedAt: time.Now(),
-			Slack: approvals.SlackResponseSpec{
+			Slack: &approvals.SlackResponseSpec{
 				ChannelId: opts.ChannelId,
 				UserId:    opts.SenderId,
 				UserName:  opts.SenderName,

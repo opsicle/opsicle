@@ -1,4 +1,4 @@
-# Opsicle Architecture
+# System Architecture
 
 This page documents the architecture of Opsicle at various levels
 

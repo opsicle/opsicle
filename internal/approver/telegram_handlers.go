@@ -21,7 +21,6 @@ func getDefaultHandler(
 	serviceLogs chan<- common.ServiceLog,
 ) func(context.Context, *telegram.Bot, *telegram.Update) {
 	return func(ctx context.Context, bot *telegram.Bot, update *telegram.Update) {
-		serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "chat[%v] << %s", update.ChatId, update.Message)
 
 		if update.Message != "" {
 
@@ -449,11 +448,12 @@ func handleTelegramRejection(opts handleTelegramResponseOpts) {
 			ApproverName:    opts.SenderUsername,
 			Id:              uuid.New().String(),
 			RequestId:       opts.Req.Spec.Id,
+			RequestUuid:     opts.Req.Spec.GetUuid(),
 			RequesterId:     opts.Req.Spec.RequesterId,
 			RequesterName:   opts.Req.Spec.RequesterName,
 			Status:          approvals.StatusRejected,
 			StatusUpdatedAt: time.Now(),
-			Telegram: approvals.TelegramResponseSpec{
+			Telegram: &approvals.TelegramResponseSpec{
 				ChatId:   opts.ChatId,
 				UserId:   opts.SenderId,
 				Username: opts.SenderUsername,
@@ -489,6 +489,12 @@ func handleTelegramRejection(opts handleTelegramResponseOpts) {
 	if err := opts.Bot.ReplyMessage(opts.ChatId, opts.MessageId, getTelegramRejectMessage(opts.Req, opts.SenderId, opts.SenderUsername)); err != nil {
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send approval message to chat[%v]: %s", opts.ChatId, err)
 	}
+	if err := handleCallback(handleCallbackOpts{
+		Req:         opts.Req,
+		ServiceLogs: opts.ServiceLogs,
+	}); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to process webhook for request[%s:%s]: %s", opts.Req.Spec.Id, opts.Req.Spec.GetUuid(), err)
+	}
 }
 
 type processTelegramApprovalOpts struct {
@@ -509,11 +515,12 @@ func processTelegramApproval(opts processTelegramApprovalOpts) error {
 			ApproverName:    opts.SenderUsername,
 			Id:              uuid.New().String(),
 			RequestId:       opts.Req.Spec.Id,
+			RequestUuid:     opts.Req.Spec.GetUuid(),
 			RequesterId:     opts.Req.Spec.RequesterId,
 			RequesterName:   opts.Req.Spec.RequesterName,
 			Status:          approvals.StatusApproved,
 			StatusUpdatedAt: time.Now(),
-			Telegram: approvals.TelegramResponseSpec{
+			Telegram: &approvals.TelegramResponseSpec{
 				ChatId:   opts.ChatId,
 				UserId:   opts.SenderId,
 				Username: opts.SenderUsername,
@@ -547,6 +554,12 @@ func processTelegramApproval(opts processTelegramApprovalOpts) error {
 	}
 	if err := opts.Bot.ReplyMessage(opts.ChatId, opts.ApprovalMessageId, getTelegramApproveMessage(opts.Req, opts.SenderId, opts.SenderUsername)); err != nil {
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send approval message to chat[%v]: %s", opts.ChatId, err)
+	}
+	if err := handleCallback(handleCallbackOpts{
+		Req:         opts.Req,
+		ServiceLogs: opts.ServiceLogs,
+	}); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to process webhook for request[%s:%s]: %s", opts.Req.Spec.Id, opts.Req.Spec.GetUuid(), err)
 	}
 	return nil
 }

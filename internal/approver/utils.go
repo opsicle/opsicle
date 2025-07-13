@@ -47,7 +47,6 @@ func LoadApproval(approval Approval) (*ApprovalRequest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get approval[%s]: %s", cacheKey, err)
 	}
-	fmt.Println(value)
 	var approvalRequest ApprovalRequest
 	if err := json.Unmarshal([]byte(value), &approvalRequest); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal approval[%s]: %s", cacheKey, err)
@@ -61,7 +60,6 @@ func LoadApprovalRequest(req ApprovalRequest) (*ApprovalRequest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get approvalRequest[%s]: %s", cacheKey, err)
 	}
-	fmt.Println(value)
 	var approvalRequest ApprovalRequest
 	if err := json.Unmarshal([]byte(value), &approvalRequest); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal approvalRequest[%s]: %s", cacheKey, err)

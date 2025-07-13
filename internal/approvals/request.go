@@ -19,6 +19,10 @@ type RequestSpec struct {
 	// happens
 	Approval *ApprovalSpec `json:"approval" yaml:"approval"`
 
+	// Callback is a field that when specified, results in the approver
+	// service processing a callback to the specified endpoint
+	Callback *CallbackSpec `json:"callback" yaml:"callback"`
+
 	// Id is the ID of a request which will be the same for all
 	// requests of a given type
 	Id string `json:"id" yaml:"id"`
@@ -53,11 +57,55 @@ type RequestSpec struct {
 	// Url is an optional additional link to view the request in a browser or
 	// other application,
 	Url *string `json:"url" yaml:"url"`
+}
 
-	// WebhookUrl is an optional field that when specified, will be called with
-	// a HTTP POST request with the full approval request details when a request
-	// is approved/rejected
-	WebhookUrl *string `json:"webhookUrl" yaml:"webhookUrl"`
+type CallbackSpec struct {
+	Webhook *WebhookCallbackSpec `json:"webhook" yaml:"webhook"`
+	// Type defines the type of this callback. If this is not specified,
+	// the precedence will follow the code tagged with #callback-type-priority
+	Type CallbackType `json:"type" yaml:"type"`
+}
+
+type WebhookCallbackSpec struct {
+	// Method defines the HTTP method used when sending the call
+	Method string `json:"method" yaml:"method"`
+
+	// Url specifies the URL that will be called with the full approval
+	// request details when a request is approved/rejected
+	Url string `json:"url" yaml:"url"`
+
+	// RetryCount specifies the number of retries that will be made
+	// if the callback fails. Defaults to 5 with an exponential backoff
+	// strategy unless otherwise specfied
+	RetryCount *int `json:"retryCount" yaml:"retryCount"`
+
+	// RetryIntervalSeconds when specified, forces the retry mechanism
+	// to perform retries at fxed intervals
+	RetryIntervalSeconds *int `json:"retryIntervalSeconds" yaml:"retryIntervalSeconds"`
+
+	// Auth defines the auth mechanism to use when authenticating with
+	// the specified `.Url`
+	Auth *WebhookCallbackAuthSpec `json:"auth" yaml:"auth"`
+}
+
+type WebhookCallbackAuthSpec struct {
+	Basic  *WebhookCallbackBasicAuthSpec  `json:"basic" yaml:"basic"`
+	Bearer *WebhookCallbackBearerAuthSpec `json:"bearer" yaml:"bearer"`
+	Header *WebhookCallbackHeaderAuthSpec `json:"header" yaml:"header"`
+}
+
+type WebhookCallbackBasicAuthSpec struct {
+	Password string `json:"password" yaml:"password"`
+	Username string `json:"username" yaml:"username"`
+}
+
+type WebhookCallbackBearerAuthSpec struct {
+	Value string `json:"value" yaml:"value"`
+}
+
+type WebhookCallbackHeaderAuthSpec struct {
+	Key   string `json:"key" yaml:"key"`
+	Value string `json:"value" yaml:"value"`
 }
 
 func (rs *RequestSpec) Init() {

@@ -1,5 +1,9 @@
 # Integrations
 
+- [Integrations](#integrations)
+  - [Slack](#slack)
+  - [Telegram](#telegram)
+
 ## Slack
 
 1. Go to https://api.slack.com/apps and use the **Create New App** button to create a new application
@@ -45,3 +49,10 @@ settings:
   socket_mode_enabled: true
   token_rotation_enabled: false
 ```
+
+## Telegram
+
+1. Talk to the [https://t.me/BotFather](`@BotFather`) on Telegram
+2. Create a new bot, give it an appropriate name
+3. You will receive a token, save this as `${TELEGRAM_BOT_TOKEN}`
+   - Optionally include it in the `.envrc` in the root of this repository

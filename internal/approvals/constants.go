@@ -10,5 +10,10 @@ const (
 	StatusRejected Status = "rejected"
 )
 
+const (
+	CallbackWebhook CallbackType = "webhook"
+)
+
 type Platform string
 type Status string
+type CallbackType string

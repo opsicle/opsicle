@@ -62,7 +62,13 @@ func logRequestHandler(w http.ResponseWriter, r *http.Request) {
 		"host":       r.Host,
 		"remoteAddr": r.RemoteAddr,
 		"headers":    r.Header,
-		"body":       bodyContent,
+	}
+
+	var prettifiedBody map[string]any
+	if err := json.Unmarshal([]byte(bodyContent), &prettifiedBody); err == nil {
+		requestDetails["body"] = prettifiedBody
+	} else {
+		requestDetails["body"] = bodyContent
 	}
 
 	data, err := json.MarshalIndent(requestDetails, "", "  ")
