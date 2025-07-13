@@ -1,12 +1,12 @@
 apiVersion: v1
 type: ApprovalRequest
 metadata:
-  name: telegram-wo-mfa
+  name: telegram-with-webhook-callback
 spec:
   callback:
     webhook:
       url: "http://localhost:54321/callback/path"
-  id: 'telegram-wo-mfa-001'
+  id: 'telegram-w-webho-001'
   requesterId: user@company.co
   requesterName: y0l0
   message: "i can haz cheeseburger?"
