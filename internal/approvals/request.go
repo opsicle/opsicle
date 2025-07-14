@@ -3,7 +3,6 @@ package approvals
 import (
 	"opsicle/internal/common"
 	"os"
-	"time"
 
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
@@ -61,6 +60,7 @@ type RequestSpec struct {
 
 type CallbackSpec struct {
 	Webhook *WebhookCallbackSpec `json:"webhook" yaml:"webhook"`
+
 	// Type defines the type of this callback. If this is not specified,
 	// the precedence will follow the code tagged with #callback-type-priority
 	Type CallbackType `json:"type" yaml:"type"`
@@ -121,54 +121,6 @@ func (rs *RequestSpec) GetUuid() string {
 		rs.Init()
 	}
 	return *rs.Uuid
-}
-
-type SlackRequestSpec struct {
-	// ChannelName defines the name of the channel to send to
-	ChannelName string `json:"channelName" yaml:"channelName"`
-
-	// ChannelId defines the ID of the channel to send to, if this
-	// is populated, this will be used, otherwise this will be
-	// populated when the `.ChannelName` is evaluated
-	ChannelId *string `json:"channelId" yaml:"channelId"`
-
-	// MessageId is not meant to be specified in the approval request
-	// manifest, it is populated after the approval request message
-	// is sent so that responses can be threaded
-	MessageId *string `json:"-" yaml:"-"`
-
-	// MfaSeed is an optional field that when populated, requires the
-	// user to respond with their TOTP MFA number. This seed is recommended
-	// to be a specially provisioned MFA since you will be sending it to
-	// another system
-	MfaSeed *string `json:"mfaSeed" yaml:"mfaSeed"`
-
-	// UserId optionally specifies the Slack user ID of the user who is
-	// allowed to approve/reject an approval request
-	UserId *string `json:"userId" yaml:"userId"`
-
-	SentAt *time.Time `json:"sentAt" yaml:"sentAt"`
-}
-
-type TelegramRequestSpec struct {
-	// ChatId defines the ID of the chat where the message should be sent
-	ChatId int64 `json:"chatId" yaml:"chatId"`
-
-	// MfaSeed is an optional field that when populated, requires the
-	// user to respond with their TOTP MFA number. This seed is recommended
-	// to be a specially provisioned MFA since you will be sending it to
-	// another system
-	MfaSeed *string `json:"mfaSeed" yaml:"mfaSeed"`
-
-	// UserId optionally specifies the Telegram user ID of the user who is
-	// allowed to approve/reject an approval request
-	UserId *int64 `json:"userId" yaml:"userId"`
-
-	// Username optionally specifies the username of the approver whom the
-	// approval must come from otherwise the request will be rejected
-	Username *string `json:"username" yaml:"username"`
-
-	SentAt *time.Time `json:"sentAt" yaml:"sentAt"`
 }
 
 // LoadRequestFromFile reads YAML from file and returns an Automation

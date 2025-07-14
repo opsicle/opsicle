@@ -1,9 +1,11 @@
 package approver
 
 import (
+	"encoding/json"
 	"fmt"
 	"opsicle/internal/approvals"
 	"opsicle/internal/common"
+	"strconv"
 	"strings"
 )
 
@@ -31,38 +33,85 @@ type getAuthorizedTelegramTargetsOpts struct {
 	ServiceLogs    chan<- common.ServiceLog
 }
 
-func getAuthorizedTelegramTargets(opts getAuthorizedTelegramTargetsOpts) []approvals.TelegramRequestSpec {
-	authorizedTargets := []approvals.TelegramRequestSpec{}
+func getAuthorizedTelegramTargets(opts getAuthorizedTelegramTargetsOpts) approvals.AuthorizedResponders {
+	authorizedResponders := approvals.AuthorizedResponders{}
 	for _, telegramTarget := range opts.Req.Spec.Telegram {
-		if isTelegramTargetMatchingSender(isTelegramTargetMatchingSenderOpts{
+		isAuthorized, authorizedResponder := getTelegramTargetMatchingSender(getTelegramTargetMatchingSenderOpts{
 			ChatId:         opts.ChatId,
 			SenderId:       opts.SenderId,
 			SenderUsername: opts.SenderUsername,
 			Target:         telegramTarget,
-		}) {
-			authorizedTargets = append(authorizedTargets, telegramTarget)
+		})
+		if isAuthorized {
+			authorizedResponders = append(authorizedResponders, *authorizedResponder)
 			break
 		}
 	}
-	return authorizedTargets
+	return authorizedResponders
 }
 
-type isTelegramTargetMatchingSenderOpts struct {
+type getTelegramTargetMatchingSenderOpts struct {
 	ChatId         int64
 	SenderId       int64
 	SenderUsername string
 	Target         approvals.TelegramRequestSpec
 }
 
-func isTelegramTargetMatchingSender(opts isTelegramTargetMatchingSenderOpts) bool {
-	if opts.Target.ChatId == opts.ChatId {
-		if opts.Target.UserId != nil && *opts.Target.UserId != opts.SenderId {
-			return false
+func getTelegramTargetMatchingSender(opts getTelegramTargetMatchingSenderOpts) (bool, *approvals.AuthorizedResponder) {
+	isChatMatched := false
+	for _, chatId := range opts.Target.ChatIds {
+		fmt.Println("matching chat")
+		if chatId == opts.ChatId {
+			fmt.Println("matched chat id")
+			isChatMatched = true
+			break
 		}
-		if opts.Target.Username != nil && *opts.Target.Username != opts.SenderUsername {
-			return false
-		}
-		return true
 	}
-	return false
+
+	isSenderMatched := len(opts.Target.AuthorizedResponders) == 0
+	matchedSender := approvals.AuthorizedResponder{}
+	for _, authorizedResponder := range opts.Target.AuthorizedResponders {
+		fmt.Println("matching responder")
+		o, _ := json.Marshal(authorizedResponder)
+		fmt.Printf("comparing authorizedResponder[%s]\n", string(o))
+		isUserIdDefined := authorizedResponder.UserId != nil
+		isUserIdMatch := true
+		isUsernameDefined := authorizedResponder.Username != nil
+		isUsernameMatch := true
+		if isUserIdDefined {
+			userId, err := strconv.ParseInt(*authorizedResponder.UserId, 10, 64)
+			if err == nil {
+				if userId != opts.SenderId {
+					isUserIdMatch = false
+				}
+			}
+		}
+		if isUsernameDefined {
+			if opts.SenderUsername != *authorizedResponder.Username {
+				isUsernameMatch = false
+			}
+		}
+		fmt.Printf(
+			"o.chatid: %v\n"+
+				"o.uid: %v\n"+
+				"o.uname: %v\n"+
+				"uid.defined: %v\n"+
+				"uid.match: %v\n"+
+				"uname.defined: %v\n"+
+				"uname.match: %v\n",
+			opts.ChatId,
+			opts.SenderId,
+			opts.SenderUsername,
+			isUserIdDefined,
+			isUserIdMatch,
+			isUsernameDefined,
+			isUsernameMatch,
+		)
+		if isUserIdMatch && isUsernameMatch {
+			matchedSender = authorizedResponder
+			isSenderMatched = true
+			break
+		}
+	}
+	return isChatMatched && isSenderMatched, &matchedSender
 }

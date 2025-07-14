@@ -11,28 +11,16 @@ type Approval struct {
 }
 
 type ApprovalSpec struct {
-	ApproverId      string                `json:"approverId" yaml:"approverId"`
-	ApproverName    string                `json:"approverName" yaml:"approverName"`
-	Id              string                `json:"id" yaml:"id"`
-	RequestId       string                `json:"requestId" yaml:"requestId"`
-	RequestUuid     string                `json:"requestUuid" yaml:"requestId"`
-	RequesterId     string                `json:"requesterId" yaml:"requesterId"`
-	RequesterName   string                `json:"requesterName" yaml:"requesterName"`
-	Slack           *SlackResponseSpec    `json:"slack" yaml:"slack"`
-	Status          Status                `json:"status" yaml:"status"`
-	StatusUpdatedAt time.Time             `json:"statusUpdatedAt" yaml:"statusUpdatedAt"`
-	Telegram        *TelegramResponseSpec `json:"telegram" yaml:"telegram"`
-	Type            Platform              `json:"type" yaml:"type"`
-}
-
-type TelegramResponseSpec struct {
-	ChatId   int64  `json:"chatId" yaml:"chatId"`
-	Username string `json:"username" yaml:"username"`
-	UserId   int64  `json:"userId" yaml:"userId"`
-}
-
-type SlackResponseSpec struct {
-	ChannelId string `json:"channelId" yaml:"channelId"`
-	UserId    string `json:"userId" yaml:"userId"`
-	UserName  string `json:"userName" yaml:"userName"`
+	ApproverId      string                 `json:"approverId" yaml:"approverId"`
+	ApproverName    string                 `json:"approverName" yaml:"approverName"`
+	Id              string                 `json:"id" yaml:"id"`
+	RequestId       string                 `json:"requestId" yaml:"requestId"`
+	RequestUuid     string                 `json:"requestUuid" yaml:"requestId"`
+	RequesterId     string                 `json:"requesterId" yaml:"requesterId"`
+	RequesterName   string                 `json:"requesterName" yaml:"requesterName"`
+	Slack           []SlackResponseSpec    `json:"slack" yaml:"slack"`
+	Status          Status                 `json:"status" yaml:"status"`
+	StatusUpdatedAt time.Time              `json:"statusUpdatedAt" yaml:"statusUpdatedAt"`
+	Telegram        []TelegramResponseSpec `json:"telegram" yaml:"telegram"`
+	Type            Platform               `json:"type" yaml:"type"`
 }

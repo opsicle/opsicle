@@ -1,13 +1,16 @@
 apiVersion: v1
 type: ApprovalRequest
 metadata:
-  name: basic-with-mfa
+  name: telegram-with-mfa
 spec:
-  id: 'basic-with-mfa-001'
+  id: 'telegram-with-mfa-001'
   requesterId: user@company.co
   requesterName: y0l0
   message: "i can haz cheeseburger?"
   type: telegram
   telegram:
-    - chatId: 267230627
-      mfaSeed: SPKYRLYDMW46GOQKSQRGKWRYMQI6IA4O
+    - authorizedResponders:
+        - userId: 267230627
+          mfaSeed: SPKYRLYDMW46GOQKSQRGKWRYMQI6IA4O
+      chatIds:
+        - 267230627

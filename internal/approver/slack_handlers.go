@@ -459,10 +459,12 @@ func processSlackApproval(opts processSlackApprovalOpts) error {
 			RequesterName:   opts.Req.Spec.RequesterName,
 			Status:          opts.Status,
 			StatusUpdatedAt: time.Now(),
-			Slack: &approvals.SlackResponseSpec{
-				ChannelId: opts.ChannelId,
-				UserId:    opts.SenderId,
-				UserName:  opts.SenderName,
+			Slack: []approvals.SlackResponseSpec{
+				{
+					ChannelId: opts.ChannelId,
+					UserId:    opts.SenderId,
+					UserName:  opts.SenderName,
+				},
 			},
 			Type: approvals.PlatformSlack,
 		},

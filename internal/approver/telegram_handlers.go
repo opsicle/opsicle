@@ -157,18 +157,21 @@ func handleTelegramResponse(opts handleTelegramResponseOpts) {
 	isTargetAuthorized := false
 	for _, telegramTarget := range opts.Req.Spec.Telegram {
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "evaluating telegram target: user[%v] in chat[%v]", opts.SenderId, opts.ChatId)
-		if isTelegramTargetMatchingSender(isTelegramTargetMatchingSenderOpts{
+		isAuthorized, authorizedResponder := getTelegramTargetMatchingSender(getTelegramTargetMatchingSenderOpts{
 			ChatId:         opts.ChatId,
 			SenderId:       opts.SenderId,
 			SenderUsername: opts.SenderUsername,
 			Target:         telegramTarget,
-		}) {
+		})
+		if isAuthorized {
 			isTargetAuthorized = true
 			switch opts.Action {
 			case ActionApprove:
 				{
-					if telegramTarget.MfaSeed != nil {
-						handleTelegramMfaRequired(opts, telegramTarget)
+					if authorizedResponder == nil {
+						handleTelegramApproval(opts)
+					} else if authorizedResponder.MfaSeed != nil {
+						handleTelegramMfaRequired(opts, authorizedResponder)
 					} else {
 						handleTelegramApproval(opts)
 					}
@@ -186,7 +189,7 @@ func handleTelegramResponse(opts handleTelegramResponseOpts) {
 	}
 }
 
-func handleTelegramMfaRequired(opts handleTelegramResponseOpts, target approvals.TelegramRequestSpec) {
+func handleTelegramMfaRequired(opts handleTelegramResponseOpts, target *approvals.AuthorizedResponder) {
 	if err := opts.Bot.UpdateMessage(
 		opts.ChatId,
 		opts.MessageId,
@@ -450,10 +453,14 @@ func handleTelegramRejection(opts handleTelegramResponseOpts) {
 			RequesterName:   opts.Req.Spec.RequesterName,
 			Status:          approvals.StatusRejected,
 			StatusUpdatedAt: time.Now(),
-			Telegram: &approvals.TelegramResponseSpec{
-				ChatId:   opts.ChatId,
-				UserId:   opts.SenderId,
-				Username: opts.SenderUsername,
+			Telegram: []approvals.TelegramResponseSpec{
+				{
+					ChatId:     opts.ChatId,
+					UserId:     opts.SenderId,
+					Username:   opts.SenderUsername,
+					ReceivedAt: time.Now(),
+					Status:     approvals.StatusRejected,
+				},
 			},
 			Type: approvals.PlatformTelegram,
 		},
@@ -517,10 +524,14 @@ func processTelegramApproval(opts processTelegramApprovalOpts) error {
 			RequesterName:   opts.Req.Spec.RequesterName,
 			Status:          approvals.StatusApproved,
 			StatusUpdatedAt: time.Now(),
-			Telegram: &approvals.TelegramResponseSpec{
-				ChatId:   opts.ChatId,
-				UserId:   opts.SenderId,
-				Username: opts.SenderUsername,
+			Telegram: []approvals.TelegramResponseSpec{
+				{
+					ChatId:     opts.ChatId,
+					UserId:     opts.SenderId,
+					Username:   opts.SenderUsername,
+					ReceivedAt: time.Now(),
+					Status:     approvals.StatusApproved,
+				},
 			},
 			Type: approvals.PlatformTelegram,
 		},

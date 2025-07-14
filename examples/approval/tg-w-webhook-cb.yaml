@@ -12,4 +12,7 @@ spec:
   message: "i can haz cheeseburger?"
   type: telegram
   telegram:
-    - chatId: 267230627
+    - authorizedResponders:
+        - userId: 267230627
+      chatIds:
+        - 267230627

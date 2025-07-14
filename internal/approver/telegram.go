@@ -36,29 +36,35 @@ func (t *telegramNotifier) SendApprovalRequest(req *ApprovalRequest) (string, no
 	t.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "sending via telegram...")
 	notifications := notificationMessages{}
 
-	// only target telegram targets
+	hasChatIdBeenMessaged := map[int64]bool{}
 	for _, target := range req.Spec.Telegram {
 		t.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "sending message to chat[%v]: %s", target.ChatId, text)
-		notification := notificationMessage{
-			Id:       requestUuid,
-			TargetId: strconv.FormatInt(target.ChatId, 10),
-			Platform: NotifierPlatformTelegram,
+		for _, chatId := range target.ChatIds {
+			if messaged, ok := hasChatIdBeenMessaged[chatId]; ok || messaged {
+				continue
+			}
+			notification := notificationMessage{
+				Id:       requestUuid,
+				TargetId: strconv.FormatInt(chatId, 10),
+				Platform: NotifierPlatformTelegram,
+			}
+			msg, err := t.Client.Client.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID:      chatId,
+				Text:        text,
+				ParseMode:   "MarkdownV2",
+				ReplyMarkup: customKeyboard,
+			})
+			if err != nil {
+				t.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "req[%s:%s] failed to send message to chat[%v]: %s", requestId, requestUuid, chatId, err)
+				notification.Error = err
+			} else {
+				notification.IsSuccess = true
+				notification.MessageId = strconv.FormatInt(int64(msg.ID), 10)
+				notification.SentAt = time.Now()
+			}
+			hasChatIdBeenMessaged[chatId] = true
+			notifications = append(notifications, notification)
 		}
-		msg, err := t.Client.Client.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID:      target.ChatId,
-			Text:        text,
-			ParseMode:   "MarkdownV2",
-			ReplyMarkup: customKeyboard,
-		})
-		if err != nil {
-			t.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "req[%v] failed to send message to chat[%v]: %s", requestId, target.ChatId, err)
-			notification.Error = err
-		} else {
-			notification.IsSuccess = true
-			notification.MessageId = strconv.FormatInt(int64(msg.ID), 10)
-			notification.SentAt = time.Now()
-		}
-		notifications = append(notifications, notification)
 	}
 
 	return requestUuid, notifications, nil

@@ -13,7 +13,8 @@ type Template struct {
 }
 
 type Spec struct {
-	Metadata SpecMetadata   `json:"metadata" yaml:"metadata"`
+	Metadata SpecMetadata `json:"metadata" yaml:"metadata"`
+	// Approval ApprovalSpec   `json:"approval" yaml:"approval"`
 	Template AutomationSpec `json:"template" yaml:"template"`
 }
 
