@@ -17,17 +17,21 @@ type StartHttpServerOpts struct {
 func StartHttpServer(opts StartHttpServerOpts) error {
 	handler := mux.NewRouter()
 
-	handler.Use(common.GetRequestLoggerMiddleware(opts.ServiceLogs))
-
 	for urlPath, routeHandlers := range routesMapping {
 		for method, getRouteHandler := range routeHandlers {
 			handler.HandleFunc(urlPath, getRouteHandler()).Methods(method)
 		}
 	}
 
+	handler.NotFoundHandler = getNotFoundHandler()
+
+	logger := common.GetRequestLoggerMiddleware(opts.ServiceLogs)
+
+	loggedHandler := logger(handler)
+
 	server := http.Server{
 		Addr:              opts.Addr,
-		Handler:           handler,
+		Handler:           loggedHandler,
 		IdleTimeout:       common.DefaultDurationConnectionTimeout,
 		ReadTimeout:       common.DefaultDurationConnectionTimeout,
 		ReadHeaderTimeout: common.DefaultDurationConnectionTimeout,

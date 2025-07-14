@@ -7,19 +7,18 @@ import (
 	"strings"
 )
 
-func createTelegramApprovalCallbackData(action Action, requestUuid string, requestId string) (callbackData string) {
-	callbackData = fmt.Sprintf("%s:%s:%s", action, requestUuid, requestId)
+func createTelegramApprovalCallbackData(action Action, requestUuid string) (callbackData string) {
+	callbackData = fmt.Sprintf("%s:%s", action, requestUuid)
 	return
 }
 
-func parseTelegramApprovalCallbackData(callbackData string) (action Action, notificationId string, requestId string, err error) {
+func parseTelegramApprovalCallbackData(callbackData string) (action Action, requestUuid string, err error) {
 	splitCallbackData := strings.Split(callbackData, ":")
-	if len(splitCallbackData) != 3 {
-		return "", "", "", fmt.Errorf("failed to parse callback data: expected [{action}:{notificationId}:{requestId}] but received callbackData[%s]", callbackData)
+	if len(splitCallbackData) != 2 {
+		return "", "", fmt.Errorf("failed to parse callback data: expected [{action}:{requestUuid}] but received callbackData[%s]", callbackData)
 	}
 	action = Action(splitCallbackData[0])
-	notificationId = splitCallbackData[1]
-	requestId = splitCallbackData[2]
+	requestUuid = splitCallbackData[1]
 	err = nil
 	return
 }

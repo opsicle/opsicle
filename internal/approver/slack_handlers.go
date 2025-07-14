@@ -160,13 +160,13 @@ func handleSlackInteraction(opts handleSlackInteractionOpts) {
 	requestUuid := callbackData.RequestUuid
 
 	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "loading approval request[%s:%s]", requestId, requestUuid)
-	approvalRequest, err := LoadApprovalRequest(ApprovalRequest{
+
+	approvalRequest := &ApprovalRequest{
 		Spec: approvals.RequestSpec{
-			Id:   requestId,
 			Uuid: &requestUuid,
 		},
-	})
-	if err != nil {
+	}
+	if err := approvalRequest.Load(); err != nil {
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to fetch request from cache: %v", err)
 		opts.App.PostMessage(channelId, slack.MsgOptionText(getSlackSystemErrorMessage(), false))
 		return
@@ -255,13 +255,12 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 	}
 	mfaToken := opts.Callback.View.State.Values["mfa_input"]["mfa_token"].Value
 	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "received mfaToken[%s]", mfaToken)
-	approvalRequest, err := LoadApprovalRequest(ApprovalRequest{
+	approvalRequest := ApprovalRequest{
 		Spec: approvals.RequestSpec{
-			Id:   mfaModalMetadata.RequestId,
 			Uuid: &mfaModalMetadata.RequestUuid,
 		},
-	})
-	if err != nil {
+	}
+	if err := approvalRequest.Load(); err != nil {
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to fetch request from cache: %v", err)
 		opts.App.PostMessage(mfaModalMetadata.ChannelId, slack.MsgOptionText(getSlackSystemErrorMessage(), false))
 		return
@@ -294,7 +293,7 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 							ApprovalRequestMessageTs: mfaModalMetadata.MessageTs,
 							App:                      opts.App,
 							ChannelId:                mfaModalMetadata.ChannelId,
-							Req:                      approvalRequest,
+							Req:                      &approvalRequest,
 							SenderId:                 opts.Callback.User.ID,
 							SenderName:               mfaModalMetadata.UserName,
 							ServiceLogs:              opts.ServiceLogs,
@@ -468,14 +467,14 @@ func processSlackApproval(opts processSlackApprovalOpts) error {
 			Type: approvals.PlatformSlack,
 		},
 	}
-	if err := CreateApproval(approval); err != nil {
+	if err := approval.Create(); err != nil {
 		if err := respondSlackSystemError(opts.App, opts.ChannelId, opts.ApprovalRequestMessageTs); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to respond: %s", err)
 		}
 		return fmt.Errorf("failed to create approval[%s]: %s", approval.Spec.Id, err)
 	}
 	opts.Req.Spec.Approval = &approval.Spec
-	if err := UpdateApprovalRequest(*opts.Req); err != nil {
+	if err := opts.Req.Update(); err != nil {
 		msg := getSlackSystemErrorMessage()
 		if _, _, err := opts.App.PostMessage(
 			opts.ChannelId,

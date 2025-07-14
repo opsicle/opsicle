@@ -23,7 +23,8 @@ func (i *Instance) Set(key string, value string, ttl time.Duration) error {
 	if status.Err() != nil {
 		return fmt.Errorf("failed to set key[%s]: %s", key, status.Err())
 	}
-	i.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "set key[%s] response: %s", key, status.String())
+	i.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "key[%s] creation/update succeeded", key)
+	i.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "set key[%s] response: %s", key, status.String())
 	return nil
 }
 
@@ -32,7 +33,8 @@ func (i *Instance) Get(key string) (string, error) {
 	if response.Err() != nil {
 		return "", fmt.Errorf("failed to get key[%s]: %s", key, response.Err())
 	}
-	i.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "get key[%s] response: %s", key, response.String())
+	i.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "key[%s] retrieval succeeded", key)
+	i.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "get key[%s] response: %s", key, response.String())
 	value := response.Val()
 	return value, nil
 }
@@ -43,7 +45,8 @@ func (i *Instance) Scan(pattern string) ([]string, error) {
 		return nil, fmt.Errorf("failed to list keys[%s]: %s", pattern, response.Err())
 	}
 	keys := response.Val()
-	i.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "found %v keys[%s]", len(keys), pattern)
+	i.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "keys[%s] scan succeeded", pattern)
+	i.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "found %v keys[%s]", len(keys), pattern)
 	return keys, nil
 }
 
@@ -52,7 +55,8 @@ func (i *Instance) Del(key string) error {
 	if response.Err() != nil {
 		return fmt.Errorf("failed to delete key[%s]: %s", key, response.Err())
 	}
-	i.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "delete key[%s] response: %s", key, response.String())
+	i.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "key[%s] deletion succeeded", key)
+	i.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "delete key[%s] response: %s", key, response.String())
 	return nil
 }
 

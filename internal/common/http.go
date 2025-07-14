@@ -91,9 +91,9 @@ func GetRequestLoggerMiddleware(serviceLogs chan<- ServiceLog) func(http.Handler
 			requestContext = context.WithValue(requestContext, HttpContextLogger, HttpRequestLogger(func(level string, message string) {
 				serviceLogs <- ServiceLogf(level, "req[%s] %s", requestId, message)
 			}))
-			serviceLogs <- ServiceLogf(LogLevelInfo, "req[%s] received %s at %s", requestId, r.Method, r.RequestURI)
+			serviceLogs <- ServiceLogf(LogLevelDebug, "req[%s] received %s at %s", requestId, r.Method, r.RequestURI)
 			next.ServeHTTP(w, r.WithContext(requestContext))
-			serviceLogs <- ServiceLogf(LogLevelInfo, "req[%s] completed in %v", requestId, time.Since(start))
+			serviceLogs <- ServiceLogf(LogLevelInfo, "req[%s] [%s %s %s %s] from remote[%s] completed in %v", requestId, r.Proto, r.Host, r.Method, r.RequestURI, r.RemoteAddr, time.Since(start))
 		})
 	}
 }

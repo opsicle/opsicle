@@ -18,14 +18,14 @@ var routesMapping = map[string]map[string]func() http.HandlerFunc{
 	"/approval/{approvalId}": {
 		http.MethodGet: getGetApprovalHandler,
 	},
-	"/approval-request/{requestId}/{requestUuid}": {
+	"/approval-request/{requestUuid}": {
 		http.MethodGet: getGetApprovalRequestHandler,
 	},
 }
 
 func getCreateApprovalRequestHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req ApprovalRequest
+		req := &ApprovalRequest{}
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 
 		log(common.LogLevelDebug, "reading request body...")
@@ -44,20 +44,20 @@ func getCreateApprovalRequestHandler() http.HandlerFunc {
 
 		log(common.LogLevelDebug, "storing approval request...")
 		req.Spec.Init()
-		if err := CreateApprovalRequest(req); err != nil {
+		if err := req.Create(); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create approval request", err)
 			return
 		}
 
 		log(common.LogLevelDebug, fmt.Sprintf("sending approvalRequest[%s]...", req.Spec.GetUuid()))
-		requestUuid, notifications, err := Notifiers.SendApprovalRequest(&req)
+		requestUuid, notifications, err := Notifiers.SendApprovalRequest(req)
 		if err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, fmt.Sprintf("failed to send approvalRequest[%v:%s]", req.Spec.Id, requestUuid), err)
 			return
 		}
 		log(common.LogLevelInfo, fmt.Sprintf("sent %v notifications for approvalRequest[%s:%s]", len(notifications), req.Spec.Id, requestUuid))
 
-		if err := UpdateApprovalRequest(req); err != nil {
+		if err := req.Update(); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, fmt.Sprintf("failed to update approvalRequest[%v:%s]", req.Spec.Id, requestUuid), err)
 			return
 		}
@@ -90,11 +90,10 @@ func getGetApprovalHandler() http.HandlerFunc {
 func getGetApprovalRequestHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-		requestId := mux.Vars(r)["requestId"]
 		requestUuid := mux.Vars(r)["requestUuid"]
-		log(common.LogLevelDebug, fmt.Sprintf("received request for status of approvalRequest[%s:%s]", requestId, requestUuid))
+		log(common.LogLevelDebug, fmt.Sprintf("received request for status of approvalRequest[%s]", requestUuid))
 
-		cacheKey := CreateApprovalRequestCacheKey(requestId, requestUuid)
+		cacheKey := CreateApprovalRequestCacheKey(requestUuid)
 		log(common.LogLevelDebug, fmt.Sprintf("retrieving cache item with key[%s]...", cacheKey))
 		approvalRequestData, err := Cache.Get(cacheKey)
 		if err != nil {
@@ -106,7 +105,7 @@ func getGetApprovalRequestHandler() http.HandlerFunc {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, fmt.Sprintf("failed to unmarshal approvalRequest[%s]", requestUuid), err)
 			return
 		}
-		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", approvalRequest.Spec)
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", approvalRequest.GetRedacted())
 	}
 }
 
@@ -127,5 +126,11 @@ func getListApprovalRequestsHandler() http.HandlerFunc {
 		}
 
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", keys)
+	}
+}
+
+func getNotFoundHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		common.SendHttpFailResponse(w, r, http.StatusNotFound, "not found", fmt.Errorf("endpoint[%s] not found", r.URL.Path))
 	}
 }

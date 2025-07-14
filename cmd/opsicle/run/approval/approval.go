@@ -99,20 +99,18 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to read response from approver service: %s", err)
 		}
+		logrus.Debugf("received response: %s", string(responseBody))
 		var response common.HttpResponse
 		if err := json.Unmarshal(responseBody, &response); err != nil {
 			return fmt.Errorf("failed to parse response from approver service: %s", err)
 		}
 		responseData, err := json.Marshal(response.Data)
 		if err != nil {
-			return fmt.Errorf("failed to parse response from approver service: %s", err)
-		}
-		if err := json.Unmarshal(responseBody, &response); err != nil {
-			return fmt.Errorf("failed to parse response from approver service: %s", err)
+			return fmt.Errorf("failed to reconcile response into data from approver service: %s", err)
 		}
 		var requestSpec approvals.RequestSpec
 		if err := json.Unmarshal(responseData, &requestSpec); err != nil {
-			return fmt.Errorf("failed to parse response from approver service: %s", err)
+			return fmt.Errorf("failed to parse data from approver service: %s", err)
 		}
 		requestId := requestSpec.Id
 		requestUuid := requestSpec.GetUuid()
@@ -121,7 +119,7 @@ var Command = &cobra.Command{
 		isDone := false
 		for !isDone {
 			logrus.Infof("getting status from url[%s]...", approverUrl.String())
-			approverUrl.Path = fmt.Sprintf("/approval-request/%v/%v", requestId, requestUuid)
+			approverUrl.Path = fmt.Sprintf("/approval-request/%v", requestUuid)
 			req, err = http.NewRequest(
 				http.MethodGet,
 				approverUrl.String(),
@@ -139,6 +137,7 @@ var Command = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to read response from approver service: %s", err)
 			}
+			logrus.Debugf("received response from url[%s]: %s", approverUrl.String(), string(responseBody))
 			var response common.HttpResponse
 			if err := json.Unmarshal(responseBody, &response); err != nil {
 				return fmt.Errorf("failed to parse response from approver service: %s", err)
@@ -147,19 +146,16 @@ var Command = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to parse response from approver service: %s", err)
 			}
-			if err := json.Unmarshal(responseBody, &response); err != nil {
+			var approvalRequest approver.ApprovalRequest
+			if err := json.Unmarshal(responseData, &approvalRequest); err != nil {
 				return fmt.Errorf("failed to parse response from approver service: %s", err)
 			}
-			var requestSpec approvals.RequestSpec
-			if err := json.Unmarshal(responseData, &requestSpec); err != nil {
-				return fmt.Errorf("failed to parse response from approver service: %s", err)
-			}
-			if requestSpec.Approval == nil {
+			if approvalRequest.Spec.Approval == nil {
 				logrus.Infof("request is still not yet approved, waiting another 5 seconds...")
 				<-time.After(5 * time.Second)
 				continue
 			}
-			logrus.Infof("approval request has updated status[%v] (by %v)", requestSpec.Approval.Status, requestSpec.Approval.ApproverId)
+			logrus.Infof("approval request has updated status[%v] (by %v)", approvalRequest.Spec.Approval.Status, approvalRequest.Spec.Approval.ApproverId)
 			isDone = true
 		}
 

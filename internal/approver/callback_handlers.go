@@ -24,8 +24,12 @@ func getWebhookCallbackRequest(opts approvals.WebhookCallbackSpec) (*http.Reques
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse targetUrl[%s]: %s", targetUrl, err)
 	}
+	method := opts.Method
+	if method == "" {
+		method = http.MethodPost
+	}
 	req := http.Request{
-		Method: opts.Method,
+		Method: method,
 		URL:    targetUrl,
 	}
 	if opts.Auth != nil {

@@ -23,9 +23,9 @@ func (t *telegramNotifier) SendApprovalRequest(req *ApprovalRequest) (string, no
 
 	requestUuid := req.Spec.GetUuid()
 	requestId := req.Spec.Id
-	approveButtonCallbackData := createTelegramApprovalCallbackData(ActionApprove, requestUuid, requestId)
+	approveButtonCallbackData := createTelegramApprovalCallbackData(ActionApprove, requestUuid)
 	t.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "telegram approve button callback data (length: %v): %s", len(approveButtonCallbackData), approveButtonCallbackData)
-	rejectButtonCallbackData := createTelegramApprovalCallbackData(ActionReject, requestUuid, requestId)
+	rejectButtonCallbackData := createTelegramApprovalCallbackData(ActionReject, requestUuid)
 	t.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "telegram reject button callback data (length: %v): %s", len(rejectButtonCallbackData), rejectButtonCallbackData)
 	customKeyboard := getTelegramApprovalKeyboard(
 		approveButtonCallbackData,

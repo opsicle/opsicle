@@ -4,9 +4,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"github.com/sirupsen/logrus"
 )
+
+var totpOpts = totp.ValidateOpts{
+	Period:    30,
+	Skew:      1,
+	Digits:    6,
+	Algorithm: otp.AlgorithmSHA1,
+}
 
 func CreateTotpSeed(issuer, accountName string) (string, error) {
 	key, err := totp.Generate(totp.GenerateOpts{
@@ -20,22 +28,7 @@ func CreateTotpSeed(issuer, accountName string) (string, error) {
 }
 
 func ValidateTotpToken(secret string, token string) (bool, error) {
-	validTokenTimestamps := []time.Time{
-		time.Now().Add(-1 * time.Minute).Truncate(30 * time.Second),
-		time.Now().Truncate(30 * time.Second),
-		time.Now().Add(time.Minute).Truncate(30 * time.Second),
-	}
-	fmt.Println(validTokenTimestamps)
-	for _, validTokenTimestamp := range validTokenTimestamps {
-		code, err := totp.GenerateCode(secret, validTokenTimestamp)
-		if err != nil {
-			return false, fmt.Errorf("failed to generate totp token: %s", err)
-		}
-		if token == code {
-			return true, nil
-		}
-	}
-	return false, nil
+	return totp.ValidateCustom(token, secret, time.Now().UTC(), totpOpts)
 }
 
 func CreateTotpTokens(secret string, validity time.Duration) ([]string, error) {
@@ -44,7 +37,7 @@ func CreateTotpTokens(secret string, validity time.Duration) ([]string, error) {
 	for i := 0; i < int(instanceCount); i++ {
 		forTime := time.Now().Add(time.Minute * time.Duration(i)).Truncate(30 * time.Second)
 		logrus.Infof("generating code for time: %s", forTime.Format("15:04:05"))
-		code, err := totp.GenerateCode(secret, forTime)
+		code, err := totp.GenerateCodeCustom(secret, forTime, totpOpts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate totp token: %s", err)
 		}

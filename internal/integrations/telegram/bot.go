@@ -36,14 +36,7 @@ func (b *Bot) EscapeMarkdown(input string) string {
 }
 
 func (b *Bot) UpdateMessage(chatId int64, messageId int, newMessage string, markup ...models.ReplyMarkup) error {
-	b.ServiceLogs <- common.ServiceLogf(
-		common.LogLevelDebug,
-		"chat[%v].UpdateMessage[%v] '%s' (markup: %v)",
-		chatId,
-		messageId,
-		newMessage,
-		len(markup) > 0,
-	)
+	b.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "chat[%v].UpdateMessage[%v](markup: %v): '%s'", chatId, messageId, len(markup) > 0, newMessage)
 	editMessageParameters := &bot.EditMessageTextParams{
 		ChatID:    chatId,
 		MessageID: messageId,
@@ -51,11 +44,6 @@ func (b *Bot) UpdateMessage(chatId int64, messageId int, newMessage string, mark
 		Text:      newMessage,
 	}
 	if markup != nil && len(markup) > 0 && markup[0] != nil {
-		fmt.Println("-----------------------------------------------")
-		fmt.Println("added la sial")
-		o, _ := json.MarshalIndent(markup[0], "", "  ")
-		fmt.Println(string(o))
-		fmt.Println("-----------------------------------------------")
 		editMessageParameters.ReplyMarkup = markup[0]
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -67,12 +55,8 @@ func (b *Bot) UpdateMessage(chatId int64, messageId int, newMessage string, mark
 }
 
 func (b *Bot) UpdateMarkup(chatId int64, messageId int, markup models.ReplyMarkup) error {
-	b.ServiceLogs <- common.ServiceLogf(
-		common.LogLevelDebug,
-		"chat[%v].UpdateMarkup[%v]",
-		chatId,
-		messageId,
-	)
+	o, _ := json.Marshal(markup)
+	b.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "chat[%v].UpdateMarkup[%v]: %s", chatId, messageId, string(o))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := b.Client.EditMessageReplyMarkup(
@@ -89,10 +73,7 @@ func (b *Bot) UpdateMarkup(chatId int64, messageId int, markup models.ReplyMarku
 }
 
 func (b *Bot) ReplyMessage(chatId int64, replyMessageId int, message string, markup ...models.ReplyMarkup) error {
-	b.ServiceLogs <- common.ServiceLogf(
-		common.LogLevelDebug,
-		"chat[%v] >> '%s'", chatId, message,
-	)
+	b.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "chat[%v].ReplyMessage[%v]: '%s'", chatId, replyMessageId, message)
 	messageParameters := &bot.SendMessageParams{
 		ChatID: chatId,
 		Text:   message,
@@ -113,10 +94,7 @@ func (b *Bot) ReplyMessage(chatId int64, replyMessageId int, message string, mar
 }
 
 func (b *Bot) SendMessage(chatId int64, message string, markup ...models.ReplyMarkup) error {
-	b.ServiceLogs <- common.ServiceLogf(
-		common.LogLevelDebug,
-		"chat[%v] >> '%s'", chatId, message,
-	)
+	b.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "chat[%v].SendMessage: '%s'", chatId, message)
 	messageParameters := &bot.SendMessageParams{
 		ChatID:    chatId,
 		Text:      message,
