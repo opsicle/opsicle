@@ -10,4 +10,5 @@ const (
 	pendingMfaCachePrefix             = "pendingmfa"
 	ActionApprove              Action = "approve"
 	ActionReject               Action = "reject"
+	ActionMfa                  Action = "mfa"
 )

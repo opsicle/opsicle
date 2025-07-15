@@ -9,6 +9,9 @@ spec:
   message: "i can haz cheeseburger?"
   type: slack
   slack:
-    - channelName: dev-opsicle-approvals
+  - authorizedResponders:
+    - userId: U0626N0TPJ7 
       mfaSeed: SPKYRLYDMW46GOQKSQRGKWRYMQI6IA4O
+    channelNames:
+    - dev-opsicle-approvals
       

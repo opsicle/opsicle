@@ -38,27 +38,17 @@ func getSlackApprovedBlocks(req *ApprovalRequest) slack.Blocks {
 			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Requester ID: `%s`", req.Spec.RequesterId), false, false)),
 			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Request ID: `%s`", req.Spec.Id), false, false)),
 			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Request UUID: `%s`", req.Spec.GetUuid()), false, false)),
-			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Approved by: <@%s>", req.Spec.Approval.ApproverId), false, false)),
+			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Approved by: <@%s> (`%s`)", req.Spec.Approval.ApproverId, req.Spec.Approval.ApproverId), false, false)),
 			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", "Status: ✅", false, false)),
+			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Status updated at: `%s`", req.Spec.Approval.StatusUpdatedAt.Format(time.RFC1123)), false, false)),
 		},
 	}
 }
 
-func getSlackApprovedMessage(req ApprovalRequest) string {
-	return fmt.Sprintf(
-		"✅ Approval request\nID: `%v`\nMessage: `%s`\nRequester: %s (`%s`)\n\nStatus: *APPROVED*\nApproval ID: `%s`\nRequest ID: `%s`",
-		req.Spec.Id,
-		req.Spec.Message,
-		req.Spec.RequesterName,
-		req.Spec.RequesterId,
-		req.Spec.Approval.Id,
-		req.Spec.GetUuid(),
-	)
-}
-
 func getSlackApprovalDetailsMessage(userId string, respondedAt time.Time) string {
 	return fmt.Sprintf(
-		"✅ Approved by <@%s> at %s UTC",
+		"✅ Approved by <@%s> (`%s`) at %s UTC",
+		userId,
 		userId,
 		respondedAt.UTC().Format("2006-01-02 15:04:05"),
 	)
@@ -66,7 +56,8 @@ func getSlackApprovalDetailsMessage(userId string, respondedAt time.Time) string
 
 func getSlackRejectionDetailsMessage(userId string, respondedAt time.Time) string {
 	return fmt.Sprintf(
-		"⛔️ Rejected by <@%s> at %s UTC",
+		"⛔️ Rejected by <@%s> (`%s`) at %s UTC",
+		userId,
 		userId,
 		respondedAt.UTC().Format("2006-01-02 15:04:05"),
 	)
@@ -78,14 +69,16 @@ func getSlackSystemErrorMessage() string {
 
 func getSlackMfaRejectedMessage(userId string) string {
 	return fmt.Sprintf(
-		"⚠️ <@%s> provided an invalid MFA token",
+		"⚠️ <@%s> (`%s`) provided an invalid MFA token",
+		userId,
 		userId,
 	)
 }
 
 func getSlackPendingMfaMessage(userId string) string {
 	return fmt.Sprintf(
-		"⏳ Approval is pending MFA token by <@%s>",
+		"⏳ Approval is now pending MFA token by <@%s> (`%s`)",
+		userId,
 		userId,
 	)
 }
@@ -101,23 +94,17 @@ func getSlackRejectedBlocks(req *ApprovalRequest) slack.Blocks {
 			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Requester ID: `%s`", req.Spec.RequesterId), false, false)),
 			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Request ID: `%s`", req.Spec.Id), false, false)),
 			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Request UUID: `%s`", req.Spec.GetUuid()), false, false)),
-			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Rejected by: <@%s>", req.Spec.Approval.ApproverId), false, false)),
+			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Rejected by: <@%s> (`%s`)", req.Spec.Approval.ApproverId, req.Spec.Approval.ApproverId), false, false)),
 			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", "Status: ⛔️", false, false)),
+			slack.NewContextBlock("", slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Status updated at: `%s`", req.Spec.Approval.StatusUpdatedAt.Format(time.RFC1123)), false, false)),
 		},
 	}
 }
 
-func getSlackRejectedMessage(req ApprovalRequest) string {
+func getSlackUnauthorizedMessage(userId, action string) string {
 	return fmt.Sprintf(
-		"❌ Approval request\nID: `%v`\nMessage: `%s`\nRequester: %s (`%s`)\n\nStatus: *REJECTED*\nApproval ID: `%s`",
-		req.Spec.Id,
-		req.Spec.Message,
-		req.Spec.RequesterName,
-		req.Spec.RequesterId,
-		req.Spec.Approval.Id,
+		"⚠️ <@%s> tried to perform the `%s` action but is not authorised to do that",
+		userId,
+		action,
 	)
-}
-
-func getSlackUnauthorizedMessage() string {
-	return "⚠️ You are not authorised to perform this action"
 }

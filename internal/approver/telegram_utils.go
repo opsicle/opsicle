@@ -36,10 +36,12 @@ type getAuthorizedTelegramTargetsOpts struct {
 func getAuthorizedTelegramTargets(opts getAuthorizedTelegramTargetsOpts) approvals.AuthorizedResponders {
 	authorizedResponders := approvals.AuthorizedResponders{}
 	for _, telegramTarget := range opts.Req.Spec.Telegram {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "DEPRECATED - running through list of telegram chat specifications")
 		isAuthorized, authorizedResponder := getTelegramTargetMatchingSender(getTelegramTargetMatchingSenderOpts{
 			ChatId:         opts.ChatId,
 			SenderId:       opts.SenderId,
 			SenderUsername: opts.SenderUsername,
+			ServiceLogs:    opts.ServiceLogs,
 			Target:         telegramTarget,
 		})
 		if isAuthorized {
@@ -54,15 +56,15 @@ type getTelegramTargetMatchingSenderOpts struct {
 	ChatId         int64
 	SenderId       int64
 	SenderUsername string
+	ServiceLogs    chan<- common.ServiceLog
 	Target         approvals.TelegramRequestSpec
 }
 
 func getTelegramTargetMatchingSender(opts getTelegramTargetMatchingSenderOpts) (bool, *approvals.AuthorizedResponder) {
 	isChatMatched := false
 	for _, chatId := range opts.Target.ChatIds {
-		fmt.Println("matching chat")
 		if chatId == opts.ChatId {
-			fmt.Println("matched chat id")
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "matched chat[%v]", chatId)
 			isChatMatched = true
 			break
 		}
@@ -71,9 +73,8 @@ func getTelegramTargetMatchingSender(opts getTelegramTargetMatchingSenderOpts) (
 	isSenderMatched := len(opts.Target.AuthorizedResponders) == 0
 	matchedSender := approvals.AuthorizedResponder{}
 	for _, authorizedResponder := range opts.Target.AuthorizedResponders {
-		fmt.Println("matching responder")
 		o, _ := json.Marshal(authorizedResponder)
-		fmt.Printf("comparing authorizedResponder[%s]\n", string(o))
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "comparing authorizedResponder[%s] with sender[%s:%s]\n", string(o), opts.SenderId, opts.SenderUsername)
 		isUserIdDefined := authorizedResponder.UserId != nil
 		isUserIdMatch := true
 		isUsernameDefined := authorizedResponder.Username != nil
@@ -91,23 +92,8 @@ func getTelegramTargetMatchingSender(opts getTelegramTargetMatchingSenderOpts) (
 				isUsernameMatch = false
 			}
 		}
-		fmt.Printf(
-			"o.chatid: %v\n"+
-				"o.uid: %v\n"+
-				"o.uname: %v\n"+
-				"uid.defined: %v\n"+
-				"uid.match: %v\n"+
-				"uname.defined: %v\n"+
-				"uname.match: %v\n",
-			opts.ChatId,
-			opts.SenderId,
-			opts.SenderUsername,
-			isUserIdDefined,
-			isUserIdMatch,
-			isUsernameDefined,
-			isUsernameMatch,
-		)
 		if isUserIdMatch && isUsernameMatch {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "matched authorised responder in chat[%v]", opts.ChatId)
 			matchedSender = authorizedResponder
 			isSenderMatched = true
 			break

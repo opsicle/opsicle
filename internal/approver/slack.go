@@ -54,47 +54,46 @@ func (s *slackNotifier) SendApprovalRequest(req *ApprovalRequest) (string, notif
 	notifications := notificationMessages{}
 
 	for i, target := range req.Spec.Slack {
-		var channelId string
-		if target.ChannelId != nil {
-			channelId = *target.ChannelId
-		} else {
+		if req.Spec.Slack[i].ChannelIds == nil {
+			req.Spec.Slack[i].ChannelIds = []string{}
+		}
+		for _, channelName := range target.ChannelNames {
 			var err error
-			channelId, err = s.resolveChannelId(target.ChannelName)
+			channelId, err := s.resolveChannelId(channelName)
 			if err != nil {
 				s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to resolve the id of channel[%s]: %s", target.ChannelName, err)
 				continue
 			}
-			req.Spec.Slack[i].ChannelId = &channelId
+			req.Spec.Slack[i].ChannelIds = append(req.Spec.Slack[i].ChannelIds, channelId)
+
+			notification := notificationMessage{
+				Id:       requestUuid,
+				TargetId: channelId,
+				Platform: NotifierPlatformSlack,
+			}
+			callbackData := createSlackApprovalCallbackData(
+				channelId,
+				target.ChannelName,
+				requestId,
+				requestUuid,
+				target.UserId,
+			)
+			blocks := getSlackApprovalRequestBlocks(req, callbackData)
+
+			s.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "sending slack message to channel[%s/%s]", channelId, channelName)
+			sentChannelId, messageTimestamp, err := s.Client.PostMessage(channelId, slack.MsgOptionBlocks(blocks.BlockSet...))
+			if err != nil {
+				s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send slack message to channel[%s] with id[%s]: %w", target.ChannelName, channelId, err)
+				notification.Error = err
+				continue
+			} else {
+				req.Spec.Slack[i].MessageId = &messageTimestamp
+				notification.IsSuccess = true
+				notification.MessageId = fmt.Sprintf("%s_%s", sentChannelId, messageTimestamp)
+				notification.SentAt = time.Now()
+			}
+			notifications = append(notifications, notification)
 		}
-
-		notification := notificationMessage{
-			Id:       requestUuid,
-			TargetId: channelId,
-			Platform: NotifierPlatformSlack,
-		}
-
-		callbackData := createSlackApprovalCallbackData(
-			channelId,
-			target.ChannelName,
-			requestId,
-			requestUuid,
-			target.UserId,
-		)
-
-		blocks := getSlackApprovalRequestBlocks(req, callbackData)
-
-		sentChannelId, messageTimestamp, err := s.Client.PostMessage(channelId, slack.MsgOptionBlocks(blocks.BlockSet...))
-		if err != nil {
-			s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send slack message to channel[%s] with id[%s]: %w", target.ChannelName, channelId, err)
-			notification.Error = err
-			continue
-		} else {
-			req.Spec.Slack[i].MessageId = &messageTimestamp
-			notification.IsSuccess = true
-			notification.MessageId = fmt.Sprintf("%s_%s", sentChannelId, messageTimestamp)
-			notification.SentAt = time.Now()
-		}
-		notifications = append(notifications, notification)
 	}
 
 	return requestUuid, notifications, nil

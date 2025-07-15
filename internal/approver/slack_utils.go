@@ -3,6 +3,8 @@ package approver
 import (
 	"encoding/json"
 	"fmt"
+	"opsicle/internal/approvals"
+	"opsicle/internal/common"
 )
 
 const (
@@ -71,4 +73,67 @@ func parseSlackMfaModalMetadata(privateMetadata string) (*slackMfaRequestModalMe
 		return nil, fmt.Errorf("failed to unmarshal data[%s]: %s", privateMetadata, err)
 	}
 	return &data, nil
+}
+
+type getAuthorizedSlackTargetsOpts struct {
+	ChannelId   string
+	Req         ApprovalRequest
+	SenderId    string
+	ServiceLogs chan<- common.ServiceLog
+}
+
+func getAuthorizedSlackTargets(opts getAuthorizedSlackTargetsOpts) approvals.AuthorizedResponders {
+	authorizedResponders := approvals.AuthorizedResponders{}
+	for _, target := range opts.Req.Spec.Slack {
+		isAuthorized, authorizedResponder := getSlackTargetMatchingSender(getSlackTargetMatchingSenderOpts{
+			ChannelId:   opts.ChannelId,
+			SenderId:    opts.SenderId,
+			Target:      target,
+			ServiceLogs: opts.ServiceLogs,
+		})
+		if isAuthorized {
+			authorizedResponders = append(authorizedResponders, *authorizedResponder)
+			break
+		}
+	}
+	return authorizedResponders
+}
+
+type getSlackTargetMatchingSenderOpts struct {
+	ChannelId   string
+	SenderId    string
+	ServiceLogs chan<- common.ServiceLog
+	Target      approvals.SlackRequestSpec
+}
+
+func getSlackTargetMatchingSender(opts getSlackTargetMatchingSenderOpts) (bool, *approvals.AuthorizedResponder) {
+	isChatMatched := false
+	for _, channelId := range opts.Target.ChannelIds {
+		if channelId == opts.ChannelId {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "matched channel[%v]", channelId)
+			isChatMatched = true
+			break
+		}
+	}
+
+	isSenderMatched := len(opts.Target.AuthorizedResponders) == 0
+	matchedSender := approvals.AuthorizedResponder{}
+	for _, authorizedResponder := range opts.Target.AuthorizedResponders {
+		o, _ := json.Marshal(authorizedResponder)
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "comparing authorizedResponder[%s] with sender[%s]\n", string(o), opts.SenderId)
+		isUserIdDefined := authorizedResponder.UserId != nil
+		isUserIdMatch := true
+		if isUserIdDefined {
+			if *authorizedResponder.UserId != opts.SenderId {
+				isUserIdMatch = false
+			}
+		}
+		if isUserIdMatch {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "matched authorised responder in channel[%s]", opts.ChannelId)
+			matchedSender = authorizedResponder
+			isSenderMatched = true
+			break
+		}
+	}
+	return isChatMatched && isSenderMatched, &matchedSender
 }
