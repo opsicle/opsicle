@@ -1,12 +1,12 @@
 apiVersion: v1
 type: ApprovalRequest
 metadata:
-  name: telegram-wo-mfa
+  name: tg-wo-mfa
 spec:
-  id: 'telegram-wo-mfa-001'
+  id: 'tg-wo-mfa-001'
   requesterId: user@company.co
   requesterName: y0l0
   message: "i can haz cheeseburger?"
   type: telegram
   telegram:
-    - chatId: 267230627
+  - chatId: 267230627

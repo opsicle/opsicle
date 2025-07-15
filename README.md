@@ -6,7 +6,7 @@ Opsicle is a Runbhook Automation platform.
 
 ## For Contributors
 
-- [./docs/changelog](Changelog)
+- [./docs/changelog/README.md](Changelog)
 - [./docs/integrations.md](Integrations)
 - [./docs/ideas.md](Idea log)
 - [./docs/system-architecture.md](System Architecture)

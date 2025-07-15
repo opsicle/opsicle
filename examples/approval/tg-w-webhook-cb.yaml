@@ -1,18 +1,18 @@
 apiVersion: v1
 type: ApprovalRequest
 metadata:
-  name: telegram-with-webhook-callback
+  name: tg-w-webhook-cb
 spec:
   callback:
     webhook:
       url: "http://localhost:54321/callback/path"
-  id: 'telegram-w-webho-001'
+  id: 'tg-w-webhook-cb-001'
   requesterId: user@company.co
   requesterName: y0l0
   message: "i can haz cheeseburger?"
   type: telegram
   telegram:
-    - authorizedResponders:
-        - userId: 267230627
-      chatIds:
-        - 267230627
+  - authorizedResponders:
+    - userId: 267230627
+    chatIds:
+    - 267230627

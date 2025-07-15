@@ -1,9 +1,9 @@
 apiVersion: v1
 type: ApprovalRequest
 metadata:
-  name: slack-with-mfa
+  name: slack-w-mfa
 spec:
-  id: 'slack-with-mfa-001'
+  id: 'slack-w-mfa-001'
   requesterId: user@company.co
   requesterName: y0l0
   message: "i can haz cheeseburger?"
