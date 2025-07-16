@@ -24,14 +24,12 @@ func createSlackApprovalCallbackData(
 	channelName string,
 	requestId string,
 	requestUuid string,
-	userId *string,
 ) (callbackData string) {
 	data := slackApprovalCallbackData{
 		ChannelId:   channelId,
 		ChannelName: channelName,
 		RequestId:   requestId,
 		RequestUuid: requestUuid,
-		UserId:      userId,
 	}
 	callbackString, _ := json.Marshal(data)
 	return string(callbackString)

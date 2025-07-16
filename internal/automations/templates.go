@@ -1,6 +1,7 @@
 package automations
 
 import (
+	"opsicle/internal/approvals"
 	"opsicle/internal/common"
 	"os"
 
@@ -29,8 +30,26 @@ type OwnerRef struct {
 }
 
 type AutomationSpec struct {
+	// ApprovalPolicy defines the approval mechanism
+	ApprovalPolicy ApprovalPolicySpec `json:"approvalPolicy" yaml:"approvalPolicy"`
+
+	// VolumeMounts defines any volume mounts in play when containers are
+	// spun up
 	VolumeMounts []VolumeMount `json:"volumeMounts" yaml:"volumeMounts"`
-	Phases       []Phase       `json:"phases" yaml:"phases"`
+
+	// Phases defines the various steps of the automation
+	Phases []Phase `json:"phases" yaml:"phases"`
+}
+
+// ApprovalPolicySpec defines the approval mechanism in play for
+// the automation
+type ApprovalPolicySpec struct {
+	// PolicyRef when defined should be a string that references an
+	// existing policy which can be retrieved by the controller
+	PolicyRef *string `json:"policyRef" yaml:"policyRef`
+
+	// Spec contains an inline approval policy
+	Spec *approvals.PolicySpec `json:"spec" yaml:"spec"`
 }
 
 type VolumeMount struct {

@@ -161,6 +161,7 @@ func handleTelegramResponse(opts handleTelegramResponseOpts) {
 			ChatId:         opts.ChatId,
 			SenderId:       opts.SenderId,
 			SenderUsername: opts.SenderUsername,
+			ServiceLogs:    opts.ServiceLogs,
 			Target:         telegramTarget,
 		})
 		if isAuthorized {

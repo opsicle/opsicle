@@ -7,27 +7,15 @@ type TelegramRequestSpec struct {
 	// to this request
 	AuthorizedResponders AuthorizedResponders `json:"authorizedResponders" yaml:"authorizedResponders"`
 
-	// ChatId defines the ID of the chat where the message should be sent
-	ChatId int64 `json:"chatId" yaml:"chatId"`
+	// Actions is the audit log trail of any actions taken on the ApprovalRequest
+	// that this request specification is attached to
+	Actions Actions `json:"actions" yaml:"actions"`
 
 	// ChatIds defines the ID of the chat where the message should be sent
 	ChatIds []int64 `json:"chatIds" yaml:"chatIds"`
 
-	// MfaSeed is an optional field that when populated, requires the
-	// user to respond with their TOTP MFA number. This seed is recommended
-	// to be a specially provisioned MFA since you will be sending it to
-	// another system
-	MfaSeed *string `json:"mfaSeed" yaml:"mfaSeed"`
-
-	// UserId optionally specifies the Telegram user ID of the user who is
-	// allowed to approve/reject an approval request
-	UserId *int64 `json:"userId" yaml:"userId"`
-
-	// Username optionally specifies the username of the approver whom the
-	// approval must come from otherwise the request will be rejected
-	Username *string `json:"username" yaml:"username"`
-
-	SentAt *time.Time `json:"sentAt" yaml:"sentAt"`
+	// Notifications contains details of the messages sent to Telegram
+	Notifications Notifications `json:"notifications" yaml:"notifications"`
 }
 
 type TelegramResponseSpec struct {

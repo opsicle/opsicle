@@ -1,0 +1,272 @@
+definitions:
+  approvals.Action:
+    properties:
+      data: {}
+      error: {}
+      happenedAt:
+        type: string
+      messageId:
+        type: string
+      platform:
+        type: string
+      requestUuid:
+        type: string
+      status:
+        $ref: '#/definitions/approvals.Status'
+      targetId:
+        type: string
+      userId:
+        type: string
+    type: object
+  approvals.AuthorizedResponder:
+    properties:
+      mfaSeed:
+        type: string
+      userId:
+        type: string
+      username:
+        type: string
+    type: object
+  approvals.CreateRequestInput:
+    properties:
+      id:
+        description: |-
+          Id is the ID of a request which will be the same for all
+          requests of a given type
+        type: string
+      message:
+        description: Message is an additional message describing the request
+        type: string
+      requesterId:
+        description: RequesterName indicates the requester's system ID
+        type: string
+      requesterName:
+        description: RequesterName indicates the requester's name
+        type: string
+      slack:
+        description: Slack specifies the targets in Slack to send this request to
+        items:
+          $ref: '#/definitions/approvals.SlackRequestSpec'
+        type: array
+      telegram:
+        description: Telegram specifies the targets in Telegram to send this request
+          to
+        items:
+          $ref: '#/definitions/approvals.TelegramRequestSpec'
+        type: array
+    type: object
+  approvals.Notification:
+    properties:
+      error: {}
+      isSuccess:
+        type: boolean
+      messageId:
+        type: string
+      platform:
+        type: string
+      requestUuid:
+        type: string
+      sentAt:
+        type: string
+      targetId:
+        type: string
+    type: object
+  approvals.SlackRequestSpec:
+    properties:
+      actions:
+        description: |-
+          Actions is the audit log trail of any actions taken on the ApprovalRequest
+          that this request specification is attached to
+        items:
+          $ref: '#/definitions/approvals.Action'
+        type: array
+      authorizedResponders:
+        description: |-
+          AuthorizedResponders is a list of users who are authorized to respond
+          to this request
+        items:
+          $ref: '#/definitions/approvals.AuthorizedResponder'
+        type: array
+      channelIds:
+        description: |-
+          ChannelId defines the ID of the channel to send to, if this
+          is populated, this will be used, otherwise this will be
+          populated when the `.ChannelName` is evaluated
+        items:
+          type: string
+        type: array
+      channelNames:
+        description: ChannelNames defines the name of the channel to send to
+        items:
+          type: string
+        type: array
+      notifications:
+        description: Notifications contains details of the messages sent to Slack
+        items:
+          $ref: '#/definitions/approvals.Notification'
+        type: array
+    type: object
+  approvals.Status:
+    enum:
+    - approved
+    - error
+    - new
+    - invalidmfa
+    - rejected
+    type: string
+    x-enum-varnames:
+    - StatusApproved
+    - StatusError
+    - StatusNew
+    - StatusMfaInvalid
+    - StatusRejected
+  approvals.TelegramRequestSpec:
+    properties:
+      actions:
+        description: |-
+          Actions is the audit log trail of any actions taken on the ApprovalRequest
+          that this request specification is attached to
+        items:
+          $ref: '#/definitions/approvals.Action'
+        type: array
+      authorizedResponders:
+        description: |-
+          AuthorizedResponders is a list of users who are authorized to respond
+          to this request
+        items:
+          $ref: '#/definitions/approvals.AuthorizedResponder'
+        type: array
+      chatIds:
+        description: ChatIds defines the ID of the chat where the message should be
+          sent
+        items:
+          type: integer
+        type: array
+      notifications:
+        description: Notifications contains details of the messages sent to Telegram
+        items:
+          $ref: '#/definitions/approvals.Notification'
+        type: array
+    type: object
+  approver.commonHttpResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+info:
+  contact: {}
+paths:
+  /approval-request:
+    get:
+      consumes:
+      - application/json
+      description: This endpoint retrieves all approval requests
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+      summary: Retreives all approval requests
+      tags:
+      - approval
+    post:
+      consumes:
+      - application/json
+      description: This endpoint creates approval requests
+      parameters:
+      - description: Approval payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/approvals.CreateRequestInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: approved
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+        "400":
+          description: bad request
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+        "500":
+          description: 'internal server error" {"success": false}'
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+      summary: Creates approval requests
+      tags:
+      - approval
+  /approval-request/{requestUuid}:
+    get:
+      consumes:
+      - application/json
+      description: This endpoint retrieves all approval requests
+      parameters:
+      - description: Request UUID
+        in: path
+        name: requestUuid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+      summary: Retreives all approval requests
+      tags:
+      - approval
+  /approval/{approvalUuid}:
+    get:
+      consumes:
+      - application/json
+      description: This endpoint retrieves an approval given it's ID
+      parameters:
+      - description: Approval UUID
+        in: path
+        name: approvalUuid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/approver.commonHttpResponse'
+      summary: Retreives an approval given it's ID
+      tags:
+      - approval
+swagger: "2.0"

@@ -85,6 +85,11 @@ kind_up:
 kind_down:
 	kind delete cluster --name $(KIND_CLUSTER_NAME)
 
+swaggo:
+	swag init \
+		--parseDependencyLevel 1 \
+		--output ./internal/docs
+
 #                .__                               
 # _______   ____ |  |   ____ _____    ______ ____  
 # \_  __ \_/ __ \|  | _/ __ \\__  \  /  ___// __ \ 

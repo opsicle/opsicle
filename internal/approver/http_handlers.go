@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"opsicle/internal/common"
 
+	"opsicle/pkg/approvals"
+
 	"github.com/gorilla/mux"
 )
 
@@ -15,7 +17,7 @@ var routesMapping = map[string]map[string]func() http.HandlerFunc{
 		http.MethodGet:  getListApprovalRequestsHandler,
 		http.MethodPost: getCreateApprovalRequestHandler,
 	},
-	"/approval/{approvalId}": {
+	"/approval/{approvalUuid}": {
 		http.MethodGet: getGetApprovalHandler,
 	},
 	"/approval-request/{requestUuid}": {
@@ -23,6 +25,20 @@ var routesMapping = map[string]map[string]func() http.HandlerFunc{
 	},
 }
 
+type commonHttpResponse common.HttpResponse
+type createApprovalRequestInput approvals.CreateRequestInput
+
+// getCreateApprovalRequestHandler godoc
+// @Summary      Creates approval requests
+// @Description  This endpoint creates approval requests
+// @Tags         approval
+// @Accept       json
+// @Produce      json
+// @Param        request body approvals.CreateRequestInput true "Approval payload"
+// @Success      200 {object} commonHttpResponse "approved"
+// @Failure      400 {object} commonHttpResponse "bad request"
+// @Failure      500 {object} commonHttpResponse "internal server error" {"success": false}
+// @Router       /approval-request [post]
 func getCreateApprovalRequestHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		req := &ApprovalRequest{}
@@ -65,13 +81,24 @@ func getCreateApprovalRequestHandler() http.HandlerFunc {
 	}
 }
 
+// getGetApprovalHandler godoc
+// @Summary      Retreives an approval given it's ID
+// @Description  This endpoint retrieves an approval given it's ID
+// @Tags         approval
+// @Accept       json
+// @Produce      json
+// @Param				 approvalUuid path string true "Approval UUID"
+// @Success      200 {object} commonHttpResponse "Success"
+// @Failure      404 {object} commonHttpResponse "Not found"
+// @Failure      500 {object} commonHttpResponse "Internal server error"
+// @Router       /approval/{approvalUuid} [get]
 func getGetApprovalHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-		approvalId := mux.Vars(r)["approvalId"]
-		log(common.LogLevelDebug, fmt.Sprintf("received request for status of approval[%s:%s]", approvalId))
+		approvalUuid := mux.Vars(r)["approvalUuid"]
+		log(common.LogLevelDebug, fmt.Sprintf("received request for status of approval[%s]", approvalUuid))
 
-		cacheKey := CreateApprovalCacheKey(approvalId)
+		cacheKey := CreateApprovalCacheKey(approvalUuid)
 		log(common.LogLevelDebug, fmt.Sprintf("retrieving cache item with key[%s]...", cacheKey))
 		approvalData, err := Cache.Get(cacheKey)
 		if err != nil {
@@ -80,13 +107,24 @@ func getGetApprovalHandler() http.HandlerFunc {
 		}
 		var approval Approval
 		if err := json.Unmarshal([]byte(approvalData), &approval); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, fmt.Sprintf("failed to unmarshal approval[%s]", approvalId), err)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, fmt.Sprintf("failed to unmarshal approval[%s]", approvalUuid), err)
 			return
 		}
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", approval.Spec)
 	}
 }
 
+// getGetApprovalRequestHandler godoc
+// @Summary      Retreives all approval requests
+// @Description  This endpoint retrieves all approval requests
+// @Tags         approval
+// @Accept       json
+// @Produce      json
+// @Param				 requestUuid path string true "Request UUID"
+// @Success      200 {object} commonHttpResponse "Success"
+// @Failure      404 {object} commonHttpResponse "Not found"
+// @Failure      500 {object} commonHttpResponse "Internal server error"
+// @Router       /approval-request/{requestUuid} [get]
 func getGetApprovalRequestHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
@@ -109,6 +147,16 @@ func getGetApprovalRequestHandler() http.HandlerFunc {
 	}
 }
 
+// getListApprovalRequestsHandler godoc
+// @Summary      Retreives all approval requests
+// @Description  This endpoint retrieves all approval requests
+// @Tags         approval
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} commonHttpResponse "Success"
+// @Failure      404 {object} commonHttpResponse "Not found"
+// @Failure      500 {object} commonHttpResponse "Internal server error"
+// @Router       /approval-request [get]
 func getListApprovalRequestsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)

@@ -21,6 +21,8 @@
   - [ ] Add callback handling for inserting a AWS SQS message
   - [ ] Add callback handling for inserting a Kafka message
   - [ ] Add callback handling for inserting a NATS message
+- Escalation configuration
+- Multi-approver configuration
 
 ## Controller Service
 

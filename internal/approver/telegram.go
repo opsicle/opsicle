@@ -3,6 +3,7 @@ package approver
 import (
 	"context"
 	"fmt"
+	"opsicle/internal/approvals"
 	"opsicle/internal/common"
 	"opsicle/internal/integrations/telegram"
 	"strconv"
@@ -37,16 +38,19 @@ func (t *telegramNotifier) SendApprovalRequest(req *ApprovalRequest) (string, no
 	notifications := notificationMessages{}
 
 	hasChatIdBeenMessaged := map[int64]bool{}
-	for _, target := range req.Spec.Telegram {
-		t.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "sending message to chat[%v]: %s", target.ChatId, text)
+	fmt.Println("message? ----------------------------------")
+	for i, target := range req.Spec.Telegram {
 		for _, chatId := range target.ChatIds {
 			if messaged, ok := hasChatIdBeenMessaged[chatId]; ok || messaged {
+				t.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "already dispatched notification to chat[%v], skipping", chatId)
 				continue
 			}
-			notification := notificationMessage{
-				Id:       requestUuid,
-				TargetId: strconv.FormatInt(chatId, 10),
-				Platform: NotifierPlatformTelegram,
+			t.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "dispatching notification to chat[%v]...", chatId)
+			t.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "dispatching text to chat[%v]: %s", chatId, text)
+			notification := approvals.Notification{
+				Platform:    NotifierPlatformTelegram,
+				RequestUuid: requestUuid,
+				TargetId:    strconv.FormatInt(chatId, 10),
 			}
 			msg, err := t.Client.Client.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID:      chatId,
@@ -63,7 +67,10 @@ func (t *telegramNotifier) SendApprovalRequest(req *ApprovalRequest) (string, no
 				notification.SentAt = time.Now()
 			}
 			hasChatIdBeenMessaged[chatId] = true
-			notifications = append(notifications, notification)
+			req.Spec.Telegram[i].Notifications = append(
+				req.Spec.Telegram[i].Notifications,
+				notification,
+			)
 		}
 	}
 

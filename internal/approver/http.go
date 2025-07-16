@@ -5,7 +5,10 @@ import (
 	"net/http"
 	"opsicle/internal/common"
 
+	_ "opsicle/internal/docs"
+
 	"github.com/gorilla/mux"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 type StartHttpServerOpts struct {
@@ -14,6 +17,12 @@ type StartHttpServerOpts struct {
 	ServiceLogs chan<- common.ServiceLog
 }
 
+// StartHttpServer godoc
+// @title           Opsicle Approver API
+// @version         1.0
+// @description     API for Opsicle Approver service
+// @host            localhost:12345
+// @BasePath        /
 func StartHttpServer(opts StartHttpServerOpts) error {
 	handler := mux.NewRouter()
 
@@ -22,6 +31,8 @@ func StartHttpServer(opts StartHttpServerOpts) error {
 			handler.HandleFunc(urlPath, getRouteHandler()).Methods(method)
 		}
 	}
+
+	handler.PathPrefix("/docs").Handler(httpSwagger.WrapHandler)
 
 	handler.NotFoundHandler = getNotFoundHandler()
 

@@ -3,6 +3,7 @@ package approver
 import (
 	"fmt"
 	"log"
+	"opsicle/internal/approvals"
 	"opsicle/internal/common"
 	"time"
 
@@ -61,38 +62,41 @@ func (s *slackNotifier) SendApprovalRequest(req *ApprovalRequest) (string, notif
 			var err error
 			channelId, err := s.resolveChannelId(channelName)
 			if err != nil {
-				s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to resolve the id of channel[%s]: %s", target.ChannelName, err)
+				s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to resolve the id of channel[%s]: %s", channelId, err)
 				continue
 			}
+			s.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "resolved the id of channel[%s] to channel[%s]", channelId, channelName)
 			req.Spec.Slack[i].ChannelIds = append(req.Spec.Slack[i].ChannelIds, channelId)
 
-			notification := notificationMessage{
-				Id:       requestUuid,
-				TargetId: channelId,
-				Platform: NotifierPlatformSlack,
+			notification := approvals.Notification{
+				RequestUuid: requestUuid,
+				TargetId:    channelId,
+				Platform:    NotifierPlatformSlack,
 			}
 			callbackData := createSlackApprovalCallbackData(
 				channelId,
-				target.ChannelName,
+				channelName,
 				requestId,
 				requestUuid,
-				target.UserId,
 			)
 			blocks := getSlackApprovalRequestBlocks(req, callbackData)
 
 			s.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "sending slack message to channel[%s/%s]", channelId, channelName)
 			sentChannelId, messageTimestamp, err := s.Client.PostMessage(channelId, slack.MsgOptionBlocks(blocks.BlockSet...))
 			if err != nil {
-				s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send slack message to channel[%s] with id[%s]: %w", target.ChannelName, channelId, err)
+				s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send slack message to channel[%s] with id[%s]: %w", channelName, channelId, err)
 				notification.Error = err
 				continue
 			} else {
-				req.Spec.Slack[i].MessageId = &messageTimestamp
 				notification.IsSuccess = true
-				notification.MessageId = fmt.Sprintf("%s_%s", sentChannelId, messageTimestamp)
+				notification.TargetId = sentChannelId
+				notification.MessageId = messageTimestamp
 				notification.SentAt = time.Now()
 			}
-			notifications = append(notifications, notification)
+			req.Spec.Slack[i].Notifications = append(
+				req.Spec.Slack[i].Notifications,
+				notification,
+			)
 		}
 	}
 

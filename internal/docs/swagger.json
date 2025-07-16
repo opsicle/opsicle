@@ -1,0 +1,380 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {}
+    },
+    "paths": {
+        "/approval-request": {
+            "get": {
+                "description": "This endpoint retrieves all approval requests",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approval"
+                ],
+                "summary": "Retreives all approval requests",
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "This endpoint creates approval requests",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approval"
+                ],
+                "summary": "Creates approval requests",
+                "parameters": [
+                    {
+                        "description": "Approval payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/approvals.CreateRequestInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "approved",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal server error\" {\"success\": false}",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/approval-request/{requestUuid}": {
+            "get": {
+                "description": "This endpoint retrieves all approval requests",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approval"
+                ],
+                "summary": "Retreives all approval requests",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Request UUID",
+                        "name": "requestUuid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/approval/{approvalUuid}": {
+            "get": {
+                "description": "This endpoint retrieves an approval given it's ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approval"
+                ],
+                "summary": "Retreives an approval given it's ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Approval UUID",
+                        "name": "approvalUuid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/approver.commonHttpResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "approvals.Action": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error": {},
+                "happenedAt": {
+                    "type": "string"
+                },
+                "messageId": {
+                    "type": "string"
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "requestUuid": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/approvals.Status"
+                },
+                "targetId": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "approvals.AuthorizedResponder": {
+            "type": "object",
+            "properties": {
+                "mfaSeed": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "approvals.CreateRequestInput": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "Id is the ID of a request which will be the same for all\nrequests of a given type",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "Message is an additional message describing the request",
+                    "type": "string"
+                },
+                "requesterId": {
+                    "description": "RequesterName indicates the requester's system ID",
+                    "type": "string"
+                },
+                "requesterName": {
+                    "description": "RequesterName indicates the requester's name",
+                    "type": "string"
+                },
+                "slack": {
+                    "description": "Slack specifies the targets in Slack to send this request to",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.SlackRequestSpec"
+                    }
+                },
+                "telegram": {
+                    "description": "Telegram specifies the targets in Telegram to send this request to",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.TelegramRequestSpec"
+                    }
+                }
+            }
+        },
+        "approvals.Notification": {
+            "type": "object",
+            "properties": {
+                "error": {},
+                "isSuccess": {
+                    "type": "boolean"
+                },
+                "messageId": {
+                    "type": "string"
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "requestUuid": {
+                    "type": "string"
+                },
+                "sentAt": {
+                    "type": "string"
+                },
+                "targetId": {
+                    "type": "string"
+                }
+            }
+        },
+        "approvals.SlackRequestSpec": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "description": "Actions is the audit log trail of any actions taken on the ApprovalRequest\nthat this request specification is attached to",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.Action"
+                    }
+                },
+                "authorizedResponders": {
+                    "description": "AuthorizedResponders is a list of users who are authorized to respond\nto this request",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.AuthorizedResponder"
+                    }
+                },
+                "channelIds": {
+                    "description": "ChannelId defines the ID of the channel to send to, if this\nis populated, this will be used, otherwise this will be\npopulated when the `.ChannelName` is evaluated",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "channelNames": {
+                    "description": "ChannelNames defines the name of the channel to send to",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "notifications": {
+                    "description": "Notifications contains details of the messages sent to Slack",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.Notification"
+                    }
+                }
+            }
+        },
+        "approvals.Status": {
+            "type": "string",
+            "enum": [
+                "approved",
+                "error",
+                "new",
+                "invalidmfa",
+                "rejected"
+            ],
+            "x-enum-varnames": [
+                "StatusApproved",
+                "StatusError",
+                "StatusNew",
+                "StatusMfaInvalid",
+                "StatusRejected"
+            ]
+        },
+        "approvals.TelegramRequestSpec": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "description": "Actions is the audit log trail of any actions taken on the ApprovalRequest\nthat this request specification is attached to",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.Action"
+                    }
+                },
+                "authorizedResponders": {
+                    "description": "AuthorizedResponders is a list of users who are authorized to respond\nto this request",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.AuthorizedResponder"
+                    }
+                },
+                "chatIds": {
+                    "description": "ChatIds defines the ID of the chat where the message should be sent",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "notifications": {
+                    "description": "Notifications contains details of the messages sent to Telegram",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.Notification"
+                    }
+                }
+            }
+        },
+        "approver.commonHttpResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        }
+    }
+}

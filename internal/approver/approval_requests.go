@@ -8,7 +8,7 @@ import (
 )
 
 type ApprovalRequest struct {
-	Spec approvals.RequestSpec
+	Spec approvals.RequestSpec `json:"spec" yaml:"spec"`
 }
 
 func (req *ApprovalRequest) Create() error {
@@ -34,14 +34,19 @@ func (req *ApprovalRequest) Exists() bool {
 
 func (req *ApprovalRequest) GetRedacted() ApprovalRequest {
 	approvalRequest := *req
+	redactedText := "<REDACTED>"
 	for i, target := range approvalRequest.Spec.Slack {
-		if target.MfaSeed != nil {
-			approvalRequest.Spec.Slack[i].MfaSeed = nil
+		for j, authorizedResponder := range target.AuthorizedResponders {
+			if authorizedResponder.MfaSeed != nil {
+				approvalRequest.Spec.Slack[i].AuthorizedResponders[j].MfaSeed = &redactedText
+			}
 		}
 	}
 	for i, target := range approvalRequest.Spec.Telegram {
-		if target.MfaSeed != nil {
-			approvalRequest.Spec.Telegram[i].MfaSeed = nil
+		for j, authorizedResponder := range target.AuthorizedResponders {
+			if authorizedResponder.MfaSeed != nil {
+				approvalRequest.Spec.Telegram[i].AuthorizedResponders[j].MfaSeed = &redactedText
+			}
 		}
 	}
 	return approvalRequest

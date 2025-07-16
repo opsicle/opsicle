@@ -99,5 +99,6 @@ func getTelegramTargetMatchingSender(opts getTelegramTargetMatchingSenderOpts) (
 			break
 		}
 	}
+
 	return isChatMatched && isSenderMatched, &matchedSender
 }

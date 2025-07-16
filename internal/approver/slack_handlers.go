@@ -70,10 +70,7 @@ type handleSlackApprovalOpts struct {
 
 func handleSlackApproval(opts handleSlackApprovalOpts) {
 	if opts.SlackTarget.MfaSeed != nil {
-		pendingMfaCacheKey := CreatePendingMfaCacheKey(
-			fmt.Sprintf("%v", opts.ChannelId),
-			fmt.Sprintf("%v", opts.UserId),
-		)
+		pendingMfaCacheKey := CreatePendingMfaCacheKey(opts.ChannelId, opts.UserId)
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "creating cache with key[%s]...", pendingMfaCacheKey)
 		pendingMfaData := pendingMfa{
 			ApprovalRequestMessageId: opts.MessageId,
@@ -96,6 +93,7 @@ func handleSlackApproval(opts handleSlackApprovalOpts) {
 			slack.MsgOptionTS(opts.MessageId),
 		); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to respond: %s", err)
+			return
 		}
 		if err := handleSlackMfaRequest(
 			opts.App,
@@ -107,7 +105,8 @@ func handleSlackApproval(opts handleSlackApprovalOpts) {
 			opts.UserId,
 			opts.Callback.User.Name,
 		); err != nil {
-			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to handle sendingo f mfa request: %s", err)
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to handle sending of mfa request: %s", err)
+			return
 		}
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "sent mfa request for request[%s:%s] in channel[%s] to user[%s]", opts.ApprovalRequest.Spec.Id, opts.ApprovalRequest.Spec.GetUuid(), opts.ChannelId, opts.UserId)
 		return
@@ -187,11 +186,6 @@ func handleSlackInteraction(opts handleSlackInteractionOpts) {
 
 	isTargetFound := false
 	for _, slackTarget := range approvalRequest.Spec.Slack {
-		targetChannelId := "(unknown)"
-		if slackTarget.ChannelId != nil {
-			targetChannelId = *slackTarget.ChannelId
-		}
-		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "evaluating slack target: user[%v] in channel[%s]", slackTarget.UserId, targetChannelId)
 		isAuthorized, authorizedResponder := getSlackTargetMatchingSender(getSlackTargetMatchingSenderOpts{
 			ChannelId:   channelId,
 			SenderId:    userId,
@@ -199,6 +193,7 @@ func handleSlackInteraction(opts handleSlackInteractionOpts) {
 			Target:      slackTarget,
 		})
 		if isAuthorized {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "channel[%s].user[%s]:authorized", channelId, userId)
 			isTargetFound = true
 			switch action.ActionID {
 			case string(ActionApprove):
@@ -232,6 +227,7 @@ func handleSlackInteraction(opts handleSlackInteractionOpts) {
 			}
 		}
 		if !isTargetFound {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "channel[%s].user[%s]:unauthorized", channelId, userId)
 			msg := getSlackUnauthorizedMessage(userId, action.ActionID)
 			opts.App.PostMessage(
 				channelId,
@@ -270,13 +266,7 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 	}
 
 	if mfaToken != "" {
-		isTargetFound := false
 		for _, slackTarget := range approvalRequest.Spec.Slack {
-			targetChannelId := "(unknown)"
-			if slackTarget.ChannelId != nil {
-				targetChannelId = *slackTarget.ChannelId
-			}
-			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "evaluating slack target: user[%v==%v] in channel[%s==%s]", slackTarget.UserId, opts.Callback.User.ID, targetChannelId, mfaModalMetadata.ChannelId)
 			isAuthorized, authorizedResponder := getSlackTargetMatchingSender(getSlackTargetMatchingSenderOpts{
 				ChannelId:   mfaModalMetadata.ChannelId,
 				SenderId:    opts.Callback.User.ID,
@@ -284,8 +274,9 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 				Target:      slackTarget,
 			})
 			if isAuthorized {
-				isTargetFound = true
+				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "channel[%s].user[%s]:mfa:authorized", mfaModalMetadata.ChannelId, opts.Callback.User.ID)
 				if authorizedResponder.MfaSeed != nil {
+					opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "validating totp token from channel[%s].user[%s]", mfaModalMetadata.ChannelId, opts.Callback.User.ID)
 					totpValid, err := auth.ValidateTotpToken(*authorizedResponder.MfaSeed, mfaToken)
 					if err != nil {
 						opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to validate totp token in slack: %s", err)
@@ -294,6 +285,7 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 						return
 					}
 					if totpValid {
+						opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "totp token from channel[%s].user[%s] was valid", mfaModalMetadata.ChannelId, opts.Callback.User.ID)
 						if err := processSlackApproval(processSlackApprovalOpts{
 							ApprovalRequestMessageTs: mfaModalMetadata.MessageTs,
 							App:                      opts.App,
@@ -309,8 +301,10 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 							opts.App.PostMessage(opts.Callback.Channel.ID, slack.MsgOptionText(msg, false))
 							return
 						}
+						opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "channel[%s].user[%s] successfully verified totp token", mfaModalMetadata.ChannelId, opts.Callback.User.ID)
 						return
 					}
+					opts.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "totp token from channel[%s].user[%s] was invalid", mfaModalMetadata.ChannelId, opts.Callback.User.ID)
 					msg := getSlackMfaRejectedMessage(opts.Callback.User.ID)
 					opts.App.PostMessage(
 						mfaModalMetadata.ChannelId,
@@ -319,6 +313,7 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 					)
 					return
 				}
+				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "channel[%s].user[%s] submitted a token when a token wasn't expected", mfaModalMetadata.ChannelId, opts.Callback.User.ID)
 				msg := getSlackSystemErrorMessage()
 				opts.App.PostMessage(
 					opts.Callback.Channel.ID,
@@ -326,13 +321,12 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 					slack.MsgOptionTS(mfaModalMetadata.MessageTs),
 				)
 				break
+			} else {
+				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "channel[%s].user[%s]:unauthorized", mfaModalMetadata.ChannelId, opts.Callback.User.ID)
+				msg := getSlackUnauthorizedMessage(opts.Callback.User.ID, string(ActionMfa))
+				opts.App.PostMessage(opts.Callback.Channel.ID, slack.MsgOptionText(msg, false), slack.MsgOptionTS(mfaModalMetadata.MessageTs))
+				return
 			}
-		}
-		if !isTargetFound {
-			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "slack target not found - not sure how this could happen")
-			msg := getSlackUnauthorizedMessage(opts.Callback.User.ID, string(ActionMfa))
-			opts.App.PostMessage(opts.Callback.Channel.ID, slack.MsgOptionText(msg, false), slack.MsgOptionTS(mfaModalMetadata.MessageTs))
-			return
 		}
 	} else {
 		msg := getSlackMfaRejectedMessage(opts.Callback.User.ID)
