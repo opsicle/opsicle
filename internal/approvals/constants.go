@@ -6,11 +6,13 @@ const (
 )
 
 const (
-	StatusApproved   Status = "approved"
-	StatusError      Status = "error"
-	StatusNew        Status = "new"
-	StatusMfaInvalid Status = "invalidmfa"
-	StatusRejected   Status = "rejected"
+	StatusApproved     Status = "approved"
+	StatusError        Status = "error"
+	StatusNew          Status = "new"
+	StatusMfaInvalid   Status = "invalidMfa"
+	StatusMfaTriggered Status = "triggeredMfa"
+	StatusRejected     Status = "rejected"
+	StatusUnauthorized Status = "unauthorized"
 )
 
 const (

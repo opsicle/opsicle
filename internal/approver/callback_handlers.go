@@ -51,7 +51,7 @@ func getWebhookCallbackRequest(opts approvals.WebhookCallbackSpec) (*http.Reques
 }
 
 type handleCallbackOpts struct {
-	Req         ApprovalRequest
+	Req         *ApprovalRequest
 	ServiceLogs chan<- common.ServiceLog
 }
 

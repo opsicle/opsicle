@@ -14,31 +14,15 @@ type Template struct {
 }
 
 type Spec struct {
-	Metadata SpecMetadata `json:"metadata" yaml:"metadata"`
-	// Approval ApprovalSpec   `json:"approval" yaml:"approval"`
-	Template AutomationSpec `json:"template" yaml:"template"`
-}
-
-type SpecMetadata struct {
-	DisplayName string     `json:"displayName" yaml:"displayName"`
-	Owners      []OwnerRef `json:"owners" yaml:"owners"`
-}
-
-type OwnerRef struct {
-	Name  string `json:"name" yaml:"name"`
-	Email string `json:"email" yaml:"email"`
-}
-
-type AutomationSpec struct {
 	// ApprovalPolicy defines the approval mechanism
-	ApprovalPolicy ApprovalPolicySpec `json:"approvalPolicy" yaml:"approvalPolicy"`
+	ApprovalPolicy *ApprovalPolicySpec `json:"approvalPolicy" yaml:"approvalPolicy"`
 
-	// VolumeMounts defines any volume mounts in play when containers are
-	// spun up
-	VolumeMounts []VolumeMount `json:"volumeMounts" yaml:"volumeMounts"`
+	// Metadata defines other metadata not included in the parent
+	// resource
+	Metadata MetadataSpec `json:"metadata" yaml:"metadata"`
 
-	// Phases defines the various steps of the automation
-	Phases []Phase `json:"phases" yaml:"phases"`
+	// Template defines an Automation specification
+	Template AutomationSpec `json:"template" yaml:"template"`
 }
 
 // ApprovalPolicySpec defines the approval mechanism in play for
@@ -46,31 +30,21 @@ type AutomationSpec struct {
 type ApprovalPolicySpec struct {
 	// PolicyRef when defined should be a string that references an
 	// existing policy which can be retrieved by the controller
-	PolicyRef *string `json:"policyRef" yaml:"policyRef`
+	PolicyRef *string `json:"policyRef" yaml:"policyRef"`
 
 	// Spec contains an inline approval policy
 	Spec *approvals.PolicySpec `json:"spec" yaml:"spec"`
 }
 
-type VolumeMount struct {
-	Host      string `json:"host" yaml:"host"`
-	Container string `json:"container" yaml:"container"`
+type MetadataSpec struct {
+	Description string     `json:"description" yaml:"description"`
+	DisplayName string     `json:"displayName" yaml:"displayName"`
+	Owners      []OwnerRef `json:"owners" yaml:"owners"`
 }
 
-type Phase struct {
-	Name     string    `json:"name" yaml:"name"`
-	Image    string    `json:"image" yaml:"image"`
-	Commands []string  `json:"command" yaml:"commands"`
-	Timeout  int       `json:"timeout" yaml:"timeout"`
-	Logs     PhaseLogs `json:"logs" yaml:"logs"`
-}
-
-type PhaseLogs []PhaseLog
-
-type PhaseLog struct {
-	Timestamp string `json:"timestamp"`
-	Message   string `json:"message"`
-	Source    string `json:"source"`
+type OwnerRef struct {
+	Name  string `json:"name" yaml:"name"`
+	Email string `json:"email" yaml:"email"`
 }
 
 // ToYaml converts Template to YAML

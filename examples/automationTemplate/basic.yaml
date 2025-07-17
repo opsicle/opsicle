@@ -5,6 +5,8 @@ metadata:
   labels:
     opsicle/description: "this is a basic automation template resource"
 spec:
+  approvalPolicy:
+    policyRef: tg-one
   metadata:
     displayName: Basic Automation
     owners:
@@ -28,10 +30,10 @@ spec:
     - name: execution
       image: alpine:latest
       commands:
-        - mkdir ./tmp
+        - mkdir -p /tmp
         - wget -qO - google.com > /tmp/google.com.txt
     - name: clean-up
       image: alpine:latest
       commands:
         - cat /tmp/google.com.txt
-        - echo "done"
+        - echo "cleanup done"

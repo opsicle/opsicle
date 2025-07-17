@@ -7,10 +7,6 @@ type TelegramRequestSpec struct {
 	// to this request
 	AuthorizedResponders AuthorizedResponders `json:"authorizedResponders" yaml:"authorizedResponders"`
 
-	// Actions is the audit log trail of any actions taken on the ApprovalRequest
-	// that this request specification is attached to
-	Actions Actions `json:"actions" yaml:"actions"`
-
 	// ChatIds defines the ID of the chat where the message should be sent
 	ChatIds []int64 `json:"chatIds" yaml:"chatIds"`
 

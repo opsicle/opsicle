@@ -7,10 +7,6 @@ type SlackRequestSpec struct {
 	// to this request
 	AuthorizedResponders AuthorizedResponders `json:"authorizedResponders" yaml:"authorizedResponders"`
 
-	// Actions is the audit log trail of any actions taken on the ApprovalRequest
-	// that this request specification is attached to
-	Actions Actions `json:"actions" yaml:"actions"`
-
 	// ChannelNames defines the name of the channel to send to
 	ChannelNames []string `json:"channelNames" yaml:"channelNames"`
 

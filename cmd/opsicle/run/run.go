@@ -3,6 +3,7 @@ package run
 import (
 	"opsicle/cmd/opsicle/run/approval"
 	"opsicle/cmd/opsicle/run/automation"
+	"opsicle/cmd/opsicle/run/automationtemplate"
 	"opsicle/cmd/opsicle/run/migrations"
 
 	"github.com/spf13/cobra"
@@ -11,6 +12,7 @@ import (
 func init() {
 	Command.AddCommand(approval.Command)
 	Command.AddCommand(automation.Command)
+	Command.AddCommand(automationtemplate.Command)
 	Command.AddCommand(migrations.Command)
 }
 

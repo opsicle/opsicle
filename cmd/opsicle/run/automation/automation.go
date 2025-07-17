@@ -3,9 +3,10 @@ package automation
 import (
 	"fmt"
 	"opsicle/internal/automations"
+	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/worker"
-	"os"
+	"strings"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -17,21 +18,11 @@ var Command = &cobra.Command{
 	Aliases: []string{"a"},
 	Short:   "Runs an Automation resource independently",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resourceIsSpecified := false
-		resourcePath := ""
-		if len(args) > 0 {
-			resourcePath = args[0]
-			resourceIsSpecified = true
-		}
-		if !resourceIsSpecified {
-			return fmt.Errorf("failed to receive a <path-to-template-file")
-		}
-		fi, err := os.Stat(resourcePath)
+		resourceIsSpecified, resourcePath, err := cli.GetFilePathFromArgs(args)
 		if err != nil {
-			return fmt.Errorf("failed to check for existence of file at path[%s]: %s", resourcePath, err)
-		}
-		if fi.IsDir() {
-			return fmt.Errorf("failed to get a file at path[%s]: got a directory", resourcePath)
+			return fmt.Errorf("failed to get file path from args['%s']: %s", strings.Join(args, "', '"), err)
+		} else if !resourceIsSpecified {
+			return fmt.Errorf("failed to receive required <path-to-automation>")
 		}
 		automationInstance, err := automations.LoadAutomationFromFile(resourcePath)
 		if err != nil {

@@ -22,9 +22,13 @@ type PolicySpec struct {
 
 	// Slack specifies target channels and authorised responders on the
 	// Slack communication platform
-	Slack SlackRequestSpec `json:"slack" yaml:"slack"`
+	Slack *SlackRequestSpec `json:"slack" yaml:"slack"`
 
 	// Telegram specifies target chats and authorised responders on the
 	// Telegram communication platform
-	Telegram TelegramRequestSpec `json:"telegram" yaml:"telegram"`
+	Telegram *TelegramRequestSpec `json:"telegram" yaml:"telegram"`
+}
+
+func LoadPolicyFromDirectory() {
+
 }

@@ -29,12 +29,12 @@ func getTelegramApprovalKeyboard(approvalData, rejectionData string) *models.Inl
 func getTelegramApprovalRequestMessage(req ApprovalRequest) string {
 	return telegram.FormatInputf(
 		"*⚠️ Incoming Approval Request*\n"+
-			"Request ID: `%s`\n"+
-			"Message:\n```\n%s\n```\n"+
-			"Requester ID: `%s`\n"+
-			"Requester Name: `%s`\n\n"+
-			"Status: *PENDING*\n\n"+
-			"Request UUID: `%s`\n\n",
+			"*Request ID*: `%s`\n\n"+
+			"*Message*: ```\n%s\n```"+
+			"*Requester ID*: `%s`\n"+
+			"*Requester Name*: `%s`\n"+
+			"*Request UUID*: `%s`\n"+
+			"\nStatus: *PENDING*",
 		req.Spec.Id,
 		req.Spec.Message,
 		req.Spec.RequesterName,
@@ -49,22 +49,22 @@ func getTelegramApprovalRequestMessage(req ApprovalRequest) string {
 func getTelegramApprovedMessage(req ApprovalRequest) string {
 	return telegram.FormatInputf(
 		"*✅ Approval Request \\- Approved*\n"+
-			"Request ID: `%s`\n"+
-			"Message:\n ```\n%s\n```\n"+
-			"Requester ID: `%s`\n"+
-			"Requester Name: `%s`\n"+
-			"Responder ID: `%s`\n"+
-			"Responder Name: @%s\n\n"+
-			"Status: *APPROVED*\n\n"+
-			"Request UUID: `%s`\n"+
-			"Approval ID: `%s`\n"+
-			"Timestamp: `%s`",
+			"*Request ID*: `%s`\n\n"+
+			"*Message*: ```\n%s\n```"+
+			"*Requester ID*: `%s`\n"+
+			"*Requester Name*: `%s`\n"+
+			"*Responder Name*: @%s\n"+
+			"*Responder ID*: `%s`\n"+
+			"*Request UUID*: `%s`\n"+
+			"*Approval ID*: `%s`\n"+
+			"*Timestamp*: `%s`\n"+
+			"\nStatus: *APPROVED*",
 		req.Spec.Id,
 		req.Spec.Message,
 		req.Spec.RequesterId,
 		req.Spec.RequesterName,
-		req.Spec.Approval.ApproverId,
 		req.Spec.Approval.ApproverName,
+		req.Spec.Approval.ApproverId,
 		req.Spec.GetUuid(),
 		req.Spec.Approval.Id,
 		req.Spec.Approval.StatusUpdatedAt.Format("2006-01-02T15:03:04-0700"),
@@ -80,7 +80,7 @@ func getTelegramApproveMessage(req ApprovalRequest, senderId int64, senderName s
 	}
 	return telegram.FormatInputf(
 		"✅ Request has been approved by "+userReference+"\n\n"+
-			"Request UUID: `%s`\n",
+			"*Request UUID*: `%s`",
 		req.Spec.GetUuid(),
 	)
 }
@@ -115,7 +115,7 @@ func getTelegramMfaRejectedMessage(req ApprovalRequest, senderId int64, senderNa
 	}
 	return telegram.FormatInputf(
 		"⛔️ Wrong MFA entered by "+userReference+"\n\n"+
-			"Request UUID: `%s`\n",
+			"*Request UUID*: `%s`",
 		req.Spec.GetUuid(),
 	)
 }
@@ -125,12 +125,12 @@ func getTelegramMfaRejectedMessage(req ApprovalRequest, senderId int64, senderNa
 func getTelegramPendingMfaMessage(req ApprovalRequest) string {
 	return telegram.FormatInputf(
 		"*⏳ Approval Request \\- Pending MFA*\n"+
-			"Request ID: `%s`\n"+
-			"Message:\n```\n%s\n```\n"+
-			"Requester ID: `%s`\n"+
-			"Requester Name: `%s`\n\n"+
-			"Status: *PENDING MFA*\n\n"+
-			"Request UUID: `%s`\n\n",
+			"*Request ID*: `%s`\n\n"+
+			"*Message*: ```\n%s\n```"+
+			"*Requester ID*: `%s`\n"+
+			"*Requester Name*: `%s`\n"+
+			"*Request UUID*: `%s`\n"+
+			"\nStatus: *PENDING MFA*",
 		req.Spec.Id,
 		req.Spec.Message,
 		req.Spec.RequesterName,
@@ -144,22 +144,22 @@ func getTelegramPendingMfaMessage(req ApprovalRequest) string {
 func getTelegramRejectedMessage(req ApprovalRequest) string {
 	return telegram.FormatInputf(
 		"*❌ Approval Request \\- Rejected*\n"+
-			"Request ID: `%s`\n"+
-			"Message:\n ```\n%s\n```\n"+
-			"Requester ID: `%s`\n"+
-			"Requester Name: `%s`\n"+
-			"Responder ID: `%s`\n"+
-			"Responder Name: @%s\n\n"+
-			"Status: *REJECTED*\n\n"+
-			"Request UUID: `%s`\n"+
-			"Approval ID: `%s`\n"+
-			"Timestamp: `%s`",
+			"*Request ID*: `%s`\n\n"+
+			"*Message*: ```\n%s\n```"+
+			"*Requester ID*: `%s`\n"+
+			"*Requester Name*: `%s`\n"+
+			"*Responder Name*: @%s\n"+
+			"*Responder ID*: `%s`\n"+
+			"*Request UUID*: `%s`\n"+
+			"*Approval ID*: `%s`\n"+
+			"*Timestamp*: `%s`\n"+
+			"\nStatus: *REJECTED*",
 		req.Spec.Id,
 		req.Spec.Message,
 		req.Spec.RequesterId,
 		req.Spec.RequesterName,
-		req.Spec.Approval.ApproverId,
 		req.Spec.Approval.ApproverName,
+		req.Spec.Approval.ApproverId,
 		req.Spec.GetUuid(),
 		req.Spec.Approval.Id,
 		req.Spec.Approval.StatusUpdatedAt.Format("2006-01-02T15:03:04-0700"),
@@ -175,7 +175,7 @@ func getTelegramRejectMessage(req ApprovalRequest, senderId int64, senderName st
 	}
 	return telegram.FormatInputf(
 		"❌ Request has been rejected by "+userReference+"\n\n"+
-			"Request UUID: `%s`\n",
+			"Request UUID:```%s```",
 		req.Spec.GetUuid(),
 	)
 }

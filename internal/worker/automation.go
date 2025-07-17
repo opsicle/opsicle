@@ -132,17 +132,18 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 
 		containerLogs := make(chan string, 128)
 		done := make(chan common.Done)
-		go func() {
-			if err := streamDockerLogs(streamDockerLogsOpts{
-				ContainerId:    containerInfo.ID,
-				ServiceLogs:    spec.ServiceLogs,
-				AutomationLogs: containerLogs,
-				DockerClient:   dockerClient,
-				DoneChannel:    done,
-			}); err != nil {
+		dockerLogStreamingOpts := streamDockerLogsOpts{
+			ContainerId:    containerInfo.ID,
+			ServiceLogs:    spec.ServiceLogs,
+			AutomationLogs: containerLogs,
+			DockerClient:   dockerClient,
+			DoneChannel:    done,
+		}
+		go func(dockerLogStreamingOpts streamDockerLogsOpts) {
+			if err := streamDockerLogs(dockerLogStreamingOpts); err != nil {
 				spec.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "phase[%s]: failed to stream logs for container[%s]: %s", phase.Name, displayContainerId, err)
 			}
-		}()
+		}(dockerLogStreamingOpts)
 
 		containerResponses, containerErrors := dockerClient.ContainerWait(
 			phaseCtx,
@@ -197,7 +198,7 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 				}
 			}
 			spec.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "phase[%s]: container[%s] is done", phase.Name, displayContainerId)
-			time.After(100 * time.Second)
+			<-time.After(1 * time.Second)
 			close(containerLogs)
 		}()
 		waiter.Wait()

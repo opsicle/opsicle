@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"opsicle/internal/common"
 	"sync"
@@ -131,6 +132,7 @@ func streamDockerLogs(opts streamDockerLogsOpts) error {
 			n, err := errReader.Read(buffer)
 			if n > 0 {
 				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "container[%s]: streamed %v bytes from stderr", displayContainerId, n)
+				fmt.Println("xyz ------")
 				opts.AutomationLogs <- prefixWithStderr(string(buffer[:n]))
 			}
 			if err != nil {

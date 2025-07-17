@@ -56,16 +56,16 @@ func getDefaultSlackHandler(
 }
 
 type handleSlackApprovalOpts struct {
-	App             *slack.Client
-	ApprovalRequest ApprovalRequest
-	ChannelId       string
-	MessageId       string
-	ServiceLogs     chan<- common.ServiceLog
-	SlackTarget     *approvals.AuthorizedResponder
-	TriggerId       string
-	UserId          string
-	UserName        string
-	Callback        slack.InteractionCallback
+	App         *slack.Client
+	Req         *ApprovalRequest
+	ChannelId   string
+	MessageId   string
+	ServiceLogs chan<- common.ServiceLog
+	SlackTarget *approvals.AuthorizedResponder
+	TriggerId   string
+	UserId      string
+	UserName    string
+	Callback    slack.InteractionCallback
 }
 
 func handleSlackApproval(opts handleSlackApprovalOpts) {
@@ -76,8 +76,8 @@ func handleSlackApproval(opts handleSlackApprovalOpts) {
 			ApprovalRequestMessageId: opts.MessageId,
 			ChatId:                   opts.ChannelId,
 			MfaSeed:                  *opts.SlackTarget.MfaSeed,
-			RequestId:                opts.ApprovalRequest.Spec.Id,
-			RequestUuid:              opts.ApprovalRequest.Spec.GetUuid(),
+			RequestId:                opts.Req.Spec.Id,
+			RequestUuid:              opts.Req.Spec.GetUuid(),
 			UserId:                   opts.UserId,
 		}
 		pendingMfaString, _ := json.Marshal(pendingMfaData)
@@ -100,22 +100,39 @@ func handleSlackApproval(opts handleSlackApprovalOpts) {
 			opts.TriggerId,
 			opts.MessageId,
 			opts.ChannelId,
-			opts.ApprovalRequest.Spec.Id,
-			opts.ApprovalRequest.Spec.GetUuid(),
+			opts.Req.Spec.Id,
+			opts.Req.Spec.GetUuid(),
 			opts.UserId,
-			opts.Callback.User.Name,
+			opts.UserName,
 		); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to handle sending of mfa request: %s", err)
 			return
 		}
-		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "sent mfa request for request[%s:%s] in channel[%s] to user[%s]", opts.ApprovalRequest.Spec.Id, opts.ApprovalRequest.Spec.GetUuid(), opts.ChannelId, opts.UserId)
+
+		opts.Req.Spec.Actions = append(
+			opts.Req.Spec.Actions,
+			approvals.Action{
+				HappenedAt:  time.Now(),
+				MessageId:   opts.MessageId,
+				Platform:    string(approvals.PlatformTelegram),
+				RequestUuid: opts.Req.Spec.GetUuid(),
+				TargetId:    opts.ChannelId,
+				Status:      approvals.StatusMfaTriggered,
+				UserId:      opts.UserId,
+				UserName:    opts.UserName,
+			},
+		)
+		if err := opts.Req.Update(); err != nil {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update approvalRequest[%s]: %s", opts.Req.Spec.GetUuid(), err)
+		}
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "sent mfa request for request[%s:%s] in channel[%s] to user[%s]", opts.Req.Spec.Id, opts.Req.Spec.GetUuid(), opts.ChannelId, opts.UserId)
 		return
 	} else {
 		if err := processSlackApproval(processSlackApprovalOpts{
 			ApprovalRequestMessageTs: opts.MessageId,
 			App:                      opts.App,
 			ChannelId:                opts.ChannelId,
-			Req:                      &opts.ApprovalRequest,
+			Req:                      opts.Req,
 			SenderId:                 opts.UserId,
 			SenderName:               opts.Callback.User.Profile.RealName,
 			ServiceLogs:              opts.ServiceLogs,
@@ -178,6 +195,22 @@ func handleSlackInteraction(opts handleSlackInteractionOpts) {
 		ServiceLogs: opts.ServiceLogs,
 	})
 	if len(authorizedSlackTargets) == 0 {
+		approvalRequest.Spec.Actions = append(
+			approvalRequest.Spec.Actions,
+			approvals.Action{
+				HappenedAt:  time.Now(),
+				MessageId:   opts.Callback.MessageTs,
+				Platform:    string(approvals.PlatformSlack),
+				RequestUuid: approvalRequest.Spec.GetUuid(),
+				TargetId:    opts.Callback.Channel.ID,
+				Status:      approvals.StatusUnauthorized,
+				UserId:      opts.Callback.User.ID,
+				UserName:    opts.Callback.User.Name,
+			},
+		)
+		if err := approvalRequest.Update(); err != nil {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update approvalRequest[%s]: %s", approvalRequest.Spec.GetUuid(), err)
+		}
 		if err := respondSlackUnauthorized(opts.App, channelId, userId, action.ActionID, messageId); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to respond: %s", err)
 		}
@@ -199,15 +232,15 @@ func handleSlackInteraction(opts handleSlackInteractionOpts) {
 			case string(ActionApprove):
 				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "channel[%s].user[%s]:approve", channelId, userId)
 				handleSlackApproval(handleSlackApprovalOpts{
-					App:             opts.App,
-					ApprovalRequest: *approvalRequest,
-					ChannelId:       channelId,
-					MessageId:       messageId,
-					ServiceLogs:     opts.ServiceLogs,
-					SlackTarget:     authorizedResponder,
-					TriggerId:       triggerId,
-					UserId:          userId,
-					UserName:        userName,
+					App:         opts.App,
+					Req:         approvalRequest,
+					ChannelId:   channelId,
+					MessageId:   messageId,
+					ServiceLogs: opts.ServiceLogs,
+					SlackTarget: authorizedResponder,
+					TriggerId:   triggerId,
+					UserId:      userId,
+					UserName:    userName,
 				})
 			case string(ActionReject):
 				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "channel[%s].user[%s]:reject", channelId, userId)
@@ -254,7 +287,7 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 	}
 	mfaToken := opts.Callback.View.State.Values["mfa_input"]["mfa_token"].Value
 	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "received mfaToken[%s]", mfaToken)
-	approvalRequest := ApprovalRequest{
+	approvalRequest := &ApprovalRequest{
 		Spec: approvals.RequestSpec{
 			Uuid: &mfaModalMetadata.RequestUuid,
 		},
@@ -290,7 +323,7 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 							ApprovalRequestMessageTs: mfaModalMetadata.MessageTs,
 							App:                      opts.App,
 							ChannelId:                mfaModalMetadata.ChannelId,
-							Req:                      &approvalRequest,
+							Req:                      approvalRequest,
 							SenderId:                 opts.Callback.User.ID,
 							SenderName:               mfaModalMetadata.UserName,
 							ServiceLogs:              opts.ServiceLogs,
@@ -306,11 +339,27 @@ func handleSlackViewSubmission(opts handleSlackViewSubmissionOpts) {
 					}
 					opts.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "totp token from channel[%s].user[%s] was invalid", mfaModalMetadata.ChannelId, opts.Callback.User.ID)
 					msg := getSlackMfaRejectedMessage(opts.Callback.User.ID)
-					opts.App.PostMessage(
+					channelId, messageTs, _ := opts.App.PostMessage(
 						mfaModalMetadata.ChannelId,
 						slack.MsgOptionText(msg, false),
 						slack.MsgOptionTS(mfaModalMetadata.MessageTs),
 					)
+					approvalRequest.Spec.Actions = append(
+						approvalRequest.Spec.Actions,
+						approvals.Action{
+							HappenedAt:  time.Now(),
+							MessageId:   messageTs,
+							Platform:    string(approvals.PlatformTelegram),
+							RequestUuid: approvalRequest.Spec.GetUuid(),
+							TargetId:    channelId,
+							Status:      approvals.StatusMfaInvalid,
+							UserId:      opts.Callback.User.ID,
+							UserName:    opts.Callback.User.Name,
+						},
+					)
+					if err := approvalRequest.Update(); err != nil {
+						opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update approvalRequest[%s]: %s", approvalRequest.Spec.GetUuid(), err)
+					}
 					return
 				}
 				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "channel[%s].user[%s] submitted a token when a token wasn't expected", mfaModalMetadata.ChannelId, opts.Callback.User.ID)
@@ -410,8 +459,15 @@ type processSlackApprovalOpts struct {
 }
 
 func processSlackApproval(opts processSlackApprovalOpts) error {
-	approval := Approval{
-		Spec: approvals.ApprovalSpec{
+	slackResponse := approvals.SlackResponseSpec{
+		ChannelId:  opts.ChannelId,
+		ReceivedAt: time.Now(),
+		Status:     opts.Status,
+		UserId:     opts.SenderId,
+		UserName:   opts.SenderName,
+	}
+	if opts.Req.Spec.Approval == nil {
+		opts.Req.Spec.Approval = &approvals.ApprovalSpec{
 			ApproverId:      opts.SenderId,
 			ApproverName:    opts.SenderName,
 			Id:              uuid.New().String(),
@@ -421,23 +477,21 @@ func processSlackApproval(opts processSlackApprovalOpts) error {
 			RequesterName:   opts.Req.Spec.RequesterName,
 			Status:          opts.Status,
 			StatusUpdatedAt: time.Now(),
-			Slack: []approvals.SlackResponseSpec{
-				{
-					ChannelId: opts.ChannelId,
-					UserId:    opts.SenderId,
-					UserName:  opts.SenderName,
-				},
-			},
-			Type: approvals.PlatformSlack,
-		},
+			Slack:           []approvals.SlackResponseSpec{},
+			Type:            approvals.PlatformSlack,
+		}
 	}
+	opts.Req.Spec.Approval.Slack = append(
+		opts.Req.Spec.Approval.Slack,
+		slackResponse,
+	)
+	approval := Approval{Spec: *opts.Req.Spec.Approval}
 	if err := approval.Create(); err != nil {
 		if err := respondSlackSystemError(opts.App, opts.ChannelId, opts.ApprovalRequestMessageTs); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to respond: %s", err)
 		}
 		return fmt.Errorf("failed to create approval[%s]: %s", approval.Spec.Id, err)
 	}
-	opts.Req.Spec.Approval = &approval.Spec
 	if err := opts.Req.Update(); err != nil {
 		msg := getSlackSystemErrorMessage()
 		if _, _, err := opts.App.PostMessage(
@@ -450,12 +504,13 @@ func processSlackApproval(opts processSlackApprovalOpts) error {
 		return fmt.Errorf("failed to update approvalRequest[%s]: %s", opts.Req.Spec.GetUuid(), err)
 	}
 
+	var channelId, messageTs string
 	msg := slack.Blocks{}
 	if opts.Status == approvals.StatusApproved {
 		msg = getSlackApprovedBlocks(opts.Req)
 
 		threadMessage := getSlackApprovalDetailsMessage(opts.SenderId, approval.Spec.StatusUpdatedAt)
-		opts.App.PostMessage(
+		channelId, messageTs, _ = opts.App.PostMessage(
 			opts.ChannelId,
 			slack.MsgOptionText(threadMessage, false),
 			slack.MsgOptionTS(opts.ApprovalRequestMessageTs),
@@ -464,11 +519,28 @@ func processSlackApproval(opts processSlackApprovalOpts) error {
 		msg = getSlackRejectedBlocks(opts.Req)
 
 		threadMessage := getSlackRejectionDetailsMessage(opts.SenderId, approval.Spec.StatusUpdatedAt)
-		opts.App.PostMessage(
+		channelId, messageTs, _ = opts.App.PostMessage(
 			opts.ChannelId,
 			slack.MsgOptionText(threadMessage, false),
 			slack.MsgOptionTS(opts.ApprovalRequestMessageTs),
 		)
+	}
+
+	opts.Req.Spec.Actions = append(
+		opts.Req.Spec.Actions,
+		approvals.Action{
+			HappenedAt:  time.Now(),
+			MessageId:   messageTs,
+			Platform:    string(approvals.PlatformTelegram),
+			RequestUuid: opts.Req.Spec.GetUuid(),
+			TargetId:    channelId,
+			Status:      opts.Status,
+			UserId:      opts.SenderId,
+			UserName:    opts.SenderName,
+		},
+	)
+	if err := opts.Req.Update(); err != nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update approvalRequest[%s]: %s", opts.Req.Spec.GetUuid(), err)
 	}
 	if _, _, _, err := opts.App.UpdateMessage(
 		opts.ChannelId,

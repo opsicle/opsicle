@@ -14,6 +14,10 @@ type Request struct {
 }
 
 type RequestSpec struct {
+	// Actions is the audit log trail of any actions taken on the ApprovalRequest
+	// that this request specification is attached to
+	Actions Actions `json:"actions" yaml:"actions"`
+
 	// Approval is populated after an approval/rejection action
 	// happens
 	Approval *ApprovalSpec `json:"approval" yaml:"approval"`
@@ -26,10 +30,9 @@ type RequestSpec struct {
 	// requests of a given type
 	Id string `json:"id" yaml:"id"`
 
-	// Uuid is populated by the approver service if it's not already
-	// defined and represents the ID of the request instance (instead of
-	// the request)
-	Uuid *string `json:"uuid" yaml:"uuid"`
+	// Links are optional additional links to view the request in a browser or
+	// other application,
+	Links []RequestLinkAttachment `json:"links" yaml:"links"`
 
 	// Message is an additional message describing the request
 	Message string `json:"message" yaml:"message"`
@@ -53,9 +56,15 @@ type RequestSpec struct {
 	// TtlSeconds indicates the duration in seconds until the request expires
 	TtlSeconds int `json:"ttlSeconds" yaml:"ttlSeconds"`
 
-	// Url is an optional additional link to view the request in a browser or
-	// other application,
-	Url *string `json:"url" yaml:"url"`
+	// Uuid is populated by the approver service if it's not already
+	// defined and represents the ID of the request instance (instead of
+	// the request)
+	Uuid *string `json:"uuid" yaml:"uuid"`
+}
+
+type RequestLinkAttachment struct {
+	Url         string `json:"url" yaml:"url"`
+	Description string `json:"description" yaml:"description"`
 }
 
 type CallbackSpec struct {

@@ -69,7 +69,7 @@ func (req *ApprovalRequest) Load() error {
 		return fmt.Errorf("failed to get approvalRequest[%s]: %s", cacheKey, err)
 	}
 	if err := json.Unmarshal([]byte(value), req); err != nil {
-		return fmt.Errorf("failed to unmarshal approvalRequest[%s]: %s", cacheKey, err)
+		return fmt.Errorf("failed to unmarshal approvalRequest[%s]: %s (full object: %s)", cacheKey, err, value)
 	}
 	return nil
 }
