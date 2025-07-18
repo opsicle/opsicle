@@ -1,18 +1,14 @@
 package automationtemplate
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"opsicle/internal/approvals"
-	"opsicle/internal/approver"
 	"opsicle/internal/automations"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/worker"
+	approverApi "opsicle/pkg/approver"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +26,12 @@ var flags cli.Flags = cli.Flags{
 		DefaultValue: "",
 		Usage:        "specifies the directory to where ApprovalPolicy resources can be found",
 		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "approver-retry-interval",
+		DefaultValue: 5 * time.Second,
+		Usage:        "defines the retry interval for retrieving the status",
+		Type:         cli.FlagTypeDuration,
 	},
 	{
 		Name:         "approver-url",
@@ -63,33 +65,31 @@ var Command = &cobra.Command{
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resourceIsSpecified, resourcePath, err := cli.GetFilePathFromArgs(args)
+		resourcePath, err := cli.GetFilePathFromArgs(args)
 		if err != nil {
-			return fmt.Errorf("failed to get file path from args['%s']: %s", strings.Join(args, "', '"), err)
-		} else if !resourceIsSpecified {
-			return fmt.Errorf("failed to receive required <path-to-automation>")
+			return fmt.Errorf("failed to receive required <path-to-automation>: %s", err)
 		}
-		automationTemplate, err := automations.LoadAutomationTemplateFromFile(resourcePath)
+		automationTemplateInstance, err := automations.LoadAutomationTemplateFromFile(resourcePath)
 		if err != nil {
-			return fmt.Errorf("failed to load automation from path[%s]: %s", resourcePath, err)
+			return fmt.Errorf("failed to load automation template from path[%s]: %s", resourcePath, err)
 		}
-		o, _ := json.MarshalIndent(automationTemplate, "", "  ")
-		logrus.Tracef("received automation template:\n%s", string(o))
+		o, _ := json.MarshalIndent(automationTemplateInstance, "", "  ")
+		logrus.Debugf("loaded automation template as follows:\n%s", string(o))
 
 		requesterId := viper.GetString("requester-id")
 		requesterName := viper.GetString("requester-name")
 
-		// resoulve approval policy
+		// resolve approval policy and get approval if needed
 
 		var approvalPolicy *approvals.PolicySpec
 		externalPoliciesPath := viper.GetString("approval-policies-path")
-		if automationTemplate.Spec.ApprovalPolicy != nil {
+		if automationTemplateInstance.Spec.ApprovalPolicy != nil {
 			logrus.Infof("automation template has an approval policy, loading it now")
-			o, _ := json.MarshalIndent(automationTemplate.Spec.ApprovalPolicy, "", "  ")
+			o, _ := json.MarshalIndent(automationTemplateInstance.Spec.ApprovalPolicy, "", "  ")
 			logrus.Tracef("following is the loaded approval policy:\n%s", string(o))
-			if automationTemplate.Spec.ApprovalPolicy.PolicyRef != nil {
+			if automationTemplateInstance.Spec.ApprovalPolicy.PolicyRef != nil {
 				logrus.Infof("approval policy is referring to an existing policy")
-				approvalPolicyName := *automationTemplate.Spec.ApprovalPolicy.PolicyRef
+				approvalPolicyName := *automationTemplateInstance.Spec.ApprovalPolicy.PolicyRef
 				if externalPoliciesPath == "" {
 					return fmt.Errorf("failed to receive a path where approval policies can be found but policyRef was defined")
 				}
@@ -111,125 +111,78 @@ var Command = &cobra.Command{
 				if err := yaml.Unmarshal(matchedResources[0].Data, &approvalPolicyResource); err != nil {
 					return fmt.Errorf("failed to parse file[%s]: %s", matchedResources[0].Path, err)
 				}
-				automationTemplate.Spec.ApprovalPolicy.Spec = &approvalPolicyResource.Spec
+				automationTemplateInstance.Spec.ApprovalPolicy.Spec = &approvalPolicyResource.Spec
 			}
-			approvalPolicy = automationTemplate.Spec.ApprovalPolicy.Spec
+			approvalPolicy = automationTemplateInstance.Spec.ApprovalPolicy.Spec
 
 			owners := []string{}
-			for _, owner := range automationTemplate.Spec.Metadata.Owners {
+			for _, owner := range automationTemplateInstance.Spec.Metadata.Owners {
 				owners = append(owners, fmt.Sprintf("%s (%s)", owner.Name, owner.Email))
 			}
-			approvalRequest := approvals.RequestSpec{
-				Id: automationTemplate.Metadata.Name,
+			approvalRequestInstance := approvals.RequestSpec{
+				Id: automationTemplateInstance.Metadata.Name,
 				Message: fmt.Sprintf(
 					"Requesting to execute '%s' written by: %s\n\n%s",
-					automationTemplate.Spec.Metadata.DisplayName,
+					automationTemplateInstance.Spec.Metadata.DisplayName,
 					strings.Join(owners, ", "),
-					automationTemplate.Spec.Metadata.Description,
+					automationTemplateInstance.Spec.Metadata.Description,
 				),
 				RequesterId:   requesterId,
 				RequesterName: requesterName,
 			}
 			if approvalPolicy.Slack != nil {
-				approvalRequest.Slack = []approvals.SlackRequestSpec{*approvalPolicy.Slack}
+				approvalRequestInstance.Slack = []approvals.SlackRequestSpec{*approvalPolicy.Slack}
 			}
 			if approvalPolicy.Telegram != nil {
-				approvalRequest.Telegram = []approvals.TelegramRequestSpec{*approvalPolicy.Telegram}
+				approvalRequestInstance.Telegram = []approvals.TelegramRequestSpec{*approvalPolicy.Telegram}
 			}
 
-			approverUrlData := viper.GetString("approver-url")
-			approverUrl, err := url.Parse(approverUrlData)
-			if err != nil {
-				return fmt.Errorf("failed to parse approverUrl[%s] as a url: %s", approverUrlData, err)
-			}
+			approverUrl := viper.GetString("approver-url")
 			logrus.Infof("using approver service at url[%s]", approverUrl)
 
 			serviceLogs := make(chan common.ServiceLog, 64)
 			common.StartServiceLogLoop(serviceLogs)
-			approvalRequestData, err := json.Marshal(approvalRequest)
-			if err != nil {
-				return fmt.Errorf("failed to marshal approval request: %s", err)
-			}
 
-			approverUrl.Path = "/approval-request"
-			req, err := http.NewRequest(
-				http.MethodPost,
-				approverUrl.String(),
-				bytes.NewBuffer(approvalRequestData),
-			)
+			client, err := approverApi.NewClient(approverApi.NewClientOpts{
+				ApproverUrl: approverUrl,
+				Id:          "opsicle-run-approval",
+			})
 			if err != nil {
-				return fmt.Errorf("failed to create request for approver service: %s", err)
+				return fmt.Errorf("failed to create client for approver service: %s", err)
 			}
-			common.AddHttpHeaders(req)
-			client := common.NewHttpClient()
-			res, err := client.Do(req)
+			requestUuid, err := client.CreateApprovalRequest(approverApi.CreateApprovalRequestInput{
+				Callback:      approvalRequestInstance.Callback,
+				Id:            approvalRequestInstance.Id,
+				Links:         approvalRequestInstance.Links,
+				Message:       approvalRequestInstance.Message,
+				RequesterId:   approvalRequestInstance.RequesterId,
+				RequesterName: approvalRequestInstance.RequesterName,
+				Slack:         approvalRequestInstance.Slack,
+				Telegram:      approvalRequestInstance.Telegram,
+			})
 			if err != nil {
-				return fmt.Errorf("failed to execute request to approver service: %s", err)
+				return fmt.Errorf("failed to create approval request: %s", err)
 			}
-			responseBody, err := io.ReadAll(res.Body)
-			if err != nil {
-				return fmt.Errorf("failed to read response from approver service: %s", err)
-			}
-			logrus.Debugf("received response: %s", string(responseBody))
-			var response common.HttpResponse
-			if err := json.Unmarshal(responseBody, &response); err != nil {
-				return fmt.Errorf("failed to parse response from approver service: %s", err)
-			}
-			responseData, err := json.Marshal(response.Data)
-			if err != nil {
-				return fmt.Errorf("failed to reconcile response into data from approver service: %s", err)
-			}
-			var requestSpec approvals.RequestSpec
-			if err := json.Unmarshal(responseData, &requestSpec); err != nil {
-				return fmt.Errorf("failed to parse data from approver service: %s", err)
-			}
-			requestId := requestSpec.Id
-			requestUuid := requestSpec.GetUuid()
-			logrus.Infof("submitted request[%s:%s]", requestId, requestUuid)
+			logrus.Infof("submitted request[%s]", requestUuid)
+			retryInterval := viper.GetDuration("approver-retry-interval")
+			logrus.Infof("checks will be done at %v intervals, set log level to debug to see intervals if needed", retryInterval)
 
 			var approval approvals.ApprovalSpec
-			isDone := false
-			for !isDone {
-				logrus.Infof("getting status from url[%s]...", approverUrl.String())
-				approverUrl.Path = fmt.Sprintf("/approval-request/%v", requestUuid)
-				req, err = http.NewRequest(
-					http.MethodGet,
-					approverUrl.String(),
-					bytes.NewBuffer(approvalRequestData),
-				)
+			for {
+				logrus.Infof("checking status of request[%s]...", requestUuid)
+				approvalRequest, err := client.GetApprovalRequest(requestUuid)
 				if err != nil {
-					return fmt.Errorf("failed to create request for approver service: %s", err)
-				}
-				common.AddHttpHeaders(req)
-				res, err = client.Do(req)
-				if err != nil {
-					return fmt.Errorf("failed to execute request to approver service: %s", err)
-				}
-				responseBody, err := io.ReadAll(res.Body)
-				if err != nil {
-					return fmt.Errorf("failed to read response from approver service: %s", err)
-				}
-				logrus.Debugf("received response from url[%s]: %s", approverUrl.String(), string(responseBody))
-				var response common.HttpResponse
-				if err := json.Unmarshal(responseBody, &response); err != nil {
-					return fmt.Errorf("failed to parse response from approver service: %s", err)
-				}
-				responseData, err := json.Marshal(response.Data)
-				if err != nil {
-					return fmt.Errorf("failed to parse response from approver service: %s", err)
-				}
-				var approvalRequest approver.ApprovalRequest
-				if err := json.Unmarshal(responseData, &approvalRequest); err != nil {
-					return fmt.Errorf("failed to parse response from approver service: %s", err)
-				}
-				if approvalRequest.Spec.Approval == nil {
-					logrus.Infof("request is still not yet approved, waiting another 5 seconds...")
-					<-time.After(5 * time.Second)
+					logrus.Errorf("failed to retrieve approval request status of request[%s]: %s", requestUuid, err)
 					continue
 				}
-				logrus.Infof("approval request has updated status[%v] (by %v)", approvalRequest.Spec.Approval.Status, approvalRequest.Spec.Approval.ApproverId)
-				approval = *approvalRequest.Spec.Approval
-				isDone = true
+				if approvalRequest.Approval == nil {
+					logrus.Debugf("approval not received, waiting for %v before trying again...", retryInterval)
+					<-time.After(retryInterval)
+					continue
+				}
+				approval = *approvalRequest.Approval
+				logrus.Infof("approval request has updated status[%v] (by %v)", approvalRequest.Approval.Status, approvalRequest.Approval.ApproverId)
+				break
 			}
 
 			if approval.Status != approvals.StatusApproved {
@@ -238,13 +191,15 @@ var Command = &cobra.Command{
 			}
 		}
 
+		// start the automation
+
 		automationInstance := &automations.Automation{
 			Resource: common.Resource{
 				Metadata: common.Metadata{
-					Name: automationTemplate.Metadata.Name,
+					Name: automationTemplateInstance.Metadata.Name,
 				},
 			},
-			Spec: automationTemplate.Spec.Template,
+			Spec: automationTemplateInstance.Spec.Template,
 		}
 
 		var logsWaiter sync.WaitGroup
@@ -294,10 +249,6 @@ var Command = &cobra.Command{
 			}
 			logrus.Infof("worker logs have stopped streaming for automation[%s]", automationInstance.Resource.Metadata.Name)
 			logsWaiter.Done()
-			fmt.Println("----------------------------------------")
-			fmt.Println("----------------------------------------")
-			fmt.Println("----------------------------------------")
-			fmt.Println("----------------------------------------")
 		}()
 		logsWaiter.Add(1)
 		if err := worker.RunAutomation(worker.RunAutomationOpts{

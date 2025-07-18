@@ -7,26 +7,26 @@ import (
 	"net/http"
 	"opsicle/internal/common"
 
-	"opsicle/pkg/approvals"
+	"opsicle/pkg/approver"
 
 	"github.com/gorilla/mux"
 )
 
 var routesMapping = map[string]map[string]func() http.HandlerFunc{
-	"/approval-request": {
+	"/api/v1/approval-request": {
 		http.MethodGet:  getListApprovalRequestsHandler,
 		http.MethodPost: getCreateApprovalRequestHandler,
 	},
-	"/approval/{approvalUuid}": {
+	"/api/v1/approval/{approvalUuid}": {
 		http.MethodGet: getGetApprovalHandler,
 	},
-	"/approval-request/{requestUuid}": {
+	"/api/v1/approval-request/{requestUuid}": {
 		http.MethodGet: getGetApprovalRequestHandler,
 	},
 }
 
 type commonHttpResponse common.HttpResponse
-type createApprovalRequestInput approvals.CreateRequestInput
+type createApprovalRequestInput approver.CreateApprovalRequestInput
 
 // getCreateApprovalRequestHandler godoc
 // @Summary      Creates approval requests
@@ -34,11 +34,11 @@ type createApprovalRequestInput approvals.CreateRequestInput
 // @Tags         approval
 // @Accept       json
 // @Produce      json
-// @Param        request body approvals.CreateRequestInput true "Approval payload"
+// @Param        request body approver.CreateApprovalRequestInput true "Approval payload"
 // @Success      200 {object} commonHttpResponse "approved"
 // @Failure      400 {object} commonHttpResponse "bad request"
 // @Failure      500 {object} commonHttpResponse "internal server error" {"success": false}
-// @Router       /approval-request [post]
+// @Router       /api/v1/approval-request [post]
 func getCreateApprovalRequestHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		req := &ApprovalRequest{}
@@ -91,7 +91,7 @@ func getCreateApprovalRequestHandler() http.HandlerFunc {
 // @Success      200 {object} commonHttpResponse "Success"
 // @Failure      404 {object} commonHttpResponse "Not found"
 // @Failure      500 {object} commonHttpResponse "Internal server error"
-// @Router       /approval/{approvalUuid} [get]
+// @Router       /api/v1/approval/{approvalUuid} [get]
 func getGetApprovalHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
@@ -124,7 +124,7 @@ func getGetApprovalHandler() http.HandlerFunc {
 // @Success      200 {object} commonHttpResponse "Success"
 // @Failure      404 {object} commonHttpResponse "Not found"
 // @Failure      500 {object} commonHttpResponse "Internal server error"
-// @Router       /approval-request/{requestUuid} [get]
+// @Router       /api/v1/approval-request/{requestUuid} [get]
 func getGetApprovalRequestHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
@@ -156,7 +156,7 @@ func getGetApprovalRequestHandler() http.HandlerFunc {
 // @Success      200 {object} commonHttpResponse "Success"
 // @Failure      404 {object} commonHttpResponse "Not found"
 // @Failure      500 {object} commonHttpResponse "Internal server error"
-// @Router       /approval-request [get]
+// @Router       /api/v1/approval-request [get]
 func getListApprovalRequestsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
@@ -171,6 +171,9 @@ func getListApprovalRequestsHandler() http.HandlerFunc {
 		if len(keys) == 0 {
 			common.SendHttpSuccessResponse(w, r, http.StatusNotFound, "no approval requests found")
 			return
+		}
+		for i := 0; i < len(keys); i++ {
+			keys[i] = StripCacheKeyPrefix(keys[i])
 		}
 
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", keys)

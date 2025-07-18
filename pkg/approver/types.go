@@ -1,13 +1,20 @@
-package approvals
+package approver
 
 import "opsicle/internal/approvals"
 
-// CreateRequestInput represents data meant to be sent to the approval
+// CreateApprovalRequestInput represents data meant to be sent to the approval
 // request creation endpoint
-type CreateRequestInput struct {
+type CreateApprovalRequestInput struct {
+	// Callback is a field that when specified, results in the approver
+	// service processing a callback to the specified endpoint
+	Callback *approvals.CallbackSpec `json:"callback" yaml:"callback"`
+
 	// Id is the ID of a request which will be the same for all
 	// requests of a given type
 	Id string `json:"id" yaml:"id"`
+
+	// Links will be included in the approval request's message body
+	Links []approvals.RequestLinkAttachment
 
 	// Message is an additional message describing the request
 	Message string `json:"message" yaml:"message"`

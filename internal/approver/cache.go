@@ -40,3 +40,11 @@ func CreatePendingMfaCacheKey(requestIdentifiers ...string) string {
 	cacheKeys = append(cacheKeys, requestIdentifiers...)
 	return strings.Join(cacheKeys, ":")
 }
+
+func StripCacheKeyPrefix(cacheKey string) string {
+	requestIdentifier := strings.Split(cacheKey, ":")
+	if len(requestIdentifier) == 2 {
+		return requestIdentifier[1]
+	}
+	return strings.Join(requestIdentifier[1:], ":")
+}

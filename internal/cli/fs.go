@@ -5,20 +5,21 @@ import (
 	"os"
 )
 
-func GetFilePathFromArgs(args []string) (isDefined bool, filePath string, err error) {
+func GetFilePathFromArgs(args []string) (filePath string, err error) {
+	isDefined := false
 	if len(args) > 0 {
 		filePath = args[0]
 		isDefined = true
 	}
 	if !isDefined {
-		return false, "", nil
+		return "", fmt.Errorf("failed to receive any arguments")
 	}
 	fi, err := os.Stat(filePath)
 	if err != nil {
-		return false, "", fmt.Errorf("failed to check for existence of file at path[%s]: %s", filePath, err)
+		return "", fmt.Errorf("failed to check for existence of file at path[%s]: %s", filePath, err)
 	}
 	if fi.IsDir() {
-		return false, "", fmt.Errorf("failed to get a file at path[%s]: got a directory", filePath)
+		return "", fmt.Errorf("failed to get a file at path[%s]: got a directory", filePath)
 	}
-	return true, filePath, nil
+	return filePath, nil
 }

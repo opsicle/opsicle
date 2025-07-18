@@ -1,12 +1,12 @@
 package automation
 
 import (
+	"encoding/json"
 	"fmt"
 	"opsicle/internal/automations"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/worker"
-	"strings"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -18,16 +18,16 @@ var Command = &cobra.Command{
 	Aliases: []string{"a"},
 	Short:   "Runs an Automation resource independently",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resourceIsSpecified, resourcePath, err := cli.GetFilePathFromArgs(args)
+		resourcePath, err := cli.GetFilePathFromArgs(args)
 		if err != nil {
-			return fmt.Errorf("failed to get file path from args['%s']: %s", strings.Join(args, "', '"), err)
-		} else if !resourceIsSpecified {
-			return fmt.Errorf("failed to receive required <path-to-automation>")
+			return fmt.Errorf("failed to receive required <path-to-automation>: %s", err)
 		}
 		automationInstance, err := automations.LoadAutomationFromFile(resourcePath)
 		if err != nil {
 			return fmt.Errorf("failed to load automation from path[%s]: %s", resourcePath, err)
 		}
+		o, _ := json.MarshalIndent(automationInstance, "", "  ")
+		logrus.Debugf("loaded automation as follows:\n%s", string(o))
 
 		var logsWaiter sync.WaitGroup
 		serviceLogs := make(chan common.ServiceLog, 64)

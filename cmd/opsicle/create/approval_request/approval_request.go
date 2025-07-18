@@ -1,4 +1,4 @@
-package approval
+package approval_request
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	approverApi "opsicle/pkg/approver"
-	"time"
+	"os"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -17,15 +17,10 @@ import (
 var flags cli.Flags = cli.Flags{
 	{
 		Name:         "approver-url",
+		Short:        'u',
 		DefaultValue: "http://localhost:12345",
 		Usage:        "defines the url where the approver service is accessible at",
 		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "retry-interval",
-		DefaultValue: 5 * time.Second,
-		Usage:        "defines the retry interval for retrieving the status",
-		Type:         cli.FlagTypeDuration,
 	},
 }
 
@@ -34,8 +29,9 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:   "approval <path-to-approval-request>",
-	Short: "Runs an approval manifest given a path to an ApprovalRequest manifest",
+	Use:     "approval-request <path-to-approval-request>",
+	Aliases: []string{"appovreq", "appreq", "req", "ar"},
+	Short:   "Creates an approval request given a path to an ApprovalRequest manifest",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},
@@ -57,9 +53,13 @@ var Command = &cobra.Command{
 		serviceLogs := make(chan common.ServiceLog, 64)
 		common.StartServiceLogLoop(serviceLogs)
 
+		hostname, err := os.Hostname()
+		if err != nil {
+			hostname = "unknown-host"
+		}
 		client, err := approverApi.NewClient(approverApi.NewClientOpts{
 			ApproverUrl: approverUrl,
-			Id:          "opsicle-run-approval",
+			Id:          fmt.Sprintf("%s/opsicle-create-approval-request", hostname),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create client for approver service: %s", err)
@@ -78,25 +78,6 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create approval request: %s", err)
 		}
 		logrus.Infof("submitted request[%s]", requestUuid)
-		retryInterval := viper.GetDuration("retry-interval")
-		logrus.Infof("checks will be done at %v intervals, set log level to debug to see intervals if needed", retryInterval)
-
-		for {
-			logrus.Infof("checking status of request[%s]...", requestUuid)
-			approvalRequest, err := client.GetApprovalRequest(requestUuid)
-			if err != nil {
-				logrus.Errorf("failed to retrieve approval request status of request[%s]: %s", requestUuid, err)
-				continue
-			}
-			if approvalRequest.Approval == nil {
-				logrus.Debugf("approval not received, waiting for %v before trying again...", retryInterval)
-				<-time.After(retryInterval)
-				continue
-			}
-			logrus.Infof("approval request has updated status[%v] (by %v)", approvalRequest.Approval.Status, approvalRequest.Approval.ApproverId)
-			break
-		}
-
 		return nil
 	},
 }

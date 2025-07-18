@@ -2,7 +2,9 @@ package opsicle
 
 import (
 	"fmt"
-	"opsicle/cmd/opsicle/add"
+	"opsicle/cmd/opsicle/create"
+	"opsicle/cmd/opsicle/get"
+	"opsicle/cmd/opsicle/list"
 	"opsicle/cmd/opsicle/run"
 	"opsicle/cmd/opsicle/start"
 	"opsicle/cmd/opsicle/validate"
@@ -35,7 +37,9 @@ var flags cli.Flags = cli.Flags{
 }
 
 func init() {
-	Command.AddCommand(add.Command)
+	Command.AddCommand(create.Command)
+	Command.AddCommand(get.Command)
+	Command.AddCommand(list.Command)
 	Command.AddCommand(run.Command)
 	Command.AddCommand(start.Command)
 	Command.AddCommand(validate.Command)
