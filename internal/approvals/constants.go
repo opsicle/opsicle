@@ -9,6 +9,7 @@ const (
 	StatusApproved     Status = "approved"
 	StatusError        Status = "error"
 	StatusNew          Status = "new"
+	StatusMfaError     Status = "errorMfa"
 	StatusMfaInvalid   Status = "invalidMfa"
 	StatusMfaTriggered Status = "triggeredMfa"
 	StatusRejected     Status = "rejected"

@@ -3,8 +3,11 @@ package common
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -96,4 +99,105 @@ func GetRequestLoggerMiddleware(serviceLogs chan<- ServiceLog) func(http.Handler
 			serviceLogs <- ServiceLogf(LogLevelInfo, "req[%s] [%s %s %s %s] from remote[%s] completed in %v", requestId, r.Proto, r.Host, r.Method, r.RequestURI, r.RemoteAddr, time.Since(start))
 		})
 	}
+}
+
+func GetBasicAuthMiddleware(serviceLogs chan<- ServiceLog, username, password string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u, p, ok := r.BasicAuth()
+			if !ok || u != username || p != password {
+				w.Header().Set("WWW-Authenticate", `Basic realm="restricted"`)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func GetBearerAuthMiddleware(serviceLogs chan<- ServiceLog, expectedToken string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			if token != expectedToken {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func GetIpAllowlistMiddleware(serviceLogs chan<- ServiceLog, allowedCidrs []*net.IPNet) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ipAddress, err := extractRequestIp(r)
+			if err != nil {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			if !isIpAllowed(ipAddress, allowedCidrs) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// ParseCidrs parses and validates CIDRs
+func ParseCidrs(cidrs []string) (validCidrs []*net.IPNet, warnings []string, err error) {
+	var parsed []*net.IPNet
+	for _, cidr := range cidrs {
+		if !strings.Contains(cidr, "/") {
+			cidr = cidr + "/32"
+		}
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("provided cidr[%s] is invalid, it was skipped", cidr))
+		}
+		parsed = append(parsed, network)
+	}
+	return parsed, warnings, nil
+}
+
+// extractRequestIp extracts IP from X-Forwarded-For or RemoteAddr
+func extractRequestIp(r *http.Request) (net.IP, error) {
+	forwardedForHeader := r.Header.Get("X-Forwarded-For")
+	if forwardedForHeader != "" {
+		parts := strings.Split(forwardedForHeader, ",")
+		if len(parts) > 0 {
+			remoteIp := strings.TrimSpace(parts[0])
+			parsed := net.ParseIP(remoteIp)
+			if parsed != nil {
+				return parsed, nil
+			}
+		}
+	}
+	remoteIp, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return nil, err
+	}
+	parsed := net.ParseIP(remoteIp)
+	if parsed == nil {
+		return nil, errors.New("invalid remote ip")
+	}
+	return parsed, nil
+}
+
+// isIpAllowed checks if the IP is inside any of the allowed CIDRs
+func isIpAllowed(ip net.IP, cidrs []*net.IPNet) bool {
+	for _, cidr := range cidrs {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }

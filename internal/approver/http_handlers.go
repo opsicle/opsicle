@@ -34,6 +34,7 @@ type createApprovalRequestInput approver.CreateApprovalRequestInput
 // @Tags         approval
 // @Accept       json
 // @Produce      json
+// @Security     BasicAuth
 // @Param        request body approver.CreateApprovalRequestInput true "Approval payload"
 // @Success      200 {object} commonHttpResponse "approved"
 // @Failure      400 {object} commonHttpResponse "bad request"
@@ -87,6 +88,7 @@ func getCreateApprovalRequestHandler() http.HandlerFunc {
 // @Tags         approval
 // @Accept       json
 // @Produce      json
+// @Security     BasicAuth
 // @Param				 approvalUuid path string true "Approval UUID"
 // @Success      200 {object} commonHttpResponse "Success"
 // @Failure      404 {object} commonHttpResponse "Not found"
@@ -120,6 +122,7 @@ func getGetApprovalHandler() http.HandlerFunc {
 // @Tags         approval
 // @Accept       json
 // @Produce      json
+// @Security     BasicAuth
 // @Param				 requestUuid path string true "Request UUID"
 // @Success      200 {object} commonHttpResponse "Success"
 // @Failure      404 {object} commonHttpResponse "Not found"
@@ -153,6 +156,7 @@ func getGetApprovalRequestHandler() http.HandlerFunc {
 // @Tags         approval
 // @Accept       json
 // @Produce      json
+// @Security     BasicAuth
 // @Success      200 {object} commonHttpResponse "Success"
 // @Failure      404 {object} commonHttpResponse "Not found"
 // @Failure      500 {object} commonHttpResponse "Internal server error"

@@ -5,6 +5,7 @@ import (
 	"opsicle/internal/approver"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -16,6 +17,54 @@ func init() {
 }
 
 var flags cli.Flags = cli.Flags{
+	{
+		Name:         "basic-auth-enabled",
+		DefaultValue: false,
+		Usage:        "when this flag is specified, basic auth is enabled",
+		Type:         cli.FlagTypeBool,
+	},
+	{
+		Name:         "basic-auth-username",
+		DefaultValue: "",
+		Usage:        "the username segment when authenticating with basic auth; when specified, requires '--basic-auth-password' to be set as well",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "basic-auth-password",
+		DefaultValue: "",
+		Usage:        "the password segment when authenticating with basic auth; when specified, requires '--basic-auth-username' to be set as well",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "bearer-auth-enabled",
+		DefaultValue: false,
+		Usage:        "when this flag is specified, bearer auth is enabled",
+		Type:         cli.FlagTypeBool,
+	},
+	{
+		Name:         "bearer-auth-token",
+		DefaultValue: "",
+		Usage:        "the required token when a consumer authenticates with bearer auth",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "ip-allowlist-enabled",
+		DefaultValue: false,
+		Usage:        "when this flag is specified, ip allowlist is enabled and blocks all traffic from ip addresses not in the provided list; cidrs are allowed",
+		Type:         cli.FlagTypeBool,
+	},
+	{
+		Name:         "ip-allowlist",
+		DefaultValue: []string{},
+		Usage:        "specifies remote ip addresses that are allowed to communicate with the server",
+		Type:         cli.FlagTypeStringSlice,
+	},
+	{
+		Name:         "listen-addr",
+		DefaultValue: "0.0.0.0:12345",
+		Usage:        "specifies the listen address of the server",
+		Type:         cli.FlagTypeString,
+	},
 	{
 		Name:         "redis-enabled",
 		DefaultValue: true,
@@ -141,13 +190,41 @@ var Command = &cobra.Command{
 		logrus.Debugf("starting notifiers...")
 		go approver.Notifiers.StartListening()
 
-		logrus.Debugf("starting http server...")
+		listenAddress := viper.GetString("listen-addr")
+		logrus.Debugf("starting http server on addr[%s]...", listenAddress)
 		httpServerDone := make(chan common.Done)
-		approver.StartHttpServer(approver.StartHttpServerOpts{
-			Addr:        "0.0.0.0:12345",
+		startServerOpts := approver.StartHttpServerOpts{
+			Addr:        listenAddress,
 			Done:        httpServerDone,
 			ServiceLogs: serviceLogs,
-		})
+		}
+
+		isBasicAuthEnabled := viper.GetBool("basic-auth-enabled")
+		if isBasicAuthEnabled {
+			logrus.Infof("basic auth is enabled, include credentials in all your requests")
+			startServerOpts.BasicAuth = &approver.StartHttpServerBasicAuthOpts{
+				Username: viper.GetString("basic-auth-username"),
+				Password: viper.GetString("basic-auth-password"),
+			}
+		}
+		isBearerAuthEnabled := viper.GetBool("bearer-auth-enabled")
+		if isBearerAuthEnabled {
+			logrus.Infof("bearer authentication is enabled, include the 'Authorization: Bearer xyz' header in all your requests")
+			startServerOpts.BearerAuth = &approver.StartHttpServerBearerAuthOpts{
+				Token: viper.GetString("bearer-auth-token"),
+			}
+		}
+
+		isIpAllowlistEnabled := viper.GetBool("ip-allowlist-enabled")
+		if isIpAllowlistEnabled {
+			ipAllowList := viper.GetStringSlice("ip-allowlist")
+			logrus.Infof("ip allowlist enabled for cidrs['%s']", strings.Join(ipAllowList, "', '"))
+			startServerOpts.IpAllowlist = &approver.StartHttpServerIpAllowlistOpts{
+				AllowedIps: ipAllowList,
+			}
+		}
+
+		approver.StartHttpServer(startServerOpts)
 
 		return cmd.Help()
 	},
