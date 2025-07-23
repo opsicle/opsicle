@@ -85,10 +85,11 @@ kind_up:
 kind_down:
 	kind delete cluster --name $(KIND_CLUSTER_NAME)
 
-swaggo:
+docs_approver:
 	swag init \
-		--parseDependencyLevel 1 \
-		--output ./internal/docs
+		--tags approver-service \
+		--output ./internal/approver/docs \
+		--parseDependencyLevel 1
 
 #                .__                               
 # _______   ____ |  |   ____ _____    ______ ____  

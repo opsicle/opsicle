@@ -2,9 +2,6 @@ package common
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -21,64 +18,6 @@ const (
 )
 
 type HttpRequestLogger func(string, string)
-
-type HttpResponse struct {
-	Data    any    `json:"data"`
-	Message string `json:"message"`
-	Success bool   `json:"success"`
-}
-
-func AddHttpHeaders(req *http.Request) {
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("X-App-Id", "opsicle")
-}
-
-func NewHttpClient() *http.Client {
-	return &http.Client{
-		Timeout: DefaultDurationConnectionTimeout,
-	}
-}
-
-func SendHttpFailResponse(
-	responseWriter http.ResponseWriter,
-	request *http.Request,
-	statusCode int,
-	message string,
-	errorDetails error,
-	data ...any,
-) {
-	log := request.Context().Value(HttpContextLogger).(HttpRequestLogger)
-	log(LogLevelError, fmt.Sprintf("%s: %s", message, errorDetails))
-	responseData := HttpResponse{
-		Message: message,
-		Success: false,
-	}
-	if len(data) > 0 {
-		responseData.Data = data
-	}
-	res, _ := json.Marshal(responseData)
-	responseWriter.WriteHeader(statusCode)
-	responseWriter.Write(res)
-}
-
-func SendHttpSuccessResponse(
-	responseWriter http.ResponseWriter,
-	request *http.Request,
-	statusCode int,
-	message string,
-	data ...any,
-) {
-	responseData := HttpResponse{
-		Message: message,
-		Success: true,
-	}
-	if len(data) > 0 {
-		responseData.Data = data[0]
-	}
-	res, _ := json.Marshal(responseData)
-	responseWriter.WriteHeader(statusCode)
-	responseWriter.Write(res)
-}
 
 func GetRequestLoggerMiddleware(serviceLogs chan<- ServiceLog) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -150,54 +89,4 @@ func GetIpAllowlistMiddleware(serviceLogs chan<- ServiceLog, allowedCidrs []*net
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-// ParseCidrs parses and validates CIDRs
-func ParseCidrs(cidrs []string) (validCidrs []*net.IPNet, warnings []string, err error) {
-	var parsed []*net.IPNet
-	for _, cidr := range cidrs {
-		if !strings.Contains(cidr, "/") {
-			cidr = cidr + "/32"
-		}
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("provided cidr[%s] is invalid, it was skipped", cidr))
-		}
-		parsed = append(parsed, network)
-	}
-	return parsed, warnings, nil
-}
-
-// extractRequestIp extracts IP from X-Forwarded-For or RemoteAddr
-func extractRequestIp(r *http.Request) (net.IP, error) {
-	forwardedForHeader := r.Header.Get("X-Forwarded-For")
-	if forwardedForHeader != "" {
-		parts := strings.Split(forwardedForHeader, ",")
-		if len(parts) > 0 {
-			remoteIp := strings.TrimSpace(parts[0])
-			parsed := net.ParseIP(remoteIp)
-			if parsed != nil {
-				return parsed, nil
-			}
-		}
-	}
-	remoteIp, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return nil, err
-	}
-	parsed := net.ParseIP(remoteIp)
-	if parsed == nil {
-		return nil, errors.New("invalid remote ip")
-	}
-	return parsed, nil
-}
-
-// isIpAllowed checks if the IP is inside any of the allowed CIDRs
-func isIpAllowed(ip net.IP, cidrs []*net.IPNet) bool {
-	for _, cidr := range cidrs {
-		if cidr.Contains(ip) {
-			return true
-		}
-	}
-	return false
 }

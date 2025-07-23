@@ -31,7 +31,7 @@ type createApprovalRequestInput approver.CreateApprovalRequestInput
 // getCreateApprovalRequestHandler godoc
 // @Summary      Creates approval requests
 // @Description  This endpoint creates approval requests
-// @Tags         approval
+// @Tags         approver-service
 // @Accept       json
 // @Produce      json
 // @Security     BasicAuth
@@ -85,7 +85,7 @@ func getCreateApprovalRequestHandler() http.HandlerFunc {
 // getGetApprovalHandler godoc
 // @Summary      Retreives an approval given it's ID
 // @Description  This endpoint retrieves an approval given it's ID
-// @Tags         approval
+// @Tags         approver-service
 // @Accept       json
 // @Produce      json
 // @Security     BasicAuth
@@ -119,7 +119,7 @@ func getGetApprovalHandler() http.HandlerFunc {
 // getGetApprovalRequestHandler godoc
 // @Summary      Retreives all approval requests
 // @Description  This endpoint retrieves all approval requests
-// @Tags         approval
+// @Tags         approver-service
 // @Accept       json
 // @Produce      json
 // @Security     BasicAuth
@@ -153,7 +153,7 @@ func getGetApprovalRequestHandler() http.HandlerFunc {
 // getListApprovalRequestsHandler godoc
 // @Summary      Retreives all approval requests
 // @Description  This endpoint retrieves all approval requests
-// @Tags         approval
+// @Tags         approver-service
 // @Accept       json
 // @Produce      json
 // @Security     BasicAuth

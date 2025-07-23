@@ -1,23 +1,4 @@
 definitions:
-  approvals.Action:
-    properties:
-      data: {}
-      error: {}
-      happenedAt:
-        type: string
-      messageId:
-        type: string
-      platform:
-        type: string
-      requestUuid:
-        type: string
-      status:
-        $ref: '#/definitions/approvals.Status'
-      targetId:
-        type: string
-      userId:
-        type: string
-    type: object
   approvals.AuthorizedResponder:
     properties:
       mfaSeed:
@@ -27,34 +8,23 @@ definitions:
       username:
         type: string
     type: object
-  approvals.CreateRequestInput:
+  approvals.CallbackSpec:
     properties:
-      id:
+      type:
+        allOf:
+        - $ref: '#/definitions/approvals.CallbackType'
         description: |-
-          Id is the ID of a request which will be the same for all
-          requests of a given type
-        type: string
-      message:
-        description: Message is an additional message describing the request
-        type: string
-      requesterId:
-        description: RequesterName indicates the requester's system ID
-        type: string
-      requesterName:
-        description: RequesterName indicates the requester's name
-        type: string
-      slack:
-        description: Slack specifies the targets in Slack to send this request to
-        items:
-          $ref: '#/definitions/approvals.SlackRequestSpec'
-        type: array
-      telegram:
-        description: Telegram specifies the targets in Telegram to send this request
-          to
-        items:
-          $ref: '#/definitions/approvals.TelegramRequestSpec'
-        type: array
+          Type defines the type of this callback. If this is not specified,
+          the precedence will follow the code tagged with #callback-type-priority
+      webhook:
+        $ref: '#/definitions/approvals.WebhookCallbackSpec'
     type: object
+  approvals.CallbackType:
+    enum:
+    - webhook
+    type: string
+    x-enum-varnames:
+    - CallbackWebhook
   approvals.Notification:
     properties:
       error: {}
@@ -71,15 +41,15 @@ definitions:
       targetId:
         type: string
     type: object
+  approvals.RequestLinkAttachment:
+    properties:
+      description:
+        type: string
+      url:
+        type: string
+    type: object
   approvals.SlackRequestSpec:
     properties:
-      actions:
-        description: |-
-          Actions is the audit log trail of any actions taken on the ApprovalRequest
-          that this request specification is attached to
-        items:
-          $ref: '#/definitions/approvals.Action'
-        type: array
       authorizedResponders:
         description: |-
           AuthorizedResponders is a list of users who are authorized to respond
@@ -106,29 +76,8 @@ definitions:
           $ref: '#/definitions/approvals.Notification'
         type: array
     type: object
-  approvals.Status:
-    enum:
-    - approved
-    - error
-    - new
-    - invalidmfa
-    - rejected
-    type: string
-    x-enum-varnames:
-    - StatusApproved
-    - StatusError
-    - StatusNew
-    - StatusMfaInvalid
-    - StatusRejected
   approvals.TelegramRequestSpec:
     properties:
-      actions:
-        description: |-
-          Actions is the audit log trail of any actions taken on the ApprovalRequest
-          that this request specification is attached to
-        items:
-          $ref: '#/definitions/approvals.Action'
-        type: array
       authorizedResponders:
         description: |-
           AuthorizedResponders is a list of users who are authorized to respond
@@ -148,6 +97,101 @@ definitions:
           $ref: '#/definitions/approvals.Notification'
         type: array
     type: object
+  approvals.WebhookCallbackAuthSpec:
+    properties:
+      basic:
+        $ref: '#/definitions/approvals.WebhookCallbackBasicAuthSpec'
+      bearer:
+        $ref: '#/definitions/approvals.WebhookCallbackBearerAuthSpec'
+      header:
+        $ref: '#/definitions/approvals.WebhookCallbackHeaderAuthSpec'
+    type: object
+  approvals.WebhookCallbackBasicAuthSpec:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  approvals.WebhookCallbackBearerAuthSpec:
+    properties:
+      value:
+        type: string
+    type: object
+  approvals.WebhookCallbackHeaderAuthSpec:
+    properties:
+      key:
+        type: string
+      value:
+        type: string
+    type: object
+  approvals.WebhookCallbackSpec:
+    properties:
+      auth:
+        allOf:
+        - $ref: '#/definitions/approvals.WebhookCallbackAuthSpec'
+        description: |-
+          Auth defines the auth mechanism to use when authenticating with
+          the specified `.Url`
+      method:
+        description: Method defines the HTTP method used when sending the call
+        type: string
+      retryCount:
+        description: |-
+          RetryCount specifies the number of retries that will be made
+          if the callback fails. Defaults to 5 with an exponential backoff
+          strategy unless otherwise specfied
+        type: integer
+      retryIntervalSeconds:
+        description: |-
+          RetryIntervalSeconds when specified, forces the retry mechanism
+          to perform retries at fxed intervals
+        type: integer
+      url:
+        description: |-
+          Url specifies the URL that will be called with the full approval
+          request details when a request is approved/rejected
+        type: string
+    type: object
+  approver.CreateApprovalRequestInput:
+    properties:
+      callback:
+        allOf:
+        - $ref: '#/definitions/approvals.CallbackSpec'
+        description: |-
+          Callback is a field that when specified, results in the approver
+          service processing a callback to the specified endpoint
+      id:
+        description: |-
+          Id is the ID of a request which will be the same for all
+          requests of a given type
+        type: string
+      links:
+        description: Links will be included in the approval request's message body
+        items:
+          $ref: '#/definitions/approvals.RequestLinkAttachment'
+        type: array
+      message:
+        description: Message is an additional message describing the request
+        type: string
+      requesterId:
+        description: RequesterName indicates the requester's system ID
+        type: string
+      requesterName:
+        description: RequesterName indicates the requester's name
+        type: string
+      slack:
+        description: Slack specifies the targets in Slack to send this request to
+        items:
+          $ref: '#/definitions/approvals.SlackRequestSpec'
+        type: array
+      telegram:
+        description: Telegram specifies the targets in Telegram to send this request
+          to
+        items:
+          $ref: '#/definitions/approvals.TelegramRequestSpec'
+        type: array
+    type: object
   approver.commonHttpResponse:
     properties:
       data: {}
@@ -159,7 +203,7 @@ definitions:
 info:
   contact: {}
 paths:
-  /approval-request:
+  /api/v1/approval-request:
     get:
       consumes:
       - application/json
@@ -179,9 +223,11 @@ paths:
           description: Internal server error
           schema:
             $ref: '#/definitions/approver.commonHttpResponse'
+      security:
+      - BasicAuth: []
       summary: Retreives all approval requests
       tags:
-      - approval
+      - approver-service
     post:
       consumes:
       - application/json
@@ -192,7 +238,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/approvals.CreateRequestInput'
+          $ref: '#/definitions/approver.CreateApprovalRequestInput'
       produces:
       - application/json
       responses:
@@ -208,10 +254,12 @@ paths:
           description: 'internal server error" {"success": false}'
           schema:
             $ref: '#/definitions/approver.commonHttpResponse'
+      security:
+      - BasicAuth: []
       summary: Creates approval requests
       tags:
-      - approval
-  /approval-request/{requestUuid}:
+      - approver-service
+  /api/v1/approval-request/{requestUuid}:
     get:
       consumes:
       - application/json
@@ -237,10 +285,12 @@ paths:
           description: Internal server error
           schema:
             $ref: '#/definitions/approver.commonHttpResponse'
+      security:
+      - BasicAuth: []
       summary: Retreives all approval requests
       tags:
-      - approval
-  /approval/{approvalUuid}:
+      - approver-service
+  /api/v1/approval/{approvalUuid}:
     get:
       consumes:
       - application/json
@@ -266,7 +316,9 @@ paths:
           description: Internal server error
           schema:
             $ref: '#/definitions/approver.commonHttpResponse'
+      security:
+      - BasicAuth: []
       summary: Retreives an approval given it's ID
       tags:
-      - approval
+      - approver-service
 swagger: "2.0"

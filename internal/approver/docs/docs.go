@@ -15,8 +15,13 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/approval-request": {
+        "/api/v1/approval-request": {
             "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
                 "description": "This endpoint retrieves all approval requests",
                 "consumes": [
                     "application/json"
@@ -25,7 +30,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "approval"
+                    "approver-service"
                 ],
                 "summary": "Retreives all approval requests",
                 "responses": {
@@ -50,6 +55,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
                 "description": "This endpoint creates approval requests",
                 "consumes": [
                     "application/json"
@@ -58,7 +68,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "approval"
+                    "approver-service"
                 ],
                 "summary": "Creates approval requests",
                 "parameters": [
@@ -68,7 +78,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/approvals.CreateRequestInput"
+                            "$ref": "#/definitions/approver.CreateApprovalRequestInput"
                         }
                     }
                 ],
@@ -94,8 +104,13 @@ const docTemplate = `{
                 }
             }
         },
-        "/approval-request/{requestUuid}": {
+        "/api/v1/approval-request/{requestUuid}": {
             "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
                 "description": "This endpoint retrieves all approval requests",
                 "consumes": [
                     "application/json"
@@ -104,7 +119,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "approval"
+                    "approver-service"
                 ],
                 "summary": "Retreives all approval requests",
                 "parameters": [
@@ -138,8 +153,13 @@ const docTemplate = `{
                 }
             }
         },
-        "/approval/{approvalUuid}": {
+        "/api/v1/approval/{approvalUuid}": {
             "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
                 "description": "This endpoint retrieves an approval given it's ID",
                 "consumes": [
                     "application/json"
@@ -148,7 +168,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "approval"
+                    "approver-service"
                 ],
                 "summary": "Retreives an approval given it's ID",
                 "parameters": [
@@ -184,34 +204,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "approvals.Action": {
-            "type": "object",
-            "properties": {
-                "data": {},
-                "error": {},
-                "happenedAt": {
-                    "type": "string"
-                },
-                "messageId": {
-                    "type": "string"
-                },
-                "platform": {
-                    "type": "string"
-                },
-                "requestUuid": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/approvals.Status"
-                },
-                "targetId": {
-                    "type": "string"
-                },
-                "userId": {
-                    "type": "string"
-                }
-            }
-        },
         "approvals.AuthorizedResponder": {
             "type": "object",
             "properties": {
@@ -226,40 +218,30 @@ const docTemplate = `{
                 }
             }
         },
-        "approvals.CreateRequestInput": {
+        "approvals.CallbackSpec": {
             "type": "object",
             "properties": {
-                "id": {
-                    "description": "Id is the ID of a request which will be the same for all\nrequests of a given type",
-                    "type": "string"
+                "type": {
+                    "description": "Type defines the type of this callback. If this is not specified,\nthe precedence will follow the code tagged with #callback-type-priority",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/approvals.CallbackType"
+                        }
+                    ]
                 },
-                "message": {
-                    "description": "Message is an additional message describing the request",
-                    "type": "string"
-                },
-                "requesterId": {
-                    "description": "RequesterName indicates the requester's system ID",
-                    "type": "string"
-                },
-                "requesterName": {
-                    "description": "RequesterName indicates the requester's name",
-                    "type": "string"
-                },
-                "slack": {
-                    "description": "Slack specifies the targets in Slack to send this request to",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/approvals.SlackRequestSpec"
-                    }
-                },
-                "telegram": {
-                    "description": "Telegram specifies the targets in Telegram to send this request to",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/approvals.TelegramRequestSpec"
-                    }
+                "webhook": {
+                    "$ref": "#/definitions/approvals.WebhookCallbackSpec"
                 }
             }
+        },
+        "approvals.CallbackType": {
+            "type": "string",
+            "enum": [
+                "webhook"
+            ],
+            "x-enum-varnames": [
+                "CallbackWebhook"
+            ]
         },
         "approvals.Notification": {
             "type": "object",
@@ -285,16 +267,20 @@ const docTemplate = `{
                 }
             }
         },
+        "approvals.RequestLinkAttachment": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "approvals.SlackRequestSpec": {
             "type": "object",
             "properties": {
-                "actions": {
-                    "description": "Actions is the audit log trail of any actions taken on the ApprovalRequest\nthat this request specification is attached to",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/approvals.Action"
-                    }
-                },
                 "authorizedResponders": {
                     "description": "AuthorizedResponders is a list of users who are authorized to respond\nto this request",
                     "type": "array",
@@ -325,33 +311,9 @@ const docTemplate = `{
                 }
             }
         },
-        "approvals.Status": {
-            "type": "string",
-            "enum": [
-                "approved",
-                "error",
-                "new",
-                "invalidmfa",
-                "rejected"
-            ],
-            "x-enum-varnames": [
-                "StatusApproved",
-                "StatusError",
-                "StatusNew",
-                "StatusMfaInvalid",
-                "StatusRejected"
-            ]
-        },
         "approvals.TelegramRequestSpec": {
             "type": "object",
             "properties": {
-                "actions": {
-                    "description": "Actions is the audit log trail of any actions taken on the ApprovalRequest\nthat this request specification is attached to",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/approvals.Action"
-                    }
-                },
                 "authorizedResponders": {
                     "description": "AuthorizedResponders is a list of users who are authorized to respond\nto this request",
                     "type": "array",
@@ -371,6 +333,129 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/approvals.Notification"
+                    }
+                }
+            }
+        },
+        "approvals.WebhookCallbackAuthSpec": {
+            "type": "object",
+            "properties": {
+                "basic": {
+                    "$ref": "#/definitions/approvals.WebhookCallbackBasicAuthSpec"
+                },
+                "bearer": {
+                    "$ref": "#/definitions/approvals.WebhookCallbackBearerAuthSpec"
+                },
+                "header": {
+                    "$ref": "#/definitions/approvals.WebhookCallbackHeaderAuthSpec"
+                }
+            }
+        },
+        "approvals.WebhookCallbackBasicAuthSpec": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "approvals.WebhookCallbackBearerAuthSpec": {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "approvals.WebhookCallbackHeaderAuthSpec": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "approvals.WebhookCallbackSpec": {
+            "type": "object",
+            "properties": {
+                "auth": {
+                    "description": "Auth defines the auth mechanism to use when authenticating with\nthe specified ` + "`" + `.Url` + "`" + `",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/approvals.WebhookCallbackAuthSpec"
+                        }
+                    ]
+                },
+                "method": {
+                    "description": "Method defines the HTTP method used when sending the call",
+                    "type": "string"
+                },
+                "retryCount": {
+                    "description": "RetryCount specifies the number of retries that will be made\nif the callback fails. Defaults to 5 with an exponential backoff\nstrategy unless otherwise specfied",
+                    "type": "integer"
+                },
+                "retryIntervalSeconds": {
+                    "description": "RetryIntervalSeconds when specified, forces the retry mechanism\nto perform retries at fxed intervals",
+                    "type": "integer"
+                },
+                "url": {
+                    "description": "Url specifies the URL that will be called with the full approval\nrequest details when a request is approved/rejected",
+                    "type": "string"
+                }
+            }
+        },
+        "approver.CreateApprovalRequestInput": {
+            "type": "object",
+            "properties": {
+                "callback": {
+                    "description": "Callback is a field that when specified, results in the approver\nservice processing a callback to the specified endpoint",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/approvals.CallbackSpec"
+                        }
+                    ]
+                },
+                "id": {
+                    "description": "Id is the ID of a request which will be the same for all\nrequests of a given type",
+                    "type": "string"
+                },
+                "links": {
+                    "description": "Links will be included in the approval request's message body",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.RequestLinkAttachment"
+                    }
+                },
+                "message": {
+                    "description": "Message is an additional message describing the request",
+                    "type": "string"
+                },
+                "requesterId": {
+                    "description": "RequesterName indicates the requester's system ID",
+                    "type": "string"
+                },
+                "requesterName": {
+                    "description": "RequesterName indicates the requester's name",
+                    "type": "string"
+                },
+                "slack": {
+                    "description": "Slack specifies the targets in Slack to send this request to",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.SlackRequestSpec"
+                    }
+                },
+                "telegram": {
+                    "description": "Telegram specifies the targets in Telegram to send this request to",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/approvals.TelegramRequestSpec"
                     }
                 }
             }
