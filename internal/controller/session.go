@@ -3,14 +3,14 @@ package controller
 import (
 	"net/http"
 	"opsicle/internal/common"
-
-	"github.com/gorilla/mux"
 )
 
-func registerSessionRoutesV1(router *mux.Router, serviceLogs chan<- common.ServiceLog) {
-	router.HandleFunc("", createSessionHandlerV1).Methods(http.MethodPost)
-	router.HandleFunc("", getSessionHandlerV1).Methods(http.MethodGet)
-	router.HandleFunc("", stopSessionHandlerV1).Methods(http.MethodDelete)
+func registerSessionRoutes(opts RouteRegistrationOpts) {
+	v1 := opts.Router.PathPrefix("/v1/session").Subrouter()
+
+	v1.HandleFunc("", createSessionHandlerV1).Methods(http.MethodPost)
+	v1.HandleFunc("", getSessionHandlerV1).Methods(http.MethodGet)
+	v1.HandleFunc("", stopSessionHandlerV1).Methods(http.MethodDelete)
 }
 
 func createSessionHandlerV1(w http.ResponseWriter, r *http.Request) {

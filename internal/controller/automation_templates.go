@@ -1,48 +1,44 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"opsicle/internal/common"
 
 	"github.com/gorilla/mux"
 )
 
-func registerAutomationTemplatesRoutesV1(router *mux.Router, serviceLogs chan<- common.ServiceLog) {
-	requiresAuth := getRouteAuther(serviceLogs)
+func registerAutomationTemplatesRoutes(opts RouteRegistrationOpts) {
+	requiresAuth := getRouteAuther(opts.ServiceLogs)
 
-	createAutomationTemplateHandler := getCreateAutomationTemplateV1(serviceLogs)
-	router.Handle("", requiresAuth(createAutomationTemplateHandler)).Methods(http.MethodPost)
+	v1 := opts.Router.PathPrefix("/v1/automation-templates").Subrouter()
 
-	listAutomationTemplateHandler := getListAutomationTemplatesV1(serviceLogs)
-	router.Handle("", requiresAuth(listAutomationTemplateHandler)).Methods(http.MethodGet)
-
-	getAutomationTemplateHandler := getGetAutomationTemplateV1(serviceLogs)
-	router.Handle("/{id}", requiresAuth(getAutomationTemplateHandler)).Methods(http.MethodGet)
+	v1.Handle("", requiresAuth(http.HandlerFunc(createAutomationTemplateHandlerV1))).Methods(http.MethodPost)
+	v1.Handle("", requiresAuth(http.HandlerFunc(listAutomationTemplatesHandlerV1))).Methods(http.MethodGet)
+	v1.Handle("/{id}", requiresAuth(http.HandlerFunc(getAutomationTemplateHandlerV1))).Methods(http.MethodGet)
 }
 
-func getCreateAutomationTemplateV1(serviceLogs chan<- common.ServiceLog) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "creating automation template...")
-		w.Write([]byte("create"))
-	}
+func createAutomationTemplateHandlerV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	log(common.LogLevelDebug, "this endpoint handles creation of an automation template")
+	w.Write([]byte("create"))
 }
 
-func getGetAutomationTemplateV1(serviceLogs chan<- common.ServiceLog) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		automationTemplateId := vars["id"]
-		authDetails, ok := r.Context().Value(authRequestContext).(auth)
-		if !ok {
-			common.SendHttpFailResponse(w, r, http.StatusTooEarly, "not implemented yet", nil)
-			return
-		}
-		serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "role[%s] requested retrieval of automationTemplate[%s] from organisation[%s]", authDetails.OrganizationRoleId, automationTemplateId, authDetails.OrganizationId)
-		common.SendHttpSuccessResponse(w, r, http.StatusTooEarly, "not implemented yet")
+func getAutomationTemplateHandlerV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	vars := mux.Vars(r)
+	automationTemplateId := vars["id"]
+	currentUser, ok := r.Context().Value(authRequestContext).(identity)
+	if !ok {
+		common.SendHttpFailResponse(w, r, http.StatusTooEarly, "not implemented yet", nil)
+		return
 	}
+	log(common.LogLevelDebug, fmt.Sprintf("role[%s] requested retrieval of automationTemplate[%s] from organisation[%s]", currentUser.OrganizationRoleId, automationTemplateId, currentUser.OrganizationId))
+	common.SendHttpSuccessResponse(w, r, http.StatusTooEarly, "not implemented yet")
 }
 
-func getListAutomationTemplatesV1(serviceLogs chan<- common.ServiceLog) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("list"))
-	}
+func listAutomationTemplatesHandlerV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	log(common.LogLevelInfo, "this endpoint lists automation templates")
+	w.Write([]byte("list"))
 }

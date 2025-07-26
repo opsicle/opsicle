@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"database/sql"
 	"net/http"
 	"opsicle/internal/common"
 
@@ -8,18 +9,36 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func GetHttpApplication(
-	serviceLogs chan<- common.ServiceLog,
-) http.Handler {
+type HttpApplicationOpts struct {
+	AdminToken         string
+	DatabaseConnection *sql.DB
+	ServiceLogs        chan<- common.ServiceLog
+}
+
+func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
+	db = opts.DatabaseConnection
+
 	handler := mux.NewRouter()
 	handler.NotFoundHandler = common.GetNotFoundHandler()
 
 	handler.Handle("/metrics", promhttp.Handler())
-	api := handler.PathPrefix("/api").Subrouter()
-	apiV1 := api.PathPrefix("/v1").Subrouter()
+	admin := handler.PathPrefix("/admin").Subrouter()
 
-	registerAutomationTemplatesRoutesV1(apiV1.PathPrefix("/automation-templates").Subrouter(), serviceLogs)
-	registerSessionRoutesV1(apiV1.PathPrefix("/session").Subrouter(), serviceLogs)
+	if opts.AdminToken != "" {
+		registerAdminRoutes(RouteRegistrationOpts{
+			Router:      admin,
+			ServiceLogs: opts.ServiceLogs,
+		}, opts.AdminToken)
+	}
+
+	api := handler.PathPrefix("/api").Subrouter()
+	apiOpts := RouteRegistrationOpts{
+		Router:      api,
+		ServiceLogs: opts.ServiceLogs,
+	}
+
+	registerAutomationTemplatesRoutes(apiOpts)
+	registerSessionRoutes(apiOpts)
 
 	return handler
 }

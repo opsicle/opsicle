@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS `users` (
     id            VARCHAR(36) PRIMARY KEY,
     email         VARCHAR(255) NOT NULL UNIQUE,
     password_hash TEXT,
+    `type`        VARCHAR(64) DEFAULT 'standard',
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME DEFAULT NULL
 );

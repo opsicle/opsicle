@@ -10,7 +10,7 @@ type requestContextType string
 
 const authRequestContext requestContextType = "auth"
 
-type auth struct {
+type identity struct {
 	// OrganizationId is the ID of the current caller's organization
 	OrganizationId string `json:"organizationId"`
 
@@ -26,11 +26,11 @@ func getRouteAuther(serviceLogs chan<- common.ServiceLog) func(http.Handler) htt
 			// bearerToken := r.Header.Get("Authorization")
 			// TODO: check which organisation they're from
 			serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "auth middleware executing")
-			authDetails := auth{
+			identityInstance := identity{
 				OrganizationId:     "todo:id",
 				OrganizationRoleId: "todo:roleId",
 			}
-			authContext := context.WithValue(r.Context(), authRequestContext, authDetails)
+			authContext := context.WithValue(r.Context(), authRequestContext, identityInstance)
 			next.ServeHTTP(w, r.WithContext(authContext))
 		})
 	}

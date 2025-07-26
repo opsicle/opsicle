@@ -5,13 +5,21 @@ import (
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/controller"
+	"opsicle/internal/database"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 var flags cli.Flags = cli.Flags{
+	{
+		Name:         "admin-token",
+		DefaultValue: "",
+		Usage:        "specify this to enable usage of the admin endpoints, send this in the Authorization header as a Bearer token",
+		Type:         cli.FlagTypeString,
+	},
 	{
 		Name:         "storage-path",
 		DefaultValue: "./.opsicle",
@@ -81,12 +89,42 @@ var Command = &cobra.Command{
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		logrus.Debugf("starting logging engine...")
 		serviceLogs := make(chan common.ServiceLog, 64)
-		httpServerDone := make(chan common.Done)
 		common.StartServiceLogLoop(serviceLogs)
+		logrus.Debugf("started logging engine")
 
-		controllerHandler := controller.GetHttpApplication(serviceLogs)
+		logrus.Infof("establishing connection to database...")
+		databaseConnection, err := database.ConnectMysql(database.ConnectOpts{
+			ConnectionId: "opsicle/controller",
+			Host:         viper.GetString("db-host"),
+			Port:         viper.GetInt("db-port"),
+			Username:     viper.GetString("db-user"),
+			Password:     viper.GetString("db-password"),
+			Database:     viper.GetString("db-name"),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to establish connection to database: %s", err)
+		}
+		logrus.Debugf("established connection to database")
 
+		logrus.Infof("initialising application...")
+		controllerOpts := controller.HttpApplicationOpts{
+			DatabaseConnection: databaseConnection,
+			ServiceLogs:        serviceLogs,
+		}
+		adminToken := viper.GetString("admin-token")
+		if adminToken != "" {
+			if len(adminToken) < 36 {
+				return fmt.Errorf("admin token must be 36 characters or longer for security purposes (hint: use a uuid)")
+			}
+			controllerOpts.AdminToken = adminToken
+		}
+		controllerHandler := controller.GetHttpApplication(controllerOpts)
+		logrus.Debugf("initialised application")
+
+		logrus.Infof("initialising server...")
+		httpServerDone := make(chan common.Done)
 		listenAddress := viper.GetString("listen-addr")
 		server, err := common.NewHttpServer(common.NewHttpServerOpts{
 			Addr:        listenAddress,
@@ -97,9 +135,11 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create new http server: %s", err)
 		}
+		logrus.Debugf("initialised server")
+		logrus.Infof("starting server...")
 		if err := server.Start(); err != nil {
 			return fmt.Errorf("failed to start http server: %s", err)
 		}
-		return cmd.Help()
+		return nil
 	},
 }
