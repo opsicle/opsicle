@@ -19,12 +19,20 @@ import (
 	"github.com/spf13/viper"
 )
 
+var availableLogLevels = []string{
+	string(common.LogLevelTrace),
+	string(common.LogLevelDebug),
+	string(common.LogLevelInfo),
+	string(common.LogLevelWarn),
+	string(common.LogLevelError),
+}
+
 var flags cli.Flags = cli.Flags{
 	{
 		Name:         "log-level",
 		Short:        'l',
 		DefaultValue: "info",
-		Usage:        fmt.Sprintf("sets the log level (one of [%s])", strings.Join(common.LogLevels, ", ")),
+		Usage:        fmt.Sprintf("sets the log level (one of [%s])", strings.Join(availableLogLevels, ", ")),
 		Type:         cli.FlagTypeString,
 	},
 	{
@@ -53,7 +61,7 @@ func init() {
 		configPath := viper.GetString("config-path")
 		logrus.Debugf("using configuration at path[%s]", configPath)
 		if err := config.LoadGlobal(configPath); err != nil {
-			logrus.Errorf("failed to load global configuration: %s", err)
+			logrus.Warnf("failed to load global configuration: %s", err)
 		}
 	})
 

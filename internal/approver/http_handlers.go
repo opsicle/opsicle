@@ -183,9 +183,3 @@ func getListApprovalRequestsHandler() http.HandlerFunc {
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", keys)
 	}
 }
-
-func getNotFoundHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		common.SendHttpFailResponse(w, r, http.StatusNotFound, "not found", fmt.Errorf("endpoint[%s] not found", r.URL.Path))
-	}
-}

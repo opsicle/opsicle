@@ -26,11 +26,11 @@ type Resource struct {
 }
 
 type ServiceLog struct {
-	Level   string `json:"level"`
-	Message string `json:"message"`
+	Level   LogLevel `json:"level"`
+	Message string   `json:"message"`
 }
 
-func ServiceLogf(level, text string, f ...any) ServiceLog {
+func ServiceLogf(level LogLevel, text string, f ...any) ServiceLog {
 	return ServiceLog{
 		Level:   level,
 		Message: fmt.Sprintf(text, f...),

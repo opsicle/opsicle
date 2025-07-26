@@ -16,14 +16,30 @@ services:
   #   ports:
   #     - "8080:8080"
 
+  mysql:
+    image: mysql:8
+    container_name: database
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: opsicle
+      MYSQL_USER: opsicle
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./data/.mysql:/var/lib/mysql
+
   redis:
     image: redis:7-alpine
+    container_name: cache
+    restart: unless-stopped
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "6379:6379"
     volumes:
       - ./data/.redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
       - ./data/.redis/data/redis-data:/data
-    ports:
-      - "6379:6379"
 
 volumes:
   redis-data:

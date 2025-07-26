@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
+	"opsicle/internal/controller"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "fs-storage-path",
-		Short:        'p',
+		Name:         "storage-path",
 		DefaultValue: "./.opsicle",
 		Usage:        "specifies the path to a directory where Opsicle data resides",
 		Type:         cli.FlagTypeString,
@@ -20,8 +21,15 @@ var flags cli.Flags = cli.Flags{
 	{
 		Name:         "db-host",
 		Short:        'H',
-		DefaultValue: "localhost:5432",
-		Usage:        "specifies the hostname (including port) of the database",
+		DefaultValue: "127.0.0.1",
+		Usage:        "specifies the hostname of the database",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "db-port",
+		Short:        'P',
+		DefaultValue: "3306",
+		Usage:        "specifies the port which the database is listening on",
 		Type:         cli.FlagTypeString,
 	},
 	{
@@ -40,9 +48,15 @@ var flags cli.Flags = cli.Flags{
 	},
 	{
 		Name:         "db-password",
-		Short:        'P',
-		DefaultValue: "opsicle",
+		Short:        'p',
+		DefaultValue: "password",
 		Usage:        "specifies the password to use to login",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "listen-addr",
+		DefaultValue: "0.0.0.0:54321",
+		Usage:        "specifies the listen address of the server",
 		Type:         cli.FlagTypeString,
 	},
 	{
@@ -67,6 +81,25 @@ var Command = &cobra.Command{
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		serviceLogs := make(chan common.ServiceLog, 64)
+		httpServerDone := make(chan common.Done)
+		common.StartServiceLogLoop(serviceLogs)
+
+		controllerHandler := controller.GetHttpApplication(serviceLogs)
+
+		listenAddress := viper.GetString("listen-addr")
+		server, err := common.NewHttpServer(common.NewHttpServerOpts{
+			Addr:        listenAddress,
+			Done:        httpServerDone,
+			Handler:     controllerHandler,
+			ServiceLogs: serviceLogs,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create new http server: %s", err)
+		}
+		if err := server.Start(); err != nil {
+			return fmt.Errorf("failed to start http server: %s", err)
+		}
 		return cmd.Help()
 	},
 }

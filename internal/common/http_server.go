@@ -52,6 +52,7 @@ type NewHttpServerIpAllowlistOpts struct {
 
 func NewHttpServer(opts NewHttpServerOpts) (*HttpServer, error) {
 	logger := GetRequestLoggerMiddleware(opts.ServiceLogs)
+	metrics := GetCommonMetricsMiddleware(opts.ServiceLogs)
 
 	var handler http.Handler = opts.Handler
 
@@ -89,7 +90,7 @@ func NewHttpServer(opts NewHttpServerOpts) (*HttpServer, error) {
 		handler = ipAllowLister(handler)
 	}
 
-	handler = logger(handler)
+	handler = logger(metrics(handler))
 
 	return &HttpServer{
 		Done: opts.Done,

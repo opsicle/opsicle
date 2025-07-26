@@ -7,7 +7,7 @@ import (
 )
 
 func InitLogging(logLevel string) {
-	switch logLevel {
+	switch common.LogLevel(logLevel) {
 	case common.LogLevelTrace:
 		logrus.SetLevel(logrus.TraceLevel)
 	case common.LogLevelDebug:

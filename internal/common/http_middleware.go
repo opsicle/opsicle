@@ -17,7 +17,16 @@ const (
 	HttpContextLogger    HttpContextKey = "http-logger"
 )
 
-type HttpRequestLogger func(string, string)
+type HttpRequestLogger func(LogLevel, string)
+
+func GetCommonMetricsMiddleware(serviceLogs chan<- ServiceLog) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			incomingRequestsCounter.WithLabelValues(r.Method, r.URL.Path).Inc()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 
 func GetRequestLoggerMiddleware(serviceLogs chan<- ServiceLog) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -30,7 +39,7 @@ func GetRequestLoggerMiddleware(serviceLogs chan<- ServiceLog) func(http.Handler
 				requestId = uuid.New().String()
 			}
 			requestContext := context.WithValue(r.Context(), HttpContextRequestId, requestId)
-			requestContext = context.WithValue(requestContext, HttpContextLogger, HttpRequestLogger(func(level string, message string) {
+			requestContext = context.WithValue(requestContext, HttpContextLogger, HttpRequestLogger(func(level LogLevel, message string) {
 				serviceLogs <- ServiceLogf(level, "req[%s] %s", requestId, message)
 			}))
 			serviceLogs <- ServiceLogf(LogLevelDebug, "req[%s] received %s at %s", requestId, r.Method, r.RequestURI)

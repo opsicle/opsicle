@@ -6,15 +6,17 @@ const (
 	DefaultDurationConnectionTimeout = 10 * time.Second
 )
 
+type LogLevel string
+
 const (
-	LogLevelTrace = "trace"
-	LogLevelDebug = "debug"
-	LogLevelInfo  = "info"
-	LogLevelWarn  = "warn"
-	LogLevelError = "error"
+	LogLevelTrace LogLevel = "trace"
+	LogLevelDebug LogLevel = "debug"
+	LogLevelInfo  LogLevel = "info"
+	LogLevelWarn  LogLevel = "warn"
+	LogLevelError LogLevel = "error"
 )
 
-var LogLevels = []string{
+var LogLevels = []LogLevel{
 	LogLevelTrace,
 	LogLevelDebug,
 	LogLevelInfo,

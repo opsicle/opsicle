@@ -91,6 +91,9 @@ docs_approver:
 		--output ./internal/approver/docs \
 		--parseDependencyLevel 1
 
+migration:
+	migrate create -dir ./internal/database/migrations -ext sql new
+
 #                .__                               
 # _______   ____ |  |   ____ _____    ______ ____  
 # \_  __ \_/ __ \|  | _/ __ \\__  \  /  ___// __ \ 

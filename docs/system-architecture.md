@@ -2,6 +2,43 @@
 
 This page documents the architecture of Opsicle at various levels
 
+## Deployment
+
+> Last updated 2025-07-26
+
+```mermaid
+flowchart LR;
+  approver[Approver]
+  cache[Cache]
+  controller[Controller]
+  database[Database]
+  idp[[Identity Provider]]
+  slack[Slack]
+  telegram[Telegram]
+  webapp[Web Application]
+  user((User))
+  subgraph Data Persistence
+  database
+  cache
+  end
+  subgraph Applications
+  controller--->|stores all data|database
+  controller--->|stores session info|cache
+  approver<--->|stores state of approval requests|cache
+  controller--->|sends approval requests|approver
+  approver-.->|pingback via webhook|controller
+  webapp--->|via API calls|controller
+  end
+  subgraph External Systems
+  idp
+  approver--->|via Bot API|telegram
+  approver--->|via Slack App|slack
+  controller--->idp
+  end
+  user--->|via Browser|webapp
+  user--->|via CLI tool|controller
+```
+
 ## Request Flows
 
 ### Fully managed model
