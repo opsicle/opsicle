@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"opsicle/internal/common"
 
+	"opsicle/internal/approver/docs"
 	_ "opsicle/internal/approver/docs"
 
 	"github.com/gorilla/mux"
 	httpSwagger "github.com/swaggo/http-swagger"
+	"github.com/swaggo/swag"
 )
 
 type StartHttpServerOpts struct {
@@ -48,6 +50,7 @@ func StartHttpServer(opts StartHttpServerOpts) error {
 		}
 	}
 
+	swag.Register(docs.SwaggerInfo.InstanceName(), docs.SwaggerInfo)
 	router.PathPrefix("/docs").Handler(httpSwagger.WrapHandler)
 
 	router.NotFoundHandler = common.GetNotFoundHandler()

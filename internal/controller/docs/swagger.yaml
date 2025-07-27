@@ -1,0 +1,92 @@
+definitions:
+  controller.commonHttpResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  controller.handleCreateSessionV1Input:
+    properties:
+      email:
+        description: Email is the user's email address
+        type: string
+      password:
+        description: Password is the user's password
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /api/v1/session:
+    delete:
+      consumes:
+      - application/json
+      description: This endpoint deletes the session which the user is currently using
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+        "403":
+          description: forbidden
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+      security:
+      - BearerAuth: []
+      summary: Logs the current user out
+      tags:
+      - controller-service
+    get:
+      consumes:
+      - application/json
+      description: This endpoint returns information about the user's current session
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+        "403":
+          description: forbidden
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieves the user's current session
+      tags:
+      - controller-service
+    post:
+      consumes:
+      - application/json
+      description: This endpoint creates a session for the user
+      parameters:
+      - description: User credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controller.handleCreateSessionV1Input'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+        "403":
+          description: forbidden
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+        "500":
+          description: internal server error
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+      summary: Creates a session for the user credentials specified in the body
+      tags:
+      - controller-service
+swagger: "2.0"

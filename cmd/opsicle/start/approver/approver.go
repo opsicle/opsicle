@@ -3,6 +3,7 @@ package approver
 import (
 	"fmt"
 	"opsicle/internal/approver"
+	"opsicle/internal/cache"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"strings"
@@ -137,7 +138,7 @@ var Command = &cobra.Command{
 		isRedisEnabled := viper.GetBool("redis-enabled")
 		logrus.Debugf("redis-enabled status: %v", isRedisEnabled)
 		if isRedisEnabled {
-			if err := approver.InitRedisCache(approver.InitRedisCacheOpts{
+			if err := cache.InitRedis(cache.InitRedisOpts{
 				Addr:        viper.GetString("redis-addr"),
 				Username:    viper.GetString("redis-username"),
 				Password:    viper.GetString("redis-password"),

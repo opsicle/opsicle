@@ -1,4 +1,4 @@
-package approver
+package cache
 
 import (
 	"fmt"
@@ -6,8 +6,8 @@ import (
 	"opsicle/internal/integrations/redis"
 )
 
-// InitRedisCacheOpts configures the InitRedisCache method
-type InitRedisCacheOpts struct {
+// InitRedisOpts configures the InitRedis method
+type InitRedisOpts struct {
 	Addr     string
 	Username string
 	Password string
@@ -15,8 +15,8 @@ type InitRedisCacheOpts struct {
 	ServiceLogs chan<- common.ServiceLog
 }
 
-// InitRedisCache initialises a singleton instance of a Redis cache
-func InitRedisCache(opts InitRedisCacheOpts) error {
+// InitRedis initialises a singleton instance of a Redis cache
+func InitRedis(opts InitRedisOpts) error {
 	client, err := redis.New(redis.NewOpts{
 		Addr:           opts.Addr,
 		Username:       opts.Username,
@@ -27,6 +27,6 @@ func InitRedisCache(opts InitRedisCacheOpts) error {
 	if err != nil {
 		return fmt.Errorf("failed to create redis client: %s", err)
 	}
-	Cache = client
+	instance = client
 	return nil
 }

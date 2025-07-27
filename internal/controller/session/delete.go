@@ -1,0 +1,30 @@
+package session
+
+import (
+	"fmt"
+	"opsicle/internal/auth"
+	"opsicle/internal/cache"
+	"strings"
+)
+
+type DeleteV1Opts struct {
+	BearerToken string
+	CachePrefix string
+}
+
+func DeleteV1(opts DeleteV1Opts) (string, error) {
+	claims, err := auth.ValidateJWT(secretSessionKey, opts.BearerToken)
+	if err != nil {
+		return "", fmt.Errorf("failed to validate token: %s", err)
+	}
+	sessionId := claims.ID
+
+	cacheKey := strings.Join([]string{opts.CachePrefix, claims.UserID, sessionId}, ":")
+	if _, err := cache.Get().Get(cacheKey); err != nil {
+		return "", fmt.Errorf("failed to retrieve session from cache: %s", err)
+	}
+	if err := cache.Get().Del(cacheKey); err != nil {
+		return "", fmt.Errorf("failed to delete session from cache: %s", err)
+	}
+	return sessionId, nil
+}

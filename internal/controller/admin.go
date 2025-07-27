@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"opsicle/internal/auth"
 	"opsicle/internal/common"
+	"opsicle/internal/controller/user"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 func registerAdminRoutes(opts RouteRegistrationOpts, adminToken string) {
@@ -40,28 +38,15 @@ func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", nil)
 		return
 	}
-	userUuid := uuid.New().String()
-	passwordHash, err := auth.HashPassword(input.Password)
-	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to hash password", nil)
-		return
-	}
+	if err := user.CreateV1(user.CreateV1Opts{
+		Db: db,
 
-	stmt, err := db.Prepare("INSERT INTO users(id, email, password_hash, type) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to prepare insert statement", err)
+		Email:    input.Email,
+		Password: input.Password,
+		Type:     user.TypeSysAdmin,
+	}); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user", err)
 		return
-	}
-
-	res, err := stmt.Exec(userUuid, input.Email, passwordHash, "sysadmin")
-	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to execute insert statement", err)
-		return
-	}
-
-	rowsAffected, err := res.RowsAffected()
-	if err == nil {
-		log(common.LogLevelInfo, fmt.Sprintf("%v row(s) created in the users table", rowsAffected))
 	}
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "user created")

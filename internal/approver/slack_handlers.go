@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"opsicle/internal/approvals"
 	"opsicle/internal/auth"
+	"opsicle/internal/cache"
 	"opsicle/internal/common"
 	"time"
 
@@ -69,6 +70,7 @@ type handleSlackApprovalOpts struct {
 }
 
 func handleSlackApproval(opts handleSlackApprovalOpts) {
+	cacheInstance := cache.Get()
 	if opts.SlackTarget.MfaSeed != nil {
 		pendingMfaCacheKey := CreatePendingMfaCacheKey(opts.ChannelId, opts.UserId)
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "creating cache with key[%s]...", pendingMfaCacheKey)
@@ -81,7 +83,7 @@ func handleSlackApproval(opts handleSlackApprovalOpts) {
 			UserId:                   opts.UserId,
 		}
 		pendingMfaString, _ := json.Marshal(pendingMfaData)
-		if err := Cache.Set(pendingMfaCacheKey, string(pendingMfaString), 60*time.Second); err != nil {
+		if err := cacheInstance.Set(pendingMfaCacheKey, string(pendingMfaString), 60*time.Second); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to set cache item with key[%s]", pendingMfaCacheKey)
 			return
 		}

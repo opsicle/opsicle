@@ -90,6 +90,14 @@ docs_approver:
 		--tags approver-service \
 		--output ./internal/approver/docs \
 		--parseDependencyLevel 1
+	sed -i 's|swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)||g' ./internal/approver/docs/docs.go
+
+docs_controller:
+	swag init \
+		--tags controller-service \
+		--output ./internal/controller/docs \
+		--parseDependencyLevel 1
+	sed -i 's|swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)||g' ./internal/controller/docs/docs.go
 
 migration:
 	migrate create -dir ./internal/database/migrations -ext sql new

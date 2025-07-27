@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"opsicle/internal/approvals"
+	"opsicle/internal/cache"
 	"time"
 )
 
@@ -12,21 +13,23 @@ type ApprovalRequest struct {
 }
 
 func (req *ApprovalRequest) Create() error {
+	cacheInstance := cache.Get()
 	cacheKey := CreateApprovalRequestCacheKey(req.Spec.GetUuid())
 	cacheData, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal approvalRequest[%s]: %s", req.Spec.GetUuid(), err)
 	}
 	expiryDuration := time.Duration(req.Spec.TtlSeconds)*time.Second + time.Hour
-	if err := Cache.Set(cacheKey, string(cacheData), expiryDuration); err != nil {
+	if err := cacheInstance.Set(cacheKey, string(cacheData), expiryDuration); err != nil {
 		return fmt.Errorf("failed to set cache for approvalRequest[%s]: %s", req.Spec.GetUuid(), err)
 	}
 	return nil
 }
 
 func (req *ApprovalRequest) Exists() bool {
+	cacheInstance := cache.Get()
 	cacheKey := CreateApprovalRequestCacheKey(req.Spec.GetUuid())
-	if _, err := Cache.Get(cacheKey); err != nil {
+	if _, err := cacheInstance.Get(cacheKey); err != nil {
 		return false
 	}
 	return true
@@ -63,8 +66,9 @@ func (req *ApprovalRequest) Update() error {
 }
 
 func (req *ApprovalRequest) Load() error {
+	cacheInstance := cache.Get()
 	cacheKey := CreateApprovalRequestCacheKey(req.Spec.GetUuid())
-	value, err := Cache.Get(cacheKey)
+	value, err := cacheInstance.Get(cacheKey)
 	if err != nil {
 		return fmt.Errorf("failed to get approvalRequest[%s]: %s", cacheKey, err)
 	}

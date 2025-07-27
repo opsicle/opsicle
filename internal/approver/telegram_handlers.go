@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"opsicle/internal/approvals"
 	"opsicle/internal/auth"
+	"opsicle/internal/cache"
 	"opsicle/internal/common"
 	"opsicle/internal/integrations/telegram"
 	"strconv"
@@ -220,6 +221,7 @@ func handleTelegramMfaRequired(opts handleTelegramResponseOpts, target *approval
 	); err != nil {
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to update message[%v] in chat[%v]: %s", opts.MessageId, opts.ChatId, err)
 	}
+	cacheInstance := cache.Get()
 	pendingMfaCacheKey := CreatePendingMfaCacheKey(
 		fmt.Sprintf("%v", opts.ChatId),
 		fmt.Sprintf("%v", opts.SenderId),
@@ -233,7 +235,7 @@ func handleTelegramMfaRequired(opts handleTelegramResponseOpts, target *approval
 		UserId:                   fmt.Sprintf("%v", opts.SenderId),
 	}
 	pendingMfaString, _ := json.Marshal(pendingMfaData)
-	if err := Cache.Set(pendingMfaCacheKey, string(pendingMfaString), 60*time.Second); err != nil {
+	if err := cacheInstance.Set(pendingMfaCacheKey, string(pendingMfaString), 60*time.Second); err != nil {
 		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to set cache with key[%s]: %s", pendingMfaCacheKey, err)
 		if err := opts.Bot.ReplyMessage(opts.ChatId, opts.MessageId, getTelegramSystemErrorMessage()); err != nil {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
@@ -327,9 +329,10 @@ type handleTelegramMfaResponseOpts struct {
 }
 
 func handleTelegramMfaResponse(opts handleTelegramMfaResponseOpts) {
+	cacheInstance := cache.Get()
 	mfaToken := opts.Message
 	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelInfo, "processing mfa token from chat[%v] << %s", opts.ChatId, mfaToken)
-	pendingMfaString, err := Cache.Get(CreatePendingMfaCacheKey(
+	pendingMfaString, err := cacheInstance.Get(CreatePendingMfaCacheKey(
 		fmt.Sprintf("%v", opts.ChatId),
 		fmt.Sprintf("%v", opts.SenderId),
 	))

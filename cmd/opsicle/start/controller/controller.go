@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"opsicle/internal/cache"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/controller"
@@ -27,38 +28,56 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "db-host",
+		Name:         "mysql-host",
 		Short:        'H',
 		DefaultValue: "127.0.0.1",
 		Usage:        "specifies the hostname of the database",
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "db-port",
+		Name:         "mysql-port",
 		Short:        'P',
 		DefaultValue: "3306",
 		Usage:        "specifies the port which the database is listening on",
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "db-name",
+		Name:         "mysql-database",
 		Short:        'N',
 		DefaultValue: "opsicle",
 		Usage:        "specifies the name of the central database schema",
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "db-user",
+		Name:         "mysql-user",
 		Short:        'U',
 		DefaultValue: "opsicle",
 		Usage:        "specifies the username to use to login",
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "db-password",
+		Name:         "mysql-password",
 		Short:        'p',
 		DefaultValue: "password",
 		Usage:        "specifies the password to use to login",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "redis-addr",
+		DefaultValue: "localhost:6379",
+		Usage:        "defines the hostname (including port) of the redis server",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "redis-username",
+		DefaultValue: "opsicle",
+		Usage:        "defines the username used to login to redis",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "redis-password",
+		DefaultValue: "password",
+		Usage:        "defines the password used to login to redis",
 		Type:         cli.FlagTypeString,
 	},
 	{
@@ -97,16 +116,27 @@ var Command = &cobra.Command{
 		logrus.Infof("establishing connection to database...")
 		databaseConnection, err := database.ConnectMysql(database.ConnectOpts{
 			ConnectionId: "opsicle/controller",
-			Host:         viper.GetString("db-host"),
-			Port:         viper.GetInt("db-port"),
-			Username:     viper.GetString("db-user"),
-			Password:     viper.GetString("db-password"),
-			Database:     viper.GetString("db-name"),
+			Host:         viper.GetString("mysql-host"),
+			Port:         viper.GetInt("mysql-port"),
+			Username:     viper.GetString("mysql-user"),
+			Password:     viper.GetString("mysql-password"),
+			Database:     viper.GetString("mysql-database"),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to establish connection to database: %s", err)
 		}
 		logrus.Debugf("established connection to database")
+
+		logrus.Infof("establishing connection to cache...")
+		if err := cache.InitRedis(cache.InitRedisOpts{
+			Addr:        viper.GetString("redis-addr"),
+			Username:    viper.GetString("redis-username"),
+			Password:    viper.GetString("redis-password"),
+			ServiceLogs: serviceLogs,
+		}); err != nil {
+			return fmt.Errorf("failed to initialise redis cache: %s", err)
+		}
+		logrus.Debugf("established connection to cache")
 
 		logrus.Infof("initialising application...")
 		controllerOpts := controller.HttpApplicationOpts{

@@ -5,6 +5,8 @@ import (
 	"opsicle/cmd/opsicle/create"
 	"opsicle/cmd/opsicle/get"
 	"opsicle/cmd/opsicle/list"
+	"opsicle/cmd/opsicle/login"
+	"opsicle/cmd/opsicle/logout"
 	"opsicle/cmd/opsicle/run"
 	"opsicle/cmd/opsicle/start"
 	"opsicle/cmd/opsicle/validate"
@@ -48,6 +50,8 @@ func init() {
 	Command.AddCommand(create.Command)
 	Command.AddCommand(get.Command)
 	Command.AddCommand(list.Command)
+	Command.AddCommand(login.Command)
+	Command.AddCommand(logout.Command)
 	Command.AddCommand(run.Command)
 	Command.AddCommand(start.Command)
 	Command.AddCommand(validate.Command)
@@ -60,9 +64,7 @@ func init() {
 		cli.InitLogging(viper.GetString("log-level"))
 		configPath := viper.GetString("config-path")
 		logrus.Debugf("using configuration at path[%s]", configPath)
-		if err := config.LoadGlobal(configPath); err != nil {
-			logrus.Warnf("failed to load global configuration: %s", err)
-		}
+		config.LoadGlobal(configPath)
 	})
 
 	cli.InitConfig()

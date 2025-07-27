@@ -5,8 +5,13 @@ import (
 	"net/http"
 	"opsicle/internal/common"
 
+	"opsicle/internal/controller/docs"
+	_ "opsicle/internal/controller/docs"
+
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	httpSwagger "github.com/swaggo/http-swagger"
+	"github.com/swaggo/swag"
 )
 
 type HttpApplicationOpts struct {
@@ -15,6 +20,20 @@ type HttpApplicationOpts struct {
 	ServiceLogs        chan<- common.ServiceLog
 }
 
+// GetHttpApplication godoc
+// @title           Opsicle Controller Service
+// @version         1.0
+// @description     API for Opsicle Controller
+// @contact.name		API Support
+// @contact.email		support@opsicle.io
+// @tags 					  controller-service
+// @host            localhost:54321
+// @BasePath        /
+//
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description			Used for authenticating with endpoints
 func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 	db = opts.DatabaseConnection
 
@@ -39,6 +58,9 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 
 	registerAutomationTemplatesRoutes(apiOpts)
 	registerSessionRoutes(apiOpts)
+
+	swag.Register(docs.SwaggerInfo.InstanceName(), docs.SwaggerInfo)
+	handler.PathPrefix("/docs").Handler(httpSwagger.WrapHandler)
 
 	return handler
 }

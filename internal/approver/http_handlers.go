@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"opsicle/internal/cache"
 	"opsicle/internal/common"
 
 	"opsicle/pkg/approver"
@@ -95,6 +96,7 @@ func getCreateApprovalRequestHandler() http.HandlerFunc {
 // @Failure      500 {object} commonHttpResponse "Internal server error"
 // @Router       /api/v1/approval/{approvalUuid} [get]
 func getGetApprovalHandler() http.HandlerFunc {
+	cacheInstance := cache.Get()
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 		approvalUuid := mux.Vars(r)["approvalUuid"]
@@ -102,7 +104,7 @@ func getGetApprovalHandler() http.HandlerFunc {
 
 		cacheKey := CreateApprovalCacheKey(approvalUuid)
 		log(common.LogLevelDebug, fmt.Sprintf("retrieving cache item with key[%s]...", cacheKey))
-		approvalData, err := Cache.Get(cacheKey)
+		approvalData, err := cacheInstance.Get(cacheKey)
 		if err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, fmt.Sprintf("failed to retrieve cache item with key[%s]", cacheKey), err)
 			return
@@ -130,13 +132,14 @@ func getGetApprovalHandler() http.HandlerFunc {
 // @Router       /api/v1/approval-request/{requestUuid} [get]
 func getGetApprovalRequestHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		cacheInstance := cache.Get()
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 		requestUuid := mux.Vars(r)["requestUuid"]
 		log(common.LogLevelDebug, fmt.Sprintf("received request for status of approvalRequest[%s]", requestUuid))
 
 		cacheKey := CreateApprovalRequestCacheKey(requestUuid)
 		log(common.LogLevelDebug, fmt.Sprintf("retrieving cache item with key[%s]...", cacheKey))
-		approvalRequestData, err := Cache.Get(cacheKey)
+		approvalRequestData, err := cacheInstance.Get(cacheKey)
 		if err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, fmt.Sprintf("failed to retrieve cache item with key[%s]", cacheKey), err)
 			return
@@ -162,11 +165,12 @@ func getGetApprovalRequestHandler() http.HandlerFunc {
 // @Failure      500 {object} commonHttpResponse "Internal server error"
 // @Router       /api/v1/approval-request [get]
 func getListApprovalRequestsHandler() http.HandlerFunc {
+	cacheInstance := cache.Get()
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 
 		log(common.LogLevelDebug, "retrieving all cache keys...")
-		keys, err := Cache.Scan(CreateApprovalRequestCacheKey("*"))
+		keys, err := cacheInstance.Scan(CreateApprovalRequestCacheKey("*"))
 		if err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve approval requests", err)
 			return
