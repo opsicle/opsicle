@@ -22,6 +22,10 @@ func registerSessionRoutes(opts RouteRegistrationOpts) {
 type handleCreateSessionV1Input struct {
 	// Email is the user's email address
 	Email string `json:"email"`
+
+	// OrgCode is the user's organisation code
+	OrgCode string `json:"orgCode"`
+
 	// Password is the user's password
 	Password string `json:"password"`
 }
@@ -52,11 +56,21 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 	log(common.LogLevelDebug, "successfully parsed body into expected input class")
 
+	if input.OrgCode == "" {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive a valid org code", nil)
+		return
+	}
+	if input.Email == "" {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive a valid org email", nil)
+		return
+	}
+
 	sessionToken, err := session.CreateV1(session.CreateV1Opts{
 		Db:          db,
 		CachePrefix: sessionCachePrefix,
 
 		Email:    input.Email,
+		OrgCode:  input.OrgCode,
 		Password: input.Password,
 
 		IpAddress: r.RemoteAddr,

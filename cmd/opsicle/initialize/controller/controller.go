@@ -1,11 +1,9 @@
-package login
+package controller
 
 import (
 	"fmt"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -20,6 +18,12 @@ import (
 
 var flags cli.Flags = cli.Flags{
 	{
+		Name:         "admin-api-token",
+		DefaultValue: "",
+		Usage:        "defines the admin token to use when communicating with the endpoint",
+		Type:         cli.FlagTypeString,
+	},
+	{
 		Name:         "controller-url",
 		DefaultValue: "http://localhost:54321",
 		Usage:        "defines the url where the controller service is accessible at",
@@ -32,48 +36,26 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:   "login",
-	Short: "Logs into Opsicle from your terminal",
+	Use:     "controller",
+	Aliases: []string{"ctl", "con", "c"},
+	Short:   "Initialises Opsicle's controller service",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		userHomeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("failed to determine user's home directory: %s", err)
-		}
-		sessionPath := filepath.Join(userHomeDir, "/.opsicle/session")
-		fileInfo, err := os.Lstat(sessionPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				if err := os.MkdirAll(sessionPath, os.ModePerm); err != nil {
-					return fmt.Errorf("failed to provision configuration directory at path[%s]: %s", sessionPath, err)
-				}
-				fileInfo, _ = os.Lstat(sessionPath)
-			} else {
-				return fmt.Errorf("path[%s] for session information does not exist: %s", sessionPath, err)
-			}
-		}
-		if !fileInfo.IsDir() {
-			return fmt.Errorf("path[%s] exists but is not a directory, it should be", sessionPath)
-		}
-		sessionFilePath := filepath.Join(sessionPath, "current")
-		fileInfo, err = os.Lstat(sessionFilePath)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return fmt.Errorf("failed to check current session file at path[%s]: %s", sessionFilePath, err)
-			}
-		} else if fileInfo.IsDir() {
-			return fmt.Errorf("path[%s] exists but is a directory, it should be a file", sessionFilePath)
-		} else if fileInfo.Size() > 0 {
-			return fmt.Errorf("an existing session already exists, use logout to stop the current session first")
-		}
-
 		model := getModel()
 		program := tea.NewProgram(model)
 		if _, err := program.Run(); err != nil {
 			return fmt.Errorf("failed to get user input: %s", err)
 		}
+		adminApiToken := model.GetAdminApiToken()
+		adminEmail := model.GetEmail()
+		adminPassword := model.GetPassword()
+
+		if adminApiToken == "" || adminEmail == "" || adminPassword == "" {
+			return fmt.Errorf("one or more required fields were not specified")
+		}
+
 		controllerUrl := viper.GetString("controller-url")
 		client, err := controller.NewClient(controller.NewClientOpts{
 			ControllerUrl: controllerUrl,
@@ -82,20 +64,18 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create controller client: %s", err)
 		}
-		sessionId, sessionToken, err := client.CreateSessionV1(controller.CreateSessionV1Opts{
-			OrgCode:  model.GetOrganisation(),
-			Email:    model.GetEmail(),
-			Password: model.GetPassword(),
+		userId, orgId, err := client.InitV1(controller.InitV1Opts{
+			AdminApiToken: adminApiToken,
+			Email:         adminEmail,
+			Password:      adminPassword,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create session: %s", err)
+			return fmt.Errorf("failed to create `root` organisation and user: %s", err)
 		}
 
-		if err := os.WriteFile(sessionFilePath, []byte(sessionToken), 0600); err != nil {
-			return fmt.Errorf("failed to write session token to path[%s]: %s", sessionFilePath, err)
-		}
+		logrus.Infof("created user[%s] in org[%s]", userId, orgId)
 
-		logrus.Infof("opened session[%s]: welcome to opsicle!", sessionId)
+		logrus.Infof("`root` organisation and user created successfully! login using 'opsicle login'")
 		return nil
 	},
 }
@@ -111,8 +91,6 @@ var (
 	focusedButton = focusedStyle.Render("[ Submit ]")
 	blurredButton = fmt.Sprintf("[ %s ]", blurredStyle.Render("Submit"))
 )
-
-type errMsg error
 
 type model struct {
 	focusIndex int
@@ -136,17 +114,17 @@ func getModel() model {
 			t.Focus()
 			t.Width = 64
 			t.CharLimit = 256
-			t.Placeholder = "Organisation"
+			t.Placeholder = "Admin API token"
 			t.PromptStyle = focusedStyle
 			t.TextStyle = focusedStyle
 		case 1:
 			t.Width = 64
 			t.CharLimit = 256
-			t.Placeholder = "Email"
+			t.Placeholder = "Admin email"
 		case 2:
 			t.Width = 64
 			t.CharLimit = 128
-			t.Placeholder = "Password"
+			t.Placeholder = "Admin password"
 			t.EchoMode = textinput.EchoPassword
 			t.EchoCharacter = '*'
 		}
@@ -157,7 +135,7 @@ func getModel() model {
 	return m
 }
 
-func (m model) GetOrganisation() string {
+func (m model) GetAdminApiToken() string {
 	return m.inputs[0].Value()
 }
 

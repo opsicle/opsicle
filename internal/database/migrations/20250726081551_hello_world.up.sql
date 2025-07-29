@@ -1,15 +1,24 @@
 CREATE TABLE IF NOT EXISTS `users` (
     id            VARCHAR(36) PRIMARY KEY,
-    email         VARCHAR(255) NOT NULL UNIQUE,
+    email         VARCHAR(255) NOT NULL,
     password_hash TEXT,
-    `type`        VARCHAR(64) DEFAULT 'standard',
+    `type`        VARCHAR(64) NOT NULL DEFAULT 'user',
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME DEFAULT NULL
+    is_deleted    BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted_at    DATETIME,
+    is_disabled   BOOLEAN NOT NULL DEFAULT FALSE,
+    disabled_at   DATETIME
 );
 
 CREATE TABLE IF NOT EXISTS `orgs` (
     id            VARCHAR(36) PRIMARY KEY,
     name          VARCHAR(255) NOT NULL,
+    code        VARCHAR(32) NOT NULL UNIQUE,
+    `type`        VARCHAR(32) NOT NULL DEFAULT 'org',
+    icon        TEXT,
+    logo        TEXT,
+    motd        TEXT,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME DEFAULT NULL,
     is_deleted    BOOLEAN NOT NULL DEFAULT FALSE,

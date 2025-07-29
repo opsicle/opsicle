@@ -26,7 +26,7 @@ TARGETS := \
 
 build:
 	@echo "Building production binary: $(BASE_NAME)_$(GOOS)_$(GOARCH)"
-	EXT=""
+	@EXT=""
 	@if [ "$(GOOS)" = "windows" ]; then EXT=".exe"; fi; \
 	OUT_FILE="$(OUTPUT_DIR)/$(BASE_NAME)_$(GOOS)_$(GOARCH)$$EXT"; \
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 go build \
@@ -38,7 +38,7 @@ build:
 
 build_debug:
 	@echo "Building debug binary: $(BASE_NAME)_$(GOOS)_$(GOARCH)_debug"
-	EXT=""
+	@EXT=""
 	@if [ "$(GOOS)" = "windows" ]; then EXT=".exe"; fi; \
 	OUT_FILE="$(OUTPUT_DIR)/$(BASE_NAME)_$(GOOS)_$(GOARCH)_debug$$EXT"; \
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 go build \
@@ -77,6 +77,12 @@ compose_up:
 compose_down:
 	docker-compose down
 
+install_local: build
+	@EXT=""
+	@if [ "$(GOOS)" = "windows" ]; then EXT=".exe"; fi; \
+		OUT_FILE="$(OUTPUT_DIR)/$(BASE_NAME)_$(GOOS)_$(GOARCH)$$EXT"; \
+		sudo ln -sf $$(pwd)/$$OUT_FILE /usr/bin/$(BASE_NAME)
+
 KIND_CLUSTER_NAME := opsicle-dev
 
 kind_up:
@@ -101,6 +107,9 @@ docs_controller:
 
 migration:
 	migrate create -dir ./internal/database/migrations -ext sql new
+
+mysql_shell:
+	mysql -uopsicle -h127.0.0.1 -P3306 -ppassword opsicle
 
 #                .__                               
 # _______   ____ |  |   ____ _____    ______ ____  

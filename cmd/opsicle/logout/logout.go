@@ -2,10 +2,10 @@ package logout
 
 import (
 	"fmt"
+	"net/http"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -38,39 +38,9 @@ var Command = &cobra.Command{
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		userHomeDir, err := os.UserHomeDir()
+		sessionToken, sessionFilePath, err := controller.GetSessionToken()
 		if err != nil {
-			return fmt.Errorf("failed to determine user's home directory: %s", err)
-		}
-		sessionPath := filepath.Join(userHomeDir, "/.opsicle/session")
-		fileInfo, err := os.Lstat(sessionPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				if err := os.MkdirAll(sessionPath, os.ModePerm); err != nil {
-					return fmt.Errorf("failed to provision configuration directory at path[%s]: %s", sessionPath, err)
-				}
-				fileInfo, _ = os.Lstat(sessionPath)
-			} else {
-				return fmt.Errorf("path[%s] for session information does not exist: %s", sessionPath, err)
-			}
-		}
-		if !fileInfo.IsDir() {
-			return fmt.Errorf("path[%s] exists but is not a directory, it should be", sessionPath)
-		}
-		sessionFilePath := filepath.Join(sessionPath, "current")
-		fileInfo, err = os.Lstat(sessionFilePath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				logrus.Infof("there is no current session to logout from")
-				return nil
-			}
-			return fmt.Errorf("failed to check current session file at path[%s]: %s", sessionFilePath, err)
-		} else if fileInfo.IsDir() {
-			return fmt.Errorf("path[%s] exists but is a directory, it should be a file", sessionFilePath)
-		}
-		sessionToken, err := os.ReadFile(sessionFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to read file at path[%s]: %s", sessionFilePath, err)
+			return fmt.Errorf("failed to get a session token: %s", err)
 		}
 
 		controllerUrl := viper.GetString("controller-url")
@@ -84,16 +54,20 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create controller client: %s", err)
 		}
-		sessionId, err := client.DeleteSessionV1()
+		sessionId, httpResponse, err := client.DeleteSessionV1()
 		if err != nil {
-			return fmt.Errorf("failed to delete session: %s", err)
+			if httpResponse.StatusCode == http.StatusUnauthorized {
+				logrus.Infof("existing session was invalid, please login again")
+			} else {
+				return fmt.Errorf("failed to delete session: %s", err)
+			}
 		}
 
 		if err := os.Remove(sessionFilePath); err != nil {
 			return fmt.Errorf("failed to remove file at path[%s], please do it yourself: %s", sessionFilePath, err)
 		}
 
-		logrus.Infof("closed session[%s]: see you again!", sessionId)
+		logrus.Infof("session[%s] is closed: see you again!", sessionId)
 		return nil
 	},
 }

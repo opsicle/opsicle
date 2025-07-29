@@ -14,4 +14,18 @@ Opsicle is a Runbhook Automation platform.
 
 ## For Users
 
-Coming soon!
+The following instructions assume a deployment where the deployment is accessible over `localhost` or `127.0.0.1`. You may need to modify the URLs to hit the correct server on the correct network relative to your workstation.
+
+### Deploying Opsicle
+
+### Initialising Opsicle
+
+1. Verify that the approver serivce is running at `http://localhost:12345`
+1. Verify that the controller serivce is running at `http://localhost:54321`
+1. Verify the database is running
+   1. Verify that a MySQL database is available at `127.0.0.1:3306`
+2. Verify that a cache is running
+   1. Verify that a Redis cache is available at `127.0.0.1:6379`
+      ```sh
+      nc -zv 127.0.0.1 6379
+      ```

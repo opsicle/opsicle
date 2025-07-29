@@ -16,7 +16,7 @@ import (
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "admin-token",
+		Name:         "admin-api-token",
 		DefaultValue: "",
 		Usage:        "specify this to enable usage of the admin endpoints, send this in the Authorization header as a Bearer token",
 		Type:         cli.FlagTypeString,
@@ -143,7 +143,7 @@ var Command = &cobra.Command{
 			DatabaseConnection: databaseConnection,
 			ServiceLogs:        serviceLogs,
 		}
-		adminToken := viper.GetString("admin-token")
+		adminToken := viper.GetString("admin-api-token")
 		if adminToken != "" {
 			if len(adminToken) < 36 {
 				return fmt.Errorf("admin token must be 36 characters or longer for security purposes (hint: use a uuid)")

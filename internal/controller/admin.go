@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"opsicle/internal/common"
+	"opsicle/internal/controller/org"
 	"opsicle/internal/controller/user"
 	"strings"
 )
@@ -25,6 +26,13 @@ type initHandlerV1Input struct {
 	Password string `json:"password"`
 }
 
+type initHandlerV1Output struct {
+	UserEmail string `json:"userEmail"`
+	UserId    string `json:"userId"`
+	OrgId     string `json:"orgId"`
+	OrgCode   string `json:"orgCode"`
+}
+
 func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	log(common.LogLevelInfo, "this endpoint initialises the server")
@@ -38,18 +46,60 @@ func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", nil)
 		return
 	}
+	rootOrgCode := "root"
+	rootOrg, err := org.GetV1(org.GetV1Opts{
+		Db:   db,
+		Code: &rootOrgCode,
+	})
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to detect root org", err)
+		return
+	}
+	if rootOrg == nil {
+		if err := org.CreateV1(org.CreateV1Opts{
+			Db:   db,
+			Name: "Root Organisation",
+			Code: rootOrgCode,
+			Type: org.TypeAdmin,
+		}); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create root org", err)
+			return
+		}
+		rootOrg, err = org.GetV1(org.GetV1Opts{
+			Db:   db,
+			Code: &rootOrgCode,
+		})
+		if err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve created root org", err)
+			return
+		}
+	}
 	if err := user.CreateV1(user.CreateV1Opts{
 		Db: db,
 
+		OrgCode:  rootOrg.Code,
 		Email:    input.Email,
 		Password: input.Password,
 		Type:     user.TypeSysAdmin,
 	}); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user", err)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create admin user", err)
+		return
+	}
+	adminUser, err := user.GetV1(user.GetV1Opts{
+		Db:    db,
+		Email: &input.Email,
+	})
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve admin user", err)
 		return
 	}
 
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "user created")
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", initHandlerV1Output{
+		UserId:    *adminUser.Id,
+		UserEmail: adminUser.Email,
+		OrgId:     *adminUser.Org.Id,
+		OrgCode:   adminUser.Org.Code,
+	})
 }
 
 func getAdminRouteAuther(adminToken string, serviceLogs chan<- common.ServiceLog) func(http.Handler) http.Handler {

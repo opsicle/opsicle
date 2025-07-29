@@ -12,6 +12,8 @@ type Claims struct {
 	Ext      map[string]string `json:"ext"`
 	UserID   string            `json:"userId"`
 	Username string            `json:"username"`
+	OrgCode  string            `json:"orgCode"`
+	OrgId    string            `json:"orgId"`
 	jwt.RegisteredClaims
 }
 
@@ -20,6 +22,8 @@ type GenerateJwtOpts struct {
 	Ext      map[string]string
 	Id       string
 	Issuer   string
+	OrgCode  string
+	OrgId    string
 	Secret   string
 	Subject  string
 	Ttl      time.Duration
@@ -33,6 +37,8 @@ func GenerateJwt(opts GenerateJwtOpts) (string, error) {
 	claims := Claims{
 		UserID:   opts.UserId,
 		Username: opts.Username,
+		OrgCode:  opts.OrgCode,
+		OrgId:    opts.OrgId,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Audience:  jwt.ClaimStrings{opts.Audience},
 			ID:        opts.Id,
@@ -64,6 +70,9 @@ func ValidateJWT(jwtSecret, tokenStr string) (*Claims, error) {
 		return []byte(jwtSecret), nil
 	})
 	if err != nil {
+		// if errors.Is(err, jwt.ErrTokenExpired) {
+
+		// }
 		return nil, fmt.Errorf("failed to parse token claims: %s", err)
 	}
 

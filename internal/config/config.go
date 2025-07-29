@@ -42,15 +42,15 @@ func LoadGlobal(from string) error {
 		}
 		logrus.Debugf("derived path[%s] from path[%s]", globalConfigPath, from)
 	}
-	logrus.Infof("loading global configuration from path[%s]...", globalConfigPath)
+	logrus.Debugf("loading global configuration from path[%s]...", globalConfigPath)
 
 	isGlobalConfigLoaded := true
 	fi, err := os.Stat(globalConfigPath)
 	if errors.Is(err, os.ErrNotExist) {
-		logrus.Warnf("config file not found at path[%s], defaults will be used", globalConfigPath)
+		logrus.Debugf("config file not found at path[%s], defaults will be used", globalConfigPath)
 		isGlobalConfigLoaded = false
 	} else if fi.IsDir() {
-		logrus.Warnf("config file path[%s] led to a directory, defaults will be used", globalConfigPath)
+		logrus.Debugf("config file path[%s] led to a directory, defaults will be used", globalConfigPath)
 		isGlobalConfigLoaded = false
 	}
 	viper.SetConfigFile(globalConfigPath)

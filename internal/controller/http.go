@@ -39,7 +39,10 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 
 	handler := mux.NewRouter()
 	handler.NotFoundHandler = common.GetNotFoundHandler()
-
+	registerHealthcheckRoutes(RouteRegistrationOpts{
+		Router:      handler,
+		ServiceLogs: opts.ServiceLogs,
+	})
 	handler.Handle("/metrics", promhttp.Handler())
 	admin := handler.PathPrefix("/admin").Subrouter()
 
@@ -58,6 +61,7 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 
 	registerAutomationTemplatesRoutes(apiOpts)
 	registerSessionRoutes(apiOpts)
+	registerUserRoutes(apiOpts)
 
 	swag.Register(docs.SwaggerInfo.InstanceName(), docs.SwaggerInfo)
 	handler.PathPrefix("/docs").Handler(httpSwagger.WrapHandler)

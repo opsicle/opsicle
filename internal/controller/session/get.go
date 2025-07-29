@@ -8,14 +8,6 @@ import (
 	"time"
 )
 
-type Session struct {
-	Id        string    `json:"id"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	StartedAt time.Time `json:"startedAt"`
-	TimeLeft  string    `json:"timeLeft"`
-	UserId    string    `json:"userId"`
-}
-
 type GetV1Opts struct {
 	BearerToken string
 	CachePrefix string
@@ -41,6 +33,9 @@ func GetV1(opts GetV1Opts) (*Session, error) {
 		ExpiresAt: claims.ExpiresAt.Time,
 		StartedAt: claims.IssuedAt.Time,
 		TimeLeft:  time.Until(claims.ExpiresAt.Time).String(),
+		OrgCode:   claims.OrgCode,
+		OrgId:     claims.OrgId,
 		UserId:    claims.UserID,
+		Username:  claims.Username,
 	}, nil
 }

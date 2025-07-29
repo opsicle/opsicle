@@ -15,7 +15,8 @@ type DeleteV1Opts struct {
 func DeleteV1(opts DeleteV1Opts) (string, error) {
 	claims, err := auth.ValidateJWT(secretSessionKey, opts.BearerToken)
 	if err != nil {
-		return "", fmt.Errorf("failed to validate token: %s", err)
+		// probably already invalid
+		return "", nil
 	}
 	sessionId := claims.ID
 

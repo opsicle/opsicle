@@ -33,7 +33,7 @@ func getAutomationTemplateHandlerV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusTooEarly, "not implemented yet", nil)
 		return
 	}
-	log(common.LogLevelDebug, fmt.Sprintf("role[%s] requested retrieval of automationTemplate[%s] from organisation[%s]", currentUser.OrganizationRoleId, automationTemplateId, currentUser.OrganizationId))
+	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested retrieval of automationTemplate[%s] from organisation[%s]", currentUser.UserId, automationTemplateId, currentUser.OrganizationId))
 	common.SendHttpSuccessResponse(w, r, http.StatusTooEarly, "not implemented yet")
 }
 
