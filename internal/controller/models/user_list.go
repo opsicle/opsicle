@@ -1,18 +1,17 @@
-package user
+package models
 
 import (
 	"database/sql"
 	"fmt"
-	"opsicle/internal/controller/org"
 )
 
-type ListV1Opts struct {
+type ListUsersV1Opts struct {
 	Db *sql.DB
 
 	OrgCode string
 }
 
-func ListV1(opts ListV1Opts) ([]User, error) {
+func ListUsersV1(opts ListUsersV1Opts) ([]User, error) {
 	sqlStmt := `
 	SELECT
 		orgs.id AS org_id,
@@ -36,7 +35,7 @@ func ListV1(opts ListV1Opts) ([]User, error) {
 	}
 	userInstances := []User{}
 	for rows.Next() {
-		userInstance := User{Org: &org.Org{}}
+		userInstance := User{Org: &Org{}}
 		if err := rows.Scan(
 			&userInstance.Org.Id,
 			&userInstance.Org.Name,

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"opsicle/internal/common"
-	"opsicle/internal/controller/user"
+	"opsicle/internal/controller/models"
 )
 
 func registerUserRoutes(opts RouteRegistrationOpts) {
@@ -22,7 +22,7 @@ func handleListUsersV1(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(authRequestContext).(identity)
 	fmt.Printf("received request from user[%s] in org[%s]", session.Username, session.OrganizationCode)
 
-	users, err := user.ListV1(user.ListV1Opts{
+	users, err := models.ListUsersV1(models.ListUsersV1Opts{
 		Db:      db,
 		OrgCode: session.OrganizationCode,
 	})

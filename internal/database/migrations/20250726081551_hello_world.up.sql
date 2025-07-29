@@ -1,19 +1,20 @@
 CREATE TABLE IF NOT EXISTS `users` (
-    id            VARCHAR(36) PRIMARY KEY,
-    email         VARCHAR(255) NOT NULL,
-    password_hash TEXT,
-    `type`        VARCHAR(64) NOT NULL DEFAULT 'user',
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    DATETIME DEFAULT NULL
-    is_deleted    BOOLEAN NOT NULL DEFAULT FALSE,
-    deleted_at    DATETIME,
-    is_disabled   BOOLEAN NOT NULL DEFAULT FALSE,
-    disabled_at   DATETIME
+    id              VARCHAR(36) PRIMARY KEY,
+    email           VARCHAR(255) NOT NULL,
+    email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
+    password_hash   TEXT,
+    `type`          VARCHAR(64) NOT NULL DEFAULT 'user',
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT NULL,
+    is_deleted      BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted_at      DATETIME,
+    is_disabled     BOOLEAN NOT NULL DEFAULT FALSE,
+    disabled_at     DATETIME
 );
 
 CREATE TABLE IF NOT EXISTS `orgs` (
     id            VARCHAR(36) PRIMARY KEY,
-    name          VARCHAR(255) NOT NULL,
+    `name`          VARCHAR(255) NOT NULL,
     code        VARCHAR(32) NOT NULL UNIQUE,
     `type`        VARCHAR(32) NOT NULL DEFAULT 'org',
     icon        TEXT,
@@ -110,23 +111,34 @@ CREATE TABLE IF NOT EXISTS `org_role_users` (
 );
 
 CREATE TABLE IF NOT EXISTS `org_config_sso` (
-    id                VARCHAR(36) PRIMARY KEY,
-    org_id            VARCHAR(36) NOT NULL UNIQUE,
-    idp_name          VARCHAR(255) NOT NULL,
-    config_json       JSON NOT NULL,
-    updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id)
+  `id` VARCHAR(36) PRIMARY KEY,
+  `org_id` VARCHAR(36) NOT NULL,
+  `type` ENUM('saml', 'oidc') NOT NULL,
+  `idp_entity_id` TEXT,
+  `idp_sso_url` TEXT,
+  `idp_cert` TEXT,
+  `idp_metadata_url` TEXT,
+  `client_id` VARCHAR(255),
+  `client_secret` TEXT,
+  `issuer` TEXT,
+  `authorization_url` TEXT,
+  `token_url` TEXT,
+  `userinfo_url` TEXT,
+  `scopes` TEXT,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`org_id`) REFERENCES `orgs` (`id`) ON DELETE CASCADE
 );
 
 
 CREATE TABLE IF NOT EXISTS `org_config_sso_mapping` (
-    id           VARCHAR(36) PRIMARY KEY,
-    org_id       VARCHAR(36) NOT NULL,
-    idp_group    VARCHAR(255) NOT NULL,
-    role_id      VARCHAR(36) NOT NULL,
-    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id),
-    FOREIGN KEY (role_id) REFERENCES `org_roles`(id)
+  `id` VARCHAR(36) PRIMARY KEY,
+  `org_id` VARCHAR(36) NOT NULL,
+  `field` VARCHAR(64) NOT NULL,
+  `source` VARCHAR(255) NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`org_id`) REFERENCES `orgs` (`id`) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS `org_config_security` (
@@ -172,12 +184,13 @@ CREATE TABLE IF NOT EXISTS `user_slack` (
 CREATE TABLE IF NOT EXISTS `user_sso` (
     id              VARCHAR(36) PRIMARY KEY,
     user_id         VARCHAR(36) NOT NULL,
-    idp_name        VARCHAR(255) NOT NULL,
-    idp_subject     VARCHAR(255) NOT NULL,
+    provider_id     VARCHAR(255) NOT NULL,
     raw_attributes  JSON,
+    `subject`       VARCHAR(255) NOT NULL,
     provisioned_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_login      DATETIME,
     FOREIGN KEY (user_id) REFERENCES `users`(id),
-    UNIQUE KEY uniq_user_idp (idp_name, idp_subject)
+    UNIQUE KEY `user_provider_subject` (`user_id`, `provider_id`, `subject`)
 );
 
 CREATE TABLE IF NOT EXISTS `user_sso_group` (
@@ -218,7 +231,8 @@ CREATE TABLE IF NOT EXISTS `user_profiles` (
     bio               TEXT,
     public_email      VARCHAR(255),
     public_phone      VARCHAR(64),
-    slack_messaging_id VARCHAR(255),
+    slack_id          VARCHAR(255),
+    telegram_id       VARCHAR(255),
     company           VARCHAR(255),
     department        VARCHAR(255),
     team              VARCHAR(255),

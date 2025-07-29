@@ -1,4 +1,4 @@
-package org
+package models
 
 import (
 	"database/sql"
@@ -6,18 +6,18 @@ import (
 	"fmt"
 )
 
-type GetV1Opts struct {
+type GetOrgV1Opts struct {
 	Db *sql.DB
 
 	Id   *string
 	Code *string
 }
 
-// GetV1 returns an organisation given either it's ID or code;
+// GetOrgV1 returns an organisation given either it's ID or code;
 // when no organisation is found, returns nil for both return values
-func GetV1(opts GetV1Opts) (*Org, error) {
+func GetOrgV1(opts GetOrgV1Opts) (*Org, error) {
 	if opts.Id == nil && opts.Code == nil {
-		return nil, fmt.Errorf("org.GetV1: either the org id or its code has to be specified")
+		return nil, fmt.Errorf("models.GetOrgV1: either the org id or its code has to be specified")
 	}
 	selectorField := "id"
 	selectorValue := ""
@@ -39,16 +39,17 @@ func GetV1(opts GetV1Opts) (*Org, error) {
 		is_disabled,
 		disabled_at,
 		code,
-		type
+		type,
+		motd
 		FROM orgs
 		WHERE %s = ?`, selectorField))
 	if err != nil {
-		return nil, fmt.Errorf("org.GetV1: failed to prepare insert statement: %s", err)
+		return nil, fmt.Errorf("models.GetOrgV1: failed to prepare insert statement: %s", err)
 	}
 
 	res := stmt.QueryRow(selectorValue)
 	if res.Err() != nil {
-		return nil, fmt.Errorf("org.GetV1: failed to query org using : %s", err)
+		return nil, fmt.Errorf("models.GetOrgV1: failed to query org using : %s", err)
 	}
 	var org Org
 	if err := res.Scan(
@@ -62,11 +63,12 @@ func GetV1(opts GetV1Opts) (*Org, error) {
 		&org.DisabledAt,
 		&org.Code,
 		&org.Type,
+		&org.Motd,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("org.GetV1: failed to execute insert statement: %s", err)
+		return nil, fmt.Errorf("models.GetOrgV1: failed to execute insert statement: %s", err)
 	}
 	return &org, nil
 }

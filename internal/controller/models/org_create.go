@@ -1,4 +1,4 @@
-package org
+package models
 
 import (
 	"database/sql"
@@ -7,15 +7,15 @@ import (
 	"github.com/google/uuid"
 )
 
-type CreateV1Opts struct {
+type CreateOrgV1Opts struct {
 	Db *sql.DB
 
 	Name string
 	Code string
-	Type Type
+	Type OrgType
 }
 
-func CreateV1(opts CreateV1Opts) error {
+func CreateOrgV1(opts CreateOrgV1Opts) error {
 	orgUuid := uuid.NewString()
 	stmt, err := opts.Db.Prepare(`
 	INSERT INTO orgs(

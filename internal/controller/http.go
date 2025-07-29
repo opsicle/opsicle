@@ -60,6 +60,7 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 	}
 
 	registerAutomationTemplatesRoutes(apiOpts)
+	registerOrgRoutes(apiOpts)
 	registerSessionRoutes(apiOpts)
 	registerUserRoutes(apiOpts)
 

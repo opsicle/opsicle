@@ -1,4 +1,4 @@
-package session
+package models
 
 const (
 	secretSessionKey = "supersecretkey"

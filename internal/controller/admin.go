@@ -6,8 +6,7 @@ import (
 	"io"
 	"net/http"
 	"opsicle/internal/common"
-	"opsicle/internal/controller/org"
-	"opsicle/internal/controller/user"
+	"opsicle/internal/controller/models"
 	"strings"
 )
 
@@ -47,7 +46,7 @@ func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rootOrgCode := "root"
-	rootOrg, err := org.GetV1(org.GetV1Opts{
+	rootOrg, err := models.GetOrgV1(models.GetOrgV1Opts{
 		Db:   db,
 		Code: &rootOrgCode,
 	})
@@ -56,16 +55,16 @@ func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rootOrg == nil {
-		if err := org.CreateV1(org.CreateV1Opts{
+		if err := models.CreateOrgV1(models.CreateOrgV1Opts{
 			Db:   db,
 			Name: "Root Organisation",
 			Code: rootOrgCode,
-			Type: org.TypeAdmin,
+			Type: models.TypeAdminOrg,
 		}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create root org", err)
 			return
 		}
-		rootOrg, err = org.GetV1(org.GetV1Opts{
+		rootOrg, err = models.GetOrgV1(models.GetOrgV1Opts{
 			Db:   db,
 			Code: &rootOrgCode,
 		})
@@ -74,18 +73,18 @@ func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := user.CreateV1(user.CreateV1Opts{
+	if err := models.CreateUserV1(models.CreateUserV1Opts{
 		Db: db,
 
 		OrgCode:  rootOrg.Code,
 		Email:    input.Email,
 		Password: input.Password,
-		Type:     user.TypeSysAdmin,
+		Type:     models.TypeSystemAdmin,
 	}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create admin user", err)
 		return
 	}
-	adminUser, err := user.GetV1(user.GetV1Opts{
+	adminUser, err := models.GetUserV1(models.GetUserV1Opts{
 		Db:    db,
 		Email: &input.Email,
 	})

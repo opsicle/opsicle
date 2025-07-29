@@ -3,6 +3,7 @@ package get
 import (
 	"opsicle/cmd/opsicle/get/approval"
 	"opsicle/cmd/opsicle/get/approval_request"
+	"opsicle/cmd/opsicle/get/org"
 	"opsicle/cmd/opsicle/get/users"
 
 	"github.com/spf13/cobra"
@@ -11,6 +12,7 @@ import (
 func init() {
 	Command.AddCommand(approval.Command)
 	Command.AddCommand(approval_request.Command)
+	Command.AddCommand(org.Command)
 	Command.AddCommand(users.Command)
 }
 

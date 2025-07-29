@@ -1,28 +1,29 @@
-package user
+package models
 
 import (
 	"database/sql"
 	"fmt"
 	"opsicle/internal/auth"
-	"opsicle/internal/controller/org"
+	"time"
 )
 
-type AddToOrgV1Opts struct {
+type AddUserToOrgV1Opts struct {
 	Db *sql.DB
 
 	OrgId string
 }
 
 type User struct {
-	Id           *string  `json:"id"`
-	Email        string   `json:"email"`
-	Password     *string  `json:"password"`
-	PasswordHash *string  `json:"passwordHash"`
-	Org          *org.Org `json:"org"`
-	Type         Type     `json:"type"`
+	Id           *string    `json:"id"`
+	Email        string     `json:"email"`
+	Password     *string    `json:"password"`
+	PasswordHash *string    `json:"passwordHash"`
+	Org          *Org       `json:"org"`
+	JoinedOrgAt  *time.Time `json:"joinedOrgAt"`
+	Type         UserType   `json:"type"`
 }
 
-func (u User) AddToOrgV1(opts AddToOrgV1Opts) error {
+func (u User) AddToOrgV1(opts AddUserToOrgV1Opts) error {
 	stmt, err := opts.Db.Prepare(`
 	INSERT INTO org_users(
 		user_id,

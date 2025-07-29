@@ -1,4 +1,4 @@
-package session
+package models
 
 import "time"
 
@@ -9,7 +9,7 @@ type Session struct {
 	TimeLeft  string    `json:"timeLeft"`
 	UserId    string    `json:"userId"`
 	Username  string    `json:"username"`
-	UserType  string    `json:"userType"`
+	UserType  UserType  `json:"userType"`
 	OrgCode   string    `json:"orgCode"`
 	OrgId     string    `json:"orgId"`
 }

@@ -1,24 +1,22 @@
-package session
+package models
 
 import (
 	"database/sql"
 	"fmt"
 	"opsicle/internal/auth"
 	"opsicle/internal/cache"
-	"opsicle/internal/controller/org"
-	"opsicle/internal/controller/user"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-type Token struct {
-	Id    string `json:"id"`
-	Value string `json:"value"`
+type SessionToken struct {
+	SessionId string `json:"sessionId"`
+	Value     string `json:"value"`
 }
 
-type CreateV1Opts struct {
+type CreateSessionV1Opts struct {
 	Db          *sql.DB
 	CachePrefix string
 
@@ -32,33 +30,33 @@ type CreateV1Opts struct {
 	ExpiresIn time.Duration
 }
 
-func CreateV1(opts CreateV1Opts) (*Token, error) {
-	orgInstance, err := org.GetV1(org.GetV1Opts{
+func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
+	orgInstance, err := GetOrgV1(GetOrgV1Opts{
 		Db:   opts.Db,
 		Code: &opts.OrgCode,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("controller.session.CreateV1: failed to get org instance: %s", err)
+		return nil, fmt.Errorf("models.CreateSessionV1: failed to get org instance: %s", err)
 	}
 	if orgInstance == nil {
-		return nil, fmt.Errorf("controller.session.CreateV1: failed to find a org")
+		return nil, fmt.Errorf("models.CreateSessionV1: failed to find a org")
 	}
-	userInstance, err := user.GetV1(user.GetV1Opts{
+	userInstance, err := GetUserV1(GetUserV1Opts{
 		Db:    opts.Db,
 		Email: &opts.Email,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("controller.session.CreateV1: failed to get user instance: %s", err)
+		return nil, fmt.Errorf("models.CreateSessionV1: failed to get user instance: %s", err)
 	}
-	orgUserInstance, err := orgInstance.GetUserV1(org.GetUserV1Opts{
+	orgUserInstance, err := orgInstance.GetUserV1(GetOrgUserV1Opts{
 		Db:     opts.Db,
 		UserId: *userInstance.Id,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("controller.session.CreateV1: failed to get user org membership: %s", err)
+		return nil, fmt.Errorf("models.CreateSessionV1: failed to get user org membership: %s", err)
 	}
 	if orgUserInstance == nil {
-		return nil, fmt.Errorf("controller.session.CreateV1: failed to get a user belonging to the specified organisation")
+		return nil, fmt.Errorf("models.CreateSessionV1: failed to get a user belonging to the specified organisation")
 	}
 
 	userInstance.Password = &opts.Password
@@ -83,14 +81,14 @@ func CreateV1(opts CreateV1Opts) (*Token, error) {
 		Username: userInstance.Email,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("controller.session.CreateV1: failed to issue jwt: %s", err)
+		return nil, fmt.Errorf("models.CreateSessionV1: failed to issue jwt: %s", err)
 	}
 	cacheKey := strings.Join([]string{opts.CachePrefix, *userInstance.Id, sessionId}, ":")
 	if err := cache.Get().Set(cacheKey, sessionId, opts.ExpiresIn); err != nil {
-		return nil, fmt.Errorf("controller.session.CreateV1: failed to update cache: %s", err)
+		return nil, fmt.Errorf("models.CreateSessionV1: failed to update cache: %s", err)
 	}
-	return &Token{
-		Id:    sessionId,
-		Value: jwtToken,
+	return &SessionToken{
+		SessionId: sessionId,
+		Value:     jwtToken,
 	}, nil
 }

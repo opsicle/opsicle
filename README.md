@@ -22,10 +22,24 @@ The following instructions assume a deployment where the deployment is accessibl
 
 1. Verify that the approver serivce is running at `http://localhost:12345`
 1. Verify that the controller serivce is running at `http://localhost:54321`
-1. Verify the database is running
+   ```sh
+
+   ```
+2. Verify the database is running
    1. Verify that a MySQL database is available at `127.0.0.1:3306`
-2. Verify that a cache is running
+      ```sh
+      nc -zv 127.0.0.1 3306
+      ```
+3. Verify that a cache is running
    1. Verify that a Redis cache is available at `127.0.0.1:6379`
       ```sh
       nc -zv 127.0.0.1 6379
       ```
+1. Create the `root` organisation and superuser
+   ```sh
+   opsicle init controller;
+   ```
+1. Login as the user:
+   ```sh
+   opsicle login;
+   ```

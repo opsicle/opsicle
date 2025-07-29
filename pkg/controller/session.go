@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 	"opsicle/internal/common"
-	"opsicle/internal/controller/session"
+	"opsicle/internal/controller/models"
 )
 
 type CreateSessionV1Opts struct {
@@ -59,11 +59,11 @@ func (c Client) CreateSessionV1(opts CreateSessionV1Opts) (string, string, error
 	if err != nil {
 		return "", "", fmt.Errorf("failed to parse response data from controller service: %s", err)
 	}
-	var token session.Token
+	var token models.SessionToken
 	if err := json.Unmarshal(responseData, &token); err != nil {
 		return "", "", fmt.Errorf("failed to parse response from controller service into a session token: %s", err)
 	}
-	return token.Id, token.Value, nil
+	return token.SessionId, token.Value, nil
 }
 
 func (c Client) DeleteSessionV1() (string, *http.Response, error) {

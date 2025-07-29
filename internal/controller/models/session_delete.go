@@ -1,4 +1,4 @@
-package session
+package models
 
 import (
 	"fmt"
@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-type DeleteV1Opts struct {
+type DeleteSessionV1Opts struct {
 	BearerToken string
 	CachePrefix string
 }
 
-func DeleteV1(opts DeleteV1Opts) (string, error) {
+func DeleteSessionV1(opts DeleteSessionV1Opts) (string, error) {
 	claims, err := auth.ValidateJWT(secretSessionKey, opts.BearerToken)
 	if err != nil {
 		// probably already invalid

@@ -1,4 +1,4 @@
-package user
+package models
 
 import (
 	"database/sql"
@@ -9,16 +9,16 @@ import (
 	"github.com/google/uuid"
 )
 
-type CreateV1Opts struct {
+type CreateUserV1Opts struct {
 	Db *sql.DB
 
 	OrgCode  string
 	Email    string
 	Password string
-	Type     Type
+	Type     UserType
 }
 
-func (o CreateV1Opts) Validate() error {
+func (o CreateUserV1Opts) Validate() error {
 	errs := []error{}
 
 	if o.Db == nil {
@@ -44,51 +44,50 @@ func (o CreateV1Opts) Validate() error {
 	return nil
 }
 
-func CreateV1(opts CreateV1Opts) error {
+func CreateUserV1(opts CreateUserV1Opts) error {
 	if err := opts.Validate(); err != nil {
-		return fmt.Errorf("user.CreateV1: failed to validate input arguments: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to validate input arguments: %s", err)
 	}
 	userUuid := uuid.New().String()
 	passwordHash, err := auth.HashPassword(opts.Password)
 	if err != nil {
-		return fmt.Errorf("failed to hash password: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to hash password: %s", err)
 	}
 	userType := opts.Type
 
 	orgQueryStmt, err := opts.Db.Prepare(`
 	SELECT id FROM orgs WHERE code = ?`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare select statement for org[%s]: %s", opts.OrgCode, err)
+		return fmt.Errorf("models.CreateUserV1: failed to prepare select statement for org[%s]: %s", opts.OrgCode, err)
 	}
 	row := orgQueryStmt.QueryRow(opts.OrgCode)
 	if row.Err() != nil {
-		return fmt.Errorf("failed to query org[%s]: %s", opts.OrgCode, err)
+		return fmt.Errorf("models.CreateUserV1: failed to query org[%s]: %s", opts.OrgCode, err)
 	}
 	var orgId string
 	if err := row.Scan(&orgId); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("org[%s] does not exist", opts.OrgCode)
+			return fmt.Errorf("models.CreateUserV1: org[%s] does not exist", opts.OrgCode)
 		}
-		return fmt.Errorf("failed to scan org results: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to scan org results: %s", err)
 	}
 
-	userInsertStmt, err := opts.Db.Prepare(`
-	INSERT INTO users(id, email, password_hash, type) VALUES (?, ?, ?, ?)`)
+	userInsertStmt, err := opts.Db.Prepare(`INSERT INTO users(id, email, password_hash, type) VALUES (?, ?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare insert statement to create user: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to prepare insert statement to create user: %s", err)
 	}
 	if _, err := userInsertStmt.Exec(userUuid, opts.Email, passwordHash, userType); err != nil {
-		return fmt.Errorf("failed to execute insert statement to create user: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to execute insert statement to create user: %s", err)
 	}
 
 	orgUserInsertStmt, err := opts.Db.Prepare(`
 	INSERT INTO org_users(user_id, org_id) VALUES (?, ?)`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare insert statement: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to prepare insert statement: %s", err)
 	}
 
-	if _, err := orgUserInsertStmt.Exec(orgId); err != nil {
-		return fmt.Errorf("failed to execute insert statement to add user to organisation: %s", err)
+	if _, err := orgUserInsertStmt.Exec(userUuid, orgId); err != nil {
+		return fmt.Errorf("models.CreateUserV1: failed to execute insert statement to add user to organisation: %s", err)
 	}
 
 	return nil

@@ -1,12 +1,11 @@
-package user
+package models
 
 import (
 	"database/sql"
 	"fmt"
-	"opsicle/internal/controller/org"
 )
 
-type GetV1Opts struct {
+type GetUserV1Opts struct {
 	Db *sql.DB
 
 	OrgCode *string
@@ -14,7 +13,7 @@ type GetV1Opts struct {
 	Email   *string
 }
 
-func GetV1(opts GetV1Opts) (*User, error) {
+func GetUserV1(opts GetUserV1Opts) (*User, error) {
 	selectionField := "`users`.`email`"
 	selectionValue := ""
 	if opts.Id != nil {
@@ -23,16 +22,17 @@ func GetV1(opts GetV1Opts) (*User, error) {
 	} else if opts.Email != nil {
 		selectionValue = *opts.Email
 	} else {
-		return nil, fmt.Errorf("failed to receive either the user id or email in user.GetV1")
+		return nil, fmt.Errorf("failed to receive either the user id or email in models.GetUserV1")
 	}
 	sqlStmt := fmt.Sprintf(`
 	SELECT
     users.id AS user_id,
     users.email,
-    users.password_hash,
+    users.password_hash AS password_hash,
     orgs.id AS org_id,
     orgs.name AS org_name,
-    orgs.code AS org_code
+    orgs.code AS org_code,
+		org_users.joined_at AS joined_at
 		FROM users
 			JOIN org_users ON users.id = org_users.user_id
 			JOIN orgs ON org_users.org_id = orgs.id
@@ -54,7 +54,7 @@ func GetV1(opts GetV1Opts) (*User, error) {
 		return nil, fmt.Errorf("failed to query statement: %s", err)
 	}
 	userInstance := User{
-		Org: &org.Org{},
+		Org: &Org{},
 	}
 	if err := row.Scan(
 		&userInstance.Id,
@@ -63,6 +63,7 @@ func GetV1(opts GetV1Opts) (*User, error) {
 		&userInstance.Org.Id,
 		&userInstance.Org.Name,
 		&userInstance.Org.Code,
+		&userInstance.JoinedOrgAt,
 	); err != nil {
 		return nil, fmt.Errorf("failed to get user row: %s", err)
 	}

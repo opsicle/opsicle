@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 	"opsicle/internal/common"
-	"opsicle/internal/controller/session"
+	"opsicle/internal/controller/models"
 	"strings"
 	"time"
 )
@@ -65,7 +65,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionToken, err := session.CreateV1(session.CreateV1Opts{
+	sessionToken, err := models.CreateSessionV1(models.CreateSessionV1Opts{
 		Db:          db,
 		CachePrefix: sessionCachePrefix,
 
@@ -112,7 +112,7 @@ func handleGetSessionV1(w http.ResponseWriter, r *http.Request) {
 	authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
 	log(common.LogLevelDebug, "retrieved an authorizationToken successfully")
 
-	sessionInfo, err := session.GetV1(session.GetV1Opts{
+	sessionInfo, err := models.GetSessionV1(models.GetSessionV1Opts{
 		BearerToken: authorizationToken,
 		CachePrefix: sessionCachePrefix,
 	})
@@ -145,7 +145,7 @@ func handleStopSessionV1(w http.ResponseWriter, r *http.Request) {
 	authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
 	log(common.LogLevelDebug, "retrieved an authorizationToken successfully")
 
-	sessionId, err := session.DeleteV1(session.DeleteV1Opts{
+	sessionId, err := models.DeleteSessionV1(models.DeleteSessionV1Opts{
 		BearerToken: authorizationToken,
 		CachePrefix: sessionCachePrefix,
 	})

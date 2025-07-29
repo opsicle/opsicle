@@ -1,4 +1,4 @@
-package session
+package models
 
 import (
 	"fmt"
@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-type GetV1Opts struct {
+type GetSessionV1Opts struct {
 	BearerToken string
 	CachePrefix string
 }
 
-func GetV1(opts GetV1Opts) (*Session, error) {
+func GetSessionV1(opts GetSessionV1Opts) (*Session, error) {
 	claims, err := auth.ValidateJWT(secretSessionKey, opts.BearerToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate token: %s", err)

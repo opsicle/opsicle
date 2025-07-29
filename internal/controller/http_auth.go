@@ -2,9 +2,10 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"opsicle/internal/common"
-	"opsicle/internal/controller/session"
+	"opsicle/internal/controller/models"
 	"strings"
 )
 
@@ -34,7 +35,7 @@ func getRouteAuther(serviceLogs chan<- common.ServiceLog) func(http.Handler) htt
 				return
 			}
 			authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
-			sessionInfo, err := session.GetV1(session.GetV1Opts{
+			sessionInfo, err := models.GetSessionV1(models.GetSessionV1Opts{
 				BearerToken: authorizationToken,
 				CachePrefix: sessionCachePrefix,
 			})
@@ -43,6 +44,9 @@ func getRouteAuther(serviceLogs chan<- common.ServiceLog) func(http.Handler) htt
 				return
 			}
 			serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "auth middleware executing")
+
+			log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+			log(common.LogLevelDebug, fmt.Sprintf("incoming request from user[%s] from org[%s]", sessionInfo.Username, sessionInfo.OrgCode))
 			identityInstance := identity{
 				OrganizationCode: sessionInfo.OrgCode,
 				OrganizationId:   sessionInfo.OrgId,

@@ -7,6 +7,7 @@ import (
 	"opsicle/internal/database"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -91,6 +92,7 @@ var Command = &cobra.Command{
 		}
 
 		<-time.After(500 * time.Millisecond)
+		logrus.Infof("database migration successful")
 		return nil
 	},
 }
