@@ -24,13 +24,13 @@ type handleCreateSessionV1Input struct {
 	Email string `json:"email"`
 
 	// OrgCode is the user's organisation code
-	OrgCode string `json:"orgCode"`
+	OrgCode *string `json:"orgCode"`
 
 	// Password is the user's password
 	Password string `json:"password"`
 }
 
-// handleGetSessionV1 godoc
+// handleCreateSessionV1 godoc
 // @Summary      Creates a session for the user credentials specified in the body
 // @Description  This endpoint creates a session for the user
 // @Tags         controller-service
@@ -56,10 +56,6 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 	log(common.LogLevelDebug, "successfully parsed body into expected input class")
 
-	if input.OrgCode == "" {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive a valid org code", nil)
-		return
-	}
 	if input.Email == "" {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive a valid org email", nil)
 		return
@@ -117,7 +113,7 @@ func handleGetSessionV1(w http.ResponseWriter, r *http.Request) {
 		CachePrefix: sessionCachePrefix,
 	})
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to validate authorization header", err)
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to validate provided token", err, sessionInfo)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("session[%s] is valid and has %s time left", sessionInfo.Id, sessionInfo.TimeLeft))

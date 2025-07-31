@@ -13,7 +13,7 @@ type DeleteSessionV1Opts struct {
 }
 
 func DeleteSessionV1(opts DeleteSessionV1Opts) (string, error) {
-	claims, err := auth.ValidateJWT(secretSessionKey, opts.BearerToken)
+	claims, err := auth.ValidateJWT(sessionSigningToken, opts.BearerToken)
 	if err != nil {
 		// probably already invalid
 		return "", nil

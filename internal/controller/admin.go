@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/mail"
 	"opsicle/internal/common"
 	"opsicle/internal/controller/models"
 	"strings"
@@ -45,38 +46,17 @@ func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", nil)
 		return
 	}
-	rootOrgCode := "root"
-	rootOrg, err := models.GetOrgV1(models.GetOrgV1Opts{
-		Db:   db,
-		Code: &rootOrgCode,
-	})
-	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to detect root org", err)
+
+	log(common.LogLevelDebug, "received request to create a superadmin")
+
+	if _, err := mail.ParseAddress(input.Email); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid email address", err)
 		return
 	}
-	if rootOrg == nil {
-		if err := models.CreateOrgV1(models.CreateOrgV1Opts{
-			Db:   db,
-			Name: "Root Organisation",
-			Code: rootOrgCode,
-			Type: models.TypeAdminOrg,
-		}); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create root org", err)
-			return
-		}
-		rootOrg, err = models.GetOrgV1(models.GetOrgV1Opts{
-			Db:   db,
-			Code: &rootOrgCode,
-		})
-		if err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve created root org", err)
-			return
-		}
-	}
+
 	if err := models.CreateUserV1(models.CreateUserV1Opts{
 		Db: db,
 
-		OrgCode:  rootOrg.Code,
 		Email:    input.Email,
 		Password: input.Password,
 		Type:     models.TypeSystemAdmin,
@@ -92,12 +72,42 @@ func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve admin user", err)
 		return
 	}
+	rootOrgCode := "root"
+	rootOrg, err := models.GetOrgV1(models.GetOrgV1Opts{
+		Db:   db,
+		Code: &rootOrgCode,
+	})
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to detect root org", err)
+		return
+	}
+	if rootOrg == nil {
+		_, err := models.CreateOrgV1(models.CreateOrgV1Opts{
+			Db:     db,
+			Name:   "Root Organisation",
+			Code:   rootOrgCode,
+			Type:   models.TypeAdminOrg,
+			UserId: *adminUser.Id,
+		})
+		if err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create root org", err)
+			return
+		}
+		rootOrg, err = models.GetOrgV1(models.GetOrgV1Opts{
+			Db:   db,
+			Code: &rootOrgCode,
+		})
+		if err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve created root org", err)
+			return
+		}
+	}
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", initHandlerV1Output{
 		UserId:    *adminUser.Id,
 		UserEmail: adminUser.Email,
-		OrgId:     *adminUser.Org.Id,
-		OrgCode:   adminUser.Org.Code,
+		OrgId:     *rootOrg.Id,
+		OrgCode:   rootOrg.Code,
 	})
 }
 

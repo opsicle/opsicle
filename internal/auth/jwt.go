@@ -69,21 +69,18 @@ func ValidateJWT(jwtSecret, tokenStr string) (*Claims, error) {
 		}
 		return []byte(jwtSecret), nil
 	})
-	if err != nil {
-		// if errors.Is(err, jwt.ErrTokenExpired) {
-
-		// }
-		return nil, fmt.Errorf("failed to parse token claims: %s", err)
-	}
-
 	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
+	if !ok {
 		return nil, fmt.Errorf("failed to validate token claims structure")
 	}
-
-	if claims.ExpiresAt == nil || time.Now().After(claims.ExpiresAt.Time) {
-		return nil, fmt.Errorf("failed to validate token expiry")
+	if claims.ExpiresAt == nil {
+		return claims, nil
 	}
-
+	if time.Now().After(claims.ExpiresAt.Time) {
+		return claims, fmt.Errorf("token has expired")
+	}
+	if !token.Valid || err != nil {
+		return claims, fmt.Errorf("token is invalid: %s", err)
+	}
 	return claims, nil
 }

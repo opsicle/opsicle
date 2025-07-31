@@ -10,35 +10,67 @@ import (
 type CreateOrgV1Opts struct {
 	Db *sql.DB
 
+	// Name defines the name of the organisation as displayed to users
 	Name string
+
+	// Code defines the codeword to associate with the new
+	// organisation; this has to be unique across all organisations
 	Code string
+
+	// Type defines the type of the organisation to create
 	Type OrgType
+
+	// UserId is the ID of the user creating the organisation,
+	// which will be assigned as the administrator of the newly
+	// created organisation
+	UserId string
 }
 
-func CreateOrgV1(opts CreateOrgV1Opts) error {
+func CreateOrgV1(opts CreateOrgV1Opts) (string, error) {
 	orgUuid := uuid.NewString()
+
 	stmt, err := opts.Db.Prepare(`
 	INSERT INTO orgs(
 		id,
 		name,
 		code,
+		type,
+		created_by
+	) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return "", fmt.Errorf("models.CreateOrgV1: failed to prepare insert statement for orgs: %s", err)
+	}
+
+	_, err = stmt.Exec(
+		orgUuid,
+		opts.Name,
+		opts.Code,
+		string(opts.Type),
+		opts.UserId,
+	)
+	if err != nil {
+		return "", fmt.Errorf("models.CreateOrgV1: failed to execute insert statement for orgs: %s", err)
+	}
+
+	stmt, err = opts.Db.Prepare(`
+	INSERT INTO org_users(
+		org_id,
+		user_id,
 		type
-	) VALUES (?, ?, ?, ?)`)
+	) VALUES (?, ?, ?)
+	`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare insert statement: %s", err)
+		return "", fmt.Errorf("models.CreateOrgV1: failed to prepare insert statement for org_users: %s", err)
 	}
 
-	res, err := stmt.Exec(orgUuid, opts.Name, opts.Code, string(opts.Type))
+	_, err = stmt.Exec(
+		orgUuid,
+		opts.UserId,
+		TypeOrgAdmin,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to execute insert statement: %s", err)
+		return "", fmt.Errorf("models.CreateOrgV1: failed to execute insert statement for org_users: %s", err)
 	}
 
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to retrieve the number of rows affected: %s", err)
-	}
-	if rowsAffected != 1 {
-		return fmt.Errorf("failed to insert only 1 user")
-	}
-	return nil
+	return orgUuid, nil
 }

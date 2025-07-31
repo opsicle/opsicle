@@ -8,21 +8,66 @@ import (
 )
 
 type Org struct {
-	Id         *string    `json:"id"`
-	Name       string     `json:"name"`
-	CreatedAt  *time.Time `json:"createdAt"`
-	UpdatedAt  *time.Time `json:"updatedAt"`
-	IsDeleted  bool       `json:"isDeleted"`
-	DeletedAt  *time.Time `json:"deletedAt"`
-	IsDisabled bool       `json:"isDisabled"`
+	// Id is a UUID that identifies the orgainsation uniquely
+	Id *string `json:"id"`
+
+	// Name is the display name of the organisation
+	Name string `json:"name"`
+
+	// Code is the shortcode for the organisation and has to be unique
+	Code string `json:"code"`
+
+	// Type defines the type of organisation
+	Type string `json:"type"`
+
+	// Icon optionally contains a URL/URI for the organisation's favicon
+	Icon *string `json:"icon"`
+
+	// Logo optionally contains a URL/URI for the organisation's logo
+	Logo *string `json:"logo"`
+
+	// Motd optionally contains a markdown text that the organisation
+	// uses as a banner for all their users
+	Motd *string `json:"motd"`
+
+	// IsUsingExternalDatabase indicates whether the organisation data
+	// is hosted on a separate database instance that is not the
+	// shared database
+	IsUsingExternalDatabase bool `json:"isUsingExternalDatabase"`
+
+	// IsUsingTenantedDatabase indicates whether the organisation data
+	// is hosted on a separate database schema in the shared database
+	IsUsingTenantedDatabase bool `json:"isUsingTenantedDatabase"`
+
+	// CreatedAt defines when the organisation was created
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedAt defines when the organisation was last updated
+	UpdatedAt *time.Time `json:"updatedAt"`
+
+	// IsDeleted defines whether the organisation is scheduled for
+	// deletion but pending any legal holds
+	IsScheduledForDeletion bool `json:"isScheduledForDeletion"`
+
+	// IsDeleted defines whether the organisation is scheduled for
+	// deletion but pending any legal holds
+	IsDeleted bool `json:"isDeleted"`
+
+	// DeletedAt defines when the organisation was actually deleted
+	DeletedAt *time.Time `json:"deletedAt"`
+
+	// IsDisabled defines whether the organisation activities should
+	// be paused
+	IsDisabled bool `json:"isDisabled"`
+
+	// DisabledAt defines the time when the organisation was disabled,
+	// logs will be in the audit logs
 	DisabledAt *time.Time `json:"disabledAt"`
-	Code       string     `json:"code"`
-	Icon       *string    `json:"icon"`
-	Logo       *string    `json:"logo"`
-	Motd       *string    `json:"motd"`
-	Type       string     `json:"type"`
-	UserCount  *int       `json:"userCount"`
+
+	// UserCount stores the number of users registered to the organisation
+	UserCount *int `json:"userCount"`
 }
+
 type AddUserToOrgV1 struct {
 	Db *sql.DB
 

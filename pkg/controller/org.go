@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,70 @@ import (
 	"opsicle/internal/common"
 	"time"
 )
+
+type CreateOrgV1Output struct {
+	Id   string `json:"id"`
+	Code string `json:"code"`
+
+	http.Response
+}
+
+type CreateOrgV1Input struct {
+	Name string `json:"name"`
+	Code string `json:"code"`
+}
+
+func (c Client) CreateOrgV1(input CreateOrgV1Input) (*CreateOrgV1Output, error) {
+	controllerUrl := *c.ControllerUrl
+	controllerUrl.Path = "/api/v1/org"
+	requestBodyData, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data: %s", err)
+	}
+	requestBody := bytes.NewBuffer(requestBodyData)
+	httpRequest, err := http.NewRequest(
+		http.MethodPost,
+		controllerUrl.String(),
+		requestBody,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http request to create an org: %s", err)
+	}
+	httpRequest.Header.Add("Content-Type", "application/json")
+	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle/controller-sdk/client-%s", c.Id))
+	if c.BasicAuth != nil {
+		httpRequest.SetBasicAuth(c.BasicAuth.Username, c.BasicAuth.Password)
+	}
+	if c.BearerAuth != nil {
+		httpRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.BearerAuth.Token))
+	}
+	httpResponse, err := c.HttpClient.Do(httpRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute http request to create org: %s", err)
+	}
+	output := CreateOrgV1Output{Response: *httpResponse}
+	responseBody, err := io.ReadAll(httpResponse.Body)
+	if err != nil {
+		return &output, fmt.Errorf("failed to read response body: %s", err)
+	}
+	if httpResponse.StatusCode != http.StatusOK {
+		return &output, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
+	}
+	var response common.HttpResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return &output, fmt.Errorf("failed to parse response from controller service: %s", err)
+	}
+	responseData, err := json.Marshal(response.Data)
+	if err != nil {
+		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
+	}
+	fmt.Println(string(responseData))
+	if err := json.Unmarshal(responseData, &output); err != nil {
+		return &output, fmt.Errorf("failed to unmarshal response data into output: %s", err)
+	}
+	output.Response = *httpResponse
+	return &output, nil
+}
 
 type GetOrgV1Output struct {
 	Id         string     `json:"id"`

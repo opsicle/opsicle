@@ -10,6 +10,6 @@ type Session struct {
 	UserId    string    `json:"userId"`
 	Username  string    `json:"username"`
 	UserType  UserType  `json:"userType"`
-	OrgCode   string    `json:"orgCode"`
-	OrgId     string    `json:"orgId"`
+	OrgCode   *string   `json:"orgCode"`
+	OrgId     *string   `json:"orgId"`
 }

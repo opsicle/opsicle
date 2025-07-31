@@ -7,6 +7,7 @@ import (
 
 	"opsicle/internal/controller/docs"
 	_ "opsicle/internal/controller/docs"
+	"opsicle/internal/controller/models"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -15,9 +16,10 @@ import (
 )
 
 type HttpApplicationOpts struct {
-	AdminToken         string
-	DatabaseConnection *sql.DB
-	ServiceLogs        chan<- common.ServiceLog
+	AdminToken          string
+	SessionSigningToken string
+	DatabaseConnection  *sql.DB
+	ServiceLogs         chan<- common.ServiceLog
 }
 
 // GetHttpApplication godoc
@@ -36,6 +38,10 @@ type HttpApplicationOpts struct {
 // @description			Used for authenticating with endpoints
 func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 	db = opts.DatabaseConnection
+
+	if opts.SessionSigningToken != "" {
+		models.SetSessionSigningToken(opts.SessionSigningToken)
+	}
 
 	handler := mux.NewRouter()
 	handler.NotFoundHandler = common.GetNotFoundHandler()

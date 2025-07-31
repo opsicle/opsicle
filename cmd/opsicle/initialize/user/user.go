@@ -1,4 +1,4 @@
-package controller
+package user
 
 import (
 	"fmt"
@@ -18,12 +18,6 @@ import (
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "admin-api-token",
-		DefaultValue: "",
-		Usage:        "defines the admin token to use when communicating with the endpoint",
-		Type:         cli.FlagTypeString,
-	},
-	{
 		Name:         "controller-url",
 		DefaultValue: "http://localhost:54321",
 		Usage:        "defines the url where the controller service is accessible at",
@@ -36,46 +30,51 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:     "controller",
-	Aliases: []string{"ctl", "con", "c"},
-	Short:   "Initialises Opsicle's controller service",
+	Use:     "user",
+	Aliases: []string{"u", "me"},
+	Short:   "Initialises a user account for the current user",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		_, _, err := controller.GetSessionToken()
+		if err == nil {
+			return fmt.Errorf("looks like you're already logged in, run `opsicle logout` first before running this command")
+		}
+
 		model := getModel()
 		program := tea.NewProgram(model)
 		if _, err := program.Run(); err != nil {
 			return fmt.Errorf("failed to get user input: %s", err)
 		}
-		adminApiToken := model.GetAdminApiToken()
-		adminEmail := model.GetEmail()
-		adminPassword := model.GetPassword()
-
-		if adminApiToken == "" || adminEmail == "" || adminPassword == "" {
-			return fmt.Errorf("one or more required fields were not specified")
-		}
 
 		controllerUrl := viper.GetString("controller-url")
 		client, err := controller.NewClient(controller.NewClientOpts{
 			ControllerUrl: controllerUrl,
-			Id:            "opsicle/login",
+			Id:            "opsicle/initialize/user",
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create controller client: %s", err)
 		}
-		userId, orgId, err := client.InitV1(controller.InitV1Opts{
-			AdminApiToken: adminApiToken,
-			Email:         adminEmail,
-			Password:      adminPassword,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create `root` organisation and user: %s", err)
+
+		email := model.GetEmail()
+		password := model.GetPassword()
+
+		if email == "" || password == "" {
+			return fmt.Errorf("failed to receive an email or password")
 		}
 
-		logrus.Debugf("created user[%s] in org[%s]", userId, orgId)
+		createUserV1Output, err := client.CreateUserV1(controller.CreateUserV1Input{
+			Email:    email,
+			Password: password,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create user: %s", err)
+		}
 
-		logrus.Infof("`root` organisation and user created successfully! login using 'opsicle login'")
+		logrus.Debugf("successfully created user[%s] with id[%s]", createUserV1Output.Email, createUserV1Output.Id)
+
+		logrus.Infof("user[%s] created successfully! login using 'opsicle login'", createUserV1Output.Email)
 		return nil
 	},
 }
@@ -100,7 +99,7 @@ type model struct {
 
 func getModel() model {
 	m := model{
-		inputs: make([]textinput.Model, 3),
+		inputs: make([]textinput.Model, 2),
 	}
 
 	var t textinput.Model
@@ -114,17 +113,13 @@ func getModel() model {
 			t.Focus()
 			t.Width = 64
 			t.CharLimit = 256
-			t.Placeholder = "Admin API token"
+			t.Placeholder = "Your email address"
 			t.PromptStyle = focusedStyle
 			t.TextStyle = focusedStyle
 		case 1:
 			t.Width = 64
-			t.CharLimit = 256
-			t.Placeholder = "Admin email"
-		case 2:
-			t.Width = 64
 			t.CharLimit = 128
-			t.Placeholder = "Admin password"
+			t.Placeholder = "Your password"
 			t.EchoMode = textinput.EchoPassword
 			t.EchoCharacter = '*'
 		}
@@ -135,16 +130,12 @@ func getModel() model {
 	return m
 }
 
-func (m model) GetAdminApiToken() string {
+func (m model) GetEmail() string {
 	return m.inputs[0].Value()
 }
 
-func (m model) GetEmail() string {
-	return m.inputs[1].Value()
-}
-
 func (m model) GetPassword() string {
-	return m.inputs[2].Value()
+	return m.inputs[1].Value()
 }
 
 func (m model) Init() tea.Cmd {

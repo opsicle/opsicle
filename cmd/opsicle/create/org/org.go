@@ -1,4 +1,4 @@
-package controller
+package org
 
 import (
 	"fmt"
@@ -18,15 +18,22 @@ import (
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "admin-api-token",
-		DefaultValue: "",
-		Usage:        "defines the admin token to use when communicating with the endpoint",
+		Name:         "controller-url",
+		Short:        'u',
+		DefaultValue: "http://localhost:54321",
+		Usage:        "defines the url where the controller service is accessible at",
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "controller-url",
-		DefaultValue: "http://localhost:54321",
-		Usage:        "defines the url where the controller service is accessible at",
+		Name:         "org-code",
+		DefaultValue: "",
+		Usage:        "code of the orgnaisation to be created",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "org-name",
+		DefaultValue: "",
+		Usage:        "name of the orgnaisation to be created",
 		Type:         cli.FlagTypeString,
 	},
 }
@@ -36,46 +43,56 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:     "controller",
-	Aliases: []string{"ctl", "con", "c"},
-	Short:   "Initialises Opsicle's controller service",
+	Use:     "org",
+	Aliases: []string{"o"},
+	Short:   "Creates a new organisation",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		model := getModel()
+		controllerUrl := viper.GetString("controller-url")
+		orgCode := viper.GetString("org-code")
+		orgName := viper.GetString("org-name")
+
+		sessionToken, sessionFilePath, err := controller.GetSessionToken()
+		if err != nil {
+			return fmt.Errorf("failed to get a session token: %s", err)
+		}
+		logrus.Debugf("loaded credentials from path[%s]", sessionFilePath)
+		model := getModel(orgName, orgCode)
 		program := tea.NewProgram(model)
 		if _, err := program.Run(); err != nil {
 			return fmt.Errorf("failed to get user input: %s", err)
 		}
-		adminApiToken := model.GetAdminApiToken()
-		adminEmail := model.GetEmail()
-		adminPassword := model.GetPassword()
-
-		if adminApiToken == "" || adminEmail == "" || adminPassword == "" {
-			return fmt.Errorf("one or more required fields were not specified")
+		orgCodeIsSet, inputOrgCode := model.GetOrganisationCode()
+		if orgCodeIsSet {
+			orgCode = inputOrgCode
+		}
+		orgNameIsSet, inputOrgName := model.GetOrganisationName()
+		if orgNameIsSet {
+			orgName = inputOrgName
 		}
 
-		controllerUrl := viper.GetString("controller-url")
 		client, err := controller.NewClient(controller.NewClientOpts{
 			ControllerUrl: controllerUrl,
-			Id:            "opsicle/login",
+			BearerAuth: &controller.NewClientBearerAuthOpts{
+				Token: sessionToken,
+			},
+			Id: "opsicle/create/org",
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create controller client: %s", err)
+			return fmt.Errorf("failed to create a client: %s", err)
 		}
-		userId, orgId, err := client.InitV1(controller.InitV1Opts{
-			AdminApiToken: adminApiToken,
-			Email:         adminEmail,
-			Password:      adminPassword,
+
+		createOrgOutput, err := client.CreateOrgV1(controller.CreateOrgV1Input{
+			Name: orgName,
+			Code: orgCode,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create `root` organisation and user: %s", err)
+			return fmt.Errorf("failed to create an org: %s", err)
 		}
+		logrus.Infof("successfully created org[%s]", createOrgOutput.Code)
 
-		logrus.Debugf("created user[%s] in org[%s]", userId, orgId)
-
-		logrus.Infof("`root` organisation and user created successfully! login using 'opsicle login'")
 		return nil
 	},
 }
@@ -92,15 +109,44 @@ var (
 	blurredButton = fmt.Sprintf("[ %s ]", blurredStyle.Render("Submit"))
 )
 
+type errMsg error
+
 type model struct {
 	focusIndex int
 	inputs     []textinput.Model
+	outputs    map[string]string
+	outputMap  map[string]int
 	cursorMode cursor.Mode
 }
 
-func getModel() model {
+func getModel(orgName, orgCode string) model {
+	outputs := map[string]string{}
+	outputMap := map[string]int{}
+	inputs := []func(*textinput.Model){}
+	if orgName == "" {
+		currentInputIndex := len(inputs)
+		inputs = append(inputs, func(t *textinput.Model) {
+			t.Width = 64
+			t.CharLimit = 256
+			t.Placeholder = "Organisation name"
+			outputs["orgName"] = ""
+			outputMap["orgName"] = currentInputIndex
+		})
+	}
+	if orgCode == "" {
+		currentInputIndex := len(inputs)
+		inputs = append(inputs, func(t *textinput.Model) {
+			t.Width = 64
+			t.CharLimit = 256
+			t.Placeholder = "Organisation code"
+			outputs["orgCode"] = ""
+			outputMap["orgCode"] = currentInputIndex
+		})
+	}
 	m := model{
-		inputs: make([]textinput.Model, 3),
+		inputs:    make([]textinput.Model, len(inputs)),
+		outputs:   outputs,
+		outputMap: outputMap,
 	}
 
 	var t textinput.Model
@@ -112,39 +158,30 @@ func getModel() model {
 		switch i {
 		case 0:
 			t.Focus()
-			t.Width = 64
-			t.CharLimit = 256
-			t.Placeholder = "Admin API token"
 			t.PromptStyle = focusedStyle
 			t.TextStyle = focusedStyle
-		case 1:
-			t.Width = 64
-			t.CharLimit = 256
-			t.Placeholder = "Admin email"
-		case 2:
-			t.Width = 64
-			t.CharLimit = 128
-			t.Placeholder = "Admin password"
-			t.EchoMode = textinput.EchoPassword
-			t.EchoCharacter = '*'
 		}
-
+		inputs[i](&t)
 		m.inputs[i] = t
 	}
 
 	return m
 }
 
-func (m model) GetAdminApiToken() string {
-	return m.inputs[0].Value()
+func (m model) GetOrganisationCode() (bool, string) {
+	orgCodeIndex, ok := m.outputMap["orgCode"]
+	if !ok {
+		return false, ""
+	}
+	return true, m.inputs[orgCodeIndex].Value()
 }
 
-func (m model) GetEmail() string {
-	return m.inputs[1].Value()
-}
-
-func (m model) GetPassword() string {
-	return m.inputs[2].Value()
+func (m model) GetOrganisationName() (bool, string) {
+	orgNameIndex, ok := m.outputMap["orgName"]
+	if !ok {
+		return false, ""
+	}
+	return true, m.inputs[orgNameIndex].Value()
 }
 
 func (m model) Init() tea.Cmd {

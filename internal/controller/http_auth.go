@@ -13,10 +13,10 @@ const authRequestContext common.HttpContextKey = "controller-auth"
 
 type identity struct {
 	// OrganizationId is the ID of the current caller's organization
-	OrganizationId string `json:"organizationId"`
+	OrganizationId *string `json:"organizationId"`
 
 	// OrganizationCode is the code of the current caller's organization
-	OrganizationCode string `json:"organizationCode"`
+	OrganizationCode *string `json:"organizationCode"`
 
 	// UserId is the ID of the current caller
 	UserId string `json:"userId"`
@@ -46,10 +46,22 @@ func getRouteAuther(serviceLogs chan<- common.ServiceLog) func(http.Handler) htt
 			serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "auth middleware executing")
 
 			log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-			log(common.LogLevelDebug, fmt.Sprintf("incoming request from user[%s] from org[%s]", sessionInfo.Username, sessionInfo.OrgCode))
+			orgDetails := ""
+			var orgCode *string = nil
+			var orgId *string = nil
+			if sessionInfo.OrgCode != nil {
+				if *sessionInfo.OrgCode != "" {
+					orgCode = sessionInfo.OrgCode
+					orgDetails = fmt.Sprintf(" from org[%s]", *sessionInfo.OrgCode)
+				}
+				if *sessionInfo.OrgId != "" {
+					orgId = sessionInfo.OrgId
+				}
+			}
+			log(common.LogLevelInfo, fmt.Sprintf("request from user[%s]%s", sessionInfo.Username, orgDetails))
 			identityInstance := identity{
-				OrganizationCode: sessionInfo.OrgCode,
-				OrganizationId:   sessionInfo.OrgId,
+				OrganizationCode: orgCode,
+				OrganizationId:   orgId,
 				UserId:           sessionInfo.UserId,
 				Username:         sessionInfo.Username,
 			}

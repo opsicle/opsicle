@@ -20,7 +20,7 @@ type CreateSessionV1Opts struct {
 	Db          *sql.DB
 	CachePrefix string
 
-	OrgCode  string
+	OrgCode  *string
 	Email    string
 	Password string
 
@@ -31,15 +31,19 @@ type CreateSessionV1Opts struct {
 }
 
 func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
-	orgInstance, err := GetOrgV1(GetOrgV1Opts{
-		Db:   opts.Db,
-		Code: &opts.OrgCode,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("models.CreateSessionV1: failed to get org instance: %s", err)
-	}
-	if orgInstance == nil {
-		return nil, fmt.Errorf("models.CreateSessionV1: failed to find a org")
+	orgInstance := &Org{}
+	if opts.OrgCode != nil {
+		var err error
+		orgInstance, err = GetOrgV1(GetOrgV1Opts{
+			Db:   opts.Db,
+			Code: opts.OrgCode,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("models.CreateSessionV1: failed to get org instance: %s", err)
+		}
+		if orgInstance == nil {
+			return nil, fmt.Errorf("models.CreateSessionV1: failed to find a org")
+		}
 	}
 	userInstance, err := GetUserV1(GetUserV1Opts{
 		Db:    opts.Db,
@@ -48,15 +52,17 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 	if err != nil {
 		return nil, fmt.Errorf("models.CreateSessionV1: failed to get user instance: %s", err)
 	}
-	orgUserInstance, err := orgInstance.GetUserV1(GetOrgUserV1Opts{
-		Db:     opts.Db,
-		UserId: *userInstance.Id,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("models.CreateSessionV1: failed to get user org membership: %s", err)
-	}
-	if orgUserInstance == nil {
-		return nil, fmt.Errorf("models.CreateSessionV1: failed to get a user belonging to the specified organisation")
+	if orgInstance.Id != nil {
+		orgUserInstance, err := orgInstance.GetUserV1(GetOrgUserV1Opts{
+			Db:     opts.Db,
+			UserId: *userInstance.Id,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("models.CreateSessionV1: failed to get user org membership: %s", err)
+		}
+		if orgUserInstance == nil {
+			return nil, fmt.Errorf("models.CreateSessionV1: failed to get a user belonging to the specified organisation")
+		}
 	}
 
 	userInstance.Password = &opts.Password
@@ -64,6 +70,14 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 		return nil, nil
 	}
 	sessionId := uuid.NewString()
+	orgCode := ""
+	if orgInstance.Code != "" {
+		orgCode = orgInstance.Code
+	}
+	orgId := ""
+	if orgInstance.Id != nil {
+		orgId = *orgInstance.Id
+	}
 	jwtToken, err := auth.GenerateJwt(auth.GenerateJwtOpts{
 		Audience: opts.Source,
 		Ext: map[string]string{
@@ -72,9 +86,9 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 		},
 		Id:       sessionId,
 		Issuer:   "opsicle/controller",
-		OrgCode:  orgInstance.Code,
-		OrgId:    *orgInstance.Id,
-		Secret:   secretSessionKey,
+		OrgCode:  orgCode,
+		OrgId:    orgId,
+		Secret:   sessionSigningToken,
 		Subject:  "cli",
 		Ttl:      opts.ExpiresIn,
 		UserId:   *userInstance.Id,

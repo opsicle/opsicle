@@ -3,6 +3,7 @@ package org
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
 	"os"
@@ -56,8 +57,13 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create client for approver service: %s", err)
 		}
 
-		org, _, err := client.GetOrgV1()
+		org, httpResponse, err := client.GetOrgV1()
 		if err != nil {
+			if httpResponse.StatusCode == http.StatusUnauthorized {
+				if err := controller.DeleteSessionToken(); err != nil {
+					logrus.Warnf("failed to remove session token: %s", err)
+				}
+			}
 			return fmt.Errorf("failed to retrieve current organisation: %s", err)
 		}
 

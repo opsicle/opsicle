@@ -2,12 +2,14 @@ package create
 
 import (
 	"opsicle/cmd/opsicle/create/approval_request"
+	"opsicle/cmd/opsicle/create/org"
 
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	Command.AddCommand(approval_request.Command)
+	Command.AddCommand(org.Command)
 }
 
 var Command = &cobra.Command{

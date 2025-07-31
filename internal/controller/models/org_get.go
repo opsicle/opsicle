@@ -26,7 +26,6 @@ func GetOrgV1(opts GetOrgV1Opts) (*Org, error) {
 	} else if opts.Code != nil {
 		selectorField = "code"
 		selectorValue = *opts.Code
-		fmt.Println("code selected: ", selectorValue)
 	}
 	stmt, err := opts.Db.Prepare(fmt.Sprintf(`
 	SELECT 

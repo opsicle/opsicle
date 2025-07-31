@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,7 +9,77 @@ import (
 	"opsicle/internal/common"
 )
 
-type ListUsersV1Output []ListUsersV1OutputUser
+type CreateUserV1Input struct {
+	// OrgInviteCode if present, allows the automatic registering of the user
+	// with the organisation. Each invite code is only valid once
+	OrgInviteCode *string `json:"orgInviteCode"`
+
+	// Email is the user's email address
+	Email string `json:"email"`
+
+	// Password is the user's password
+	Password string `json:"password"`
+}
+
+type CreateUserV1Output struct {
+	Id      string  `json:"id"`
+	Email   string  `json:"email"`
+	OrgCode *string `json:"orgCode"`
+	OrgId   *string `json:"orgId"`
+
+	http.Response
+}
+
+func (c Client) CreateUserV1(input CreateUserV1Input) (*CreateUserV1Output, error) {
+	controllerUrl := *c.ControllerUrl
+	controllerUrl.Path = "/api/v1/users"
+	requestData, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal input into json: %s", err)
+	}
+	requestBody := bytes.NewBuffer(requestData)
+	httpRequest, err := http.NewRequest(
+		http.MethodPost,
+		controllerUrl.String(),
+		requestBody,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http request to create a session: %s", err)
+	}
+	httpRequest.Header.Add("Content-Type", "application/json")
+	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle/controller-sdk/client-%s", c.Id))
+	httpResponse, err := c.HttpClient.Do(httpRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute http request to create user: %s", err)
+	}
+	output := CreateUserV1Output{Response: *httpResponse}
+	responseBody, err := io.ReadAll(httpResponse.Body)
+	if err != nil {
+		return &output, fmt.Errorf("failed to read response body: %s", err)
+	}
+	if httpResponse.StatusCode != http.StatusOK {
+		return &output, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
+	}
+	var response common.HttpResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return &output, fmt.Errorf("failed to parse response from controller service: %s", err)
+	}
+	responseData, err := json.Marshal(response.Data)
+	if err != nil {
+		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
+	}
+	if err := json.Unmarshal(responseData, &output); err != nil {
+		return &output, fmt.Errorf("failed to unmarshal response data into output: %s", err)
+	}
+	output.Response = *httpResponse
+	return &output, nil
+}
+
+type ListUsersV1Output struct {
+	Users []ListUsersV1OutputUser
+
+	http.Response
+}
 
 type ListUsersV1OutputUser struct {
 	Id    string                    `json:"id"`
@@ -23,7 +94,7 @@ type ListUsersV1OutputUserOrg struct {
 	Code string `json:"code"`
 }
 
-func (c Client) ListUsersV1() (*ListUsersV1Output, *http.Response, error) {
+func (c Client) ListUsersV1() (*ListUsersV1Output, error) {
 	controllerUrl := *c.ControllerUrl
 	controllerUrl.Path = "/api/v1/users"
 	httpRequest, err := http.NewRequest(
@@ -32,7 +103,7 @@ func (c Client) ListUsersV1() (*ListUsersV1Output, *http.Response, error) {
 		nil,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create http request to create a session: %s", err)
+		return nil, fmt.Errorf("failed to create http request to create a session: %s", err)
 	}
 	httpRequest.Header.Add("Content-Type", "application/json")
 	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle/controller-sdk/client-%s", c.Id))
@@ -44,26 +115,26 @@ func (c Client) ListUsersV1() (*ListUsersV1Output, *http.Response, error) {
 	}
 	httpResponse, err := c.HttpClient.Do(httpRequest)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute http request to create session: %s", err)
+		return nil, fmt.Errorf("failed to execute http request to create session: %s", err)
 	}
+	output := ListUsersV1Output{Response: *httpResponse}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return nil, httpResponse, fmt.Errorf("failed to read response body: %s", err)
+		return &output, fmt.Errorf("failed to read response body: %s", err)
 	}
 	if httpResponse.StatusCode != http.StatusOK {
-		return nil, httpResponse, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
+		return &output, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return nil, httpResponse, fmt.Errorf("failed to parse response from controller service: %s", err)
+		return &output, fmt.Errorf("failed to parse response from controller service: %s", err)
 	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
-		return nil, httpResponse, fmt.Errorf("failed to parse response data from controller service: %s", err)
+		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
 	}
-	var output ListUsersV1Output
-	if err := json.Unmarshal(responseData, &output); err != nil {
-		return nil, httpResponse, fmt.Errorf("failed to unmarshal response data into output: %s", err)
+	if err := json.Unmarshal(responseData, &output.Users); err != nil {
+		return &output, fmt.Errorf("failed to unmarshal response data into output: %s", err)
 	}
-	return &output, httpResponse, nil
+	return &output, nil
 }

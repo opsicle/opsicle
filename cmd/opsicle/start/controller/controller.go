@@ -87,6 +87,12 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
+		Name:         "session-signing-token",
+		DefaultValue: "super_secret_session_signing_token",
+		Usage:        "specifies the token used to sign sessions",
+		Type:         cli.FlagTypeString,
+	},
+	{
 		Name:         "storage-mode",
 		Short:        's',
 		DefaultValue: common.StorageFilesystem,
@@ -139,9 +145,11 @@ var Command = &cobra.Command{
 		logrus.Debugf("established connection to cache")
 
 		logrus.Infof("initialising application...")
+		sessionSigningToken := viper.GetString("session-signing-token")
 		controllerOpts := controller.HttpApplicationOpts{
-			DatabaseConnection: databaseConnection,
-			ServiceLogs:        serviceLogs,
+			DatabaseConnection:  databaseConnection,
+			ServiceLogs:         serviceLogs,
+			SessionSigningToken: sessionSigningToken,
 		}
 		adminToken := viper.GetString("admin-api-token")
 		if adminToken != "" {

@@ -1,5 +1,9 @@
 package models
 
-const (
-	secretSessionKey = "supersecretkey"
+var (
+	sessionSigningToken = "supersecretkey"
 )
+
+func SetSessionSigningToken(token string) {
+	sessionSigningToken = token
+}

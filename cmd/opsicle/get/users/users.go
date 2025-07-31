@@ -3,6 +3,7 @@ package users
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
 	"os"
@@ -56,12 +57,17 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create client for approver service: %s", err)
 		}
 
-		users, _, err := client.ListUsersV1()
+		users, err := client.ListUsersV1()
 		if err != nil {
+			if users.Response.StatusCode == http.StatusUnauthorized {
+				if err := controller.DeleteSessionToken(); err != nil {
+					logrus.Warnf("failed to remove session token: %s", err)
+				}
+			}
 			return fmt.Errorf("failed to retrieve users: %s", err)
 		}
 
-		o, _ := json.MarshalIndent(users, "", "  ")
+		o, _ := json.MarshalIndent(users.Users, "", "  ")
 		fmt.Println(string(o))
 		return nil
 	},

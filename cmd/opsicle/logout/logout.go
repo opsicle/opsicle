@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
-	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -63,7 +62,7 @@ var Command = &cobra.Command{
 			}
 		}
 
-		if err := os.Remove(sessionFilePath); err != nil {
+		if err := controller.DeleteSessionToken(); err != nil {
 			return fmt.Errorf("failed to remove file at path[%s], please do it yourself: %s", sessionFilePath, err)
 		}
 

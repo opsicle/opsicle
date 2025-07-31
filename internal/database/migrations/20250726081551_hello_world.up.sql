@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS `users` (
     id              VARCHAR(36) PRIMARY KEY,
     email           VARCHAR(255) NOT NULL,
     email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
+    email_verification_code TEXT NOT NULL,
     password_hash   TEXT,
     `type`          VARCHAR(64) NOT NULL DEFAULT 'user',
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -14,18 +15,21 @@ CREATE TABLE IF NOT EXISTS `users` (
 
 CREATE TABLE IF NOT EXISTS `orgs` (
     id            VARCHAR(36) PRIMARY KEY,
-    `name`          VARCHAR(255) NOT NULL,
-    code        VARCHAR(32) NOT NULL UNIQUE,
-    `type`        VARCHAR(32) NOT NULL DEFAULT 'org',
-    icon        TEXT,
-    logo        TEXT,
-    motd        TEXT,
+    `name`        VARCHAR(255) NOT NULL,
+    code          VARCHAR(32) NOT NULL UNIQUE,
+    `type`        VARCHAR(32) NOT NULL DEFAULT 'tenant',
+    icon          TEXT,
+    logo          TEXT,
+    motd          TEXT,
+    created_by    VARCHAR(36) NOT NULL,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME DEFAULT NULL,
+    is_scheduled_for_deletion BOOLEAN NOT NULL DEFAULT FALSE,
     is_deleted    BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at    DATETIME,
     is_disabled   BOOLEAN NOT NULL DEFAULT FALSE,
-    disabled_at   DATETIME
+    disabled_at   DATETIME,
+    FOREIGN KEY (created_by) REFERENCES `users`(id)
 );
 
 CREATE TABLE IF NOT EXISTS `groups` (
@@ -86,6 +90,7 @@ CREATE TABLE IF NOT EXISTS `groups_users` (
 CREATE TABLE IF NOT EXISTS `org_users` (
     user_id         VARCHAR(36) NOT NULL,
     org_id          VARCHAR(36) NOT NULL,
+    `type`       VARCHAR(64) NOT NULL DEFAULT 'member',
     joined_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, org_id),
     FOREIGN KEY (user_id) REFERENCES `users`(id),
@@ -108,6 +113,14 @@ CREATE TABLE IF NOT EXISTS `org_role_users` (
     PRIMARY KEY (user_id, role_id),
     FOREIGN KEY (user_id) REFERENCES `users`(id),
     FOREIGN KEY (role_id) REFERENCES `org_roles`(id)
+);
+
+CREATE TABLE IF NOT EXISTS `org_config_db` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `db_hostname` TEXT NOT NULL,
+  `db_port` TEXT NOT NULL,
+  `db_username` TEXT NOT NULL,
+  `db_password` TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS `org_config_sso` (
@@ -154,29 +167,23 @@ CREATE TABLE IF NOT EXISTS `org_config_security` (
 
 CREATE TABLE IF NOT EXISTS `sessions` (
     id             VARCHAR(36) PRIMARY KEY,
-    session_token  VARCHAR(512) NOT NULL,
+    user_id        VARCHAR(36) NOT NULL,
+    org_id         VARCHAR(36),
+    token_hash     TEXT NOT NULL,
     user_agent     TEXT,
     ip_address     VARCHAR(64),
-    location       VARCHAR(255),
+    `location`     VARCHAR(255),
     login_method   VARCHAR(64),
     issued_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at     DATETIME,
-    revoked_at     DATETIME
-);
-
-CREATE TABLE IF NOT EXISTS `user_sessions` (
-    user_id    VARCHAR(36) NOT NULL,
-    session_id VARCHAR(36) NOT NULL,
-    PRIMARY KEY (user_id, session_id),
-    FOREIGN KEY (user_id) REFERENCES `users`(id),
-    FOREIGN KEY (session_id) REFERENCES `sessions`(id)
+    revoked_at     DATETIME,
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id)
 );
 
 CREATE TABLE IF NOT EXISTS `user_slack` (
     id            VARCHAR(36) PRIMARY KEY,
     user_id       VARCHAR(36) NOT NULL,
     slack_id      VARCHAR(255) NOT NULL,
-    slack_team_id VARCHAR(255),
     linked_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES `users`(id)
 );
@@ -215,13 +222,12 @@ CREATE TABLE IF NOT EXISTS `user_permissions` (
     id              VARCHAR(36) PRIMARY KEY,
     user_id         VARCHAR(36) NOT NULL,
     org_id          VARCHAR(36),
-    permission      VARCHAR(255) NOT NULL,
+    permission      TEXT NOT NULL,
     granted_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     granted_by      VARCHAR(36),
     FOREIGN KEY (user_id) REFERENCES `users`(id),
     FOREIGN KEY (org_id) REFERENCES `orgs`(id),
-    FOREIGN KEY (granted_by) REFERENCES `users`(id),
-    UNIQUE KEY uniq_user_org_permission (user_id, org_id, permission)
+    FOREIGN KEY (granted_by) REFERENCES `users`(id)
 );
 
 CREATE TABLE IF NOT EXISTS `user_profiles` (
@@ -244,9 +250,8 @@ CREATE TABLE IF NOT EXISTS `user_profiles` (
 CREATE TABLE IF NOT EXISTS `user_mfa` (
     id              VARCHAR(36) PRIMARY KEY,
     user_id         VARCHAR(36) NOT NULL,
-    secret          TEXT,
+    `secret`          TEXT,
     config_json     JSON,
-    enabled         BOOLEAN NOT NULL DEFAULT TRUE,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES `users`(id)

@@ -33,7 +33,7 @@ func SendHttpFailResponse(
 		Success: false,
 	}
 	if len(data) > 0 {
-		responseData.Data = data
+		responseData.Data = data[0]
 	}
 	res, _ := json.Marshal(responseData)
 	responseWriter.WriteHeader(statusCode)

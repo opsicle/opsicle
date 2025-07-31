@@ -14,28 +14,30 @@ type GetSessionV1Opts struct {
 }
 
 func GetSessionV1(opts GetSessionV1Opts) (*Session, error) {
-	claims, err := auth.ValidateJWT(secretSessionKey, opts.BearerToken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate token: %s", err)
+	var output *Session = nil
+	claims, err := auth.ValidateJWT(sessionSigningToken, opts.BearerToken)
+	if claims != nil {
+		output = &Session{
+			Id:        claims.ID,
+			ExpiresAt: claims.ExpiresAt.Time,
+			StartedAt: claims.IssuedAt.Time,
+			TimeLeft:  time.Until(claims.ExpiresAt.Time).String(),
+			OrgCode:   &claims.OrgCode,
+			OrgId:     &claims.OrgId,
+			UserId:    claims.UserID,
+			Username:  claims.Username,
+		}
 	}
-	sessionId := claims.ID
-
-	cacheKey := strings.Join([]string{opts.CachePrefix, claims.UserID, sessionId}, ":")
+	if err != nil {
+		return output, fmt.Errorf("failed to validate token: %s", err)
+	}
+	cacheKey := strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":")
 	sessionInfo, err := cache.Get().Get(cacheKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve session from cache: %s", err)
+		return output, fmt.Errorf("failed to retrieve session from cache: %s", err)
 	}
-	if sessionInfo != sessionId {
-		return nil, fmt.Errorf("failed to retrieve a valid session from cache: %s", err)
+	if sessionInfo != claims.ID {
+		return output, fmt.Errorf("failed to retrieve a valid session from cache: %s", err)
 	}
-	return &Session{
-		Id:        sessionId,
-		ExpiresAt: claims.ExpiresAt.Time,
-		StartedAt: claims.IssuedAt.Time,
-		TimeLeft:  time.Until(claims.ExpiresAt.Time).String(),
-		OrgCode:   claims.OrgCode,
-		OrgId:     claims.OrgId,
-		UserId:    claims.UserID,
-		Username:  claims.Username,
-	}, nil
+	return output, nil
 }
