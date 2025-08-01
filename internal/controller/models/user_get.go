@@ -27,6 +27,7 @@ func GetUserV1(opts GetUserV1Opts) (*User, error) {
 	SELECT
     users.id AS user_id,
     users.email,
+    users.email_verification_code,
     users.password_hash AS password_hash
 		FROM users
 			WHERE %s = ?`,
@@ -46,6 +47,7 @@ func GetUserV1(opts GetUserV1Opts) (*User, error) {
 	if err := row.Scan(
 		&userInstance.Id,
 		&userInstance.Email,
+		&userInstance.EmailVerificationCode,
 		&userInstance.PasswordHash,
 	); err != nil {
 		return nil, fmt.Errorf("failed to get user row: %s", err)

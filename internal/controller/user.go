@@ -7,7 +7,12 @@ import (
 	"net/http"
 	"net/mail"
 	"opsicle/internal/common"
+	"opsicle/internal/common/images"
 	"opsicle/internal/controller/models"
+	"opsicle/internal/controller/templates"
+	"opsicle/internal/email"
+
+	"github.com/gorilla/mux"
 )
 
 func registerUserRoutes(opts RouteRegistrationOpts) {
@@ -17,6 +22,10 @@ func registerUserRoutes(opts RouteRegistrationOpts) {
 
 	v1.HandleFunc("", handleCreateUserV1).Methods(http.MethodPost)
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleListUsersV1))).Methods(http.MethodGet)
+
+	v1 = opts.Router.PathPrefix("/v1/verification").Subrouter()
+
+	v1.HandleFunc("/{verificationCode}", handleVerifyUserV1).Methods(http.MethodGet)
 }
 
 type handleCreateUserV1Input struct {
@@ -79,6 +88,48 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !user.IsVerified() {
+		if smtpConfig.IsSet() {
+			remoteAddr := r.RemoteAddr
+			userAgent := r.UserAgent()
+			opsicleCatMimeType, opsicleCatData := images.GetOpsicleCat()
+			if err := email.SendSmtp(email.SendSmtpOpts{
+				ServiceLogs: *serviceLogs,
+				To: []email.User{
+					{
+						Address: user.Email,
+					},
+				},
+				Sender: smtpConfig.Sender,
+				Message: email.Message{
+					Title: "Verify your Opsicle account email to get started",
+					Body: templates.GetEmailVerificationMessage(
+						publicServerUrl,
+						user.EmailVerificationCode,
+						remoteAddr,
+						userAgent,
+					),
+					Images: map[string]email.MessageAttachment{
+						"cat.png": {
+							Type: opsicleCatMimeType,
+							Data: opsicleCatData,
+						},
+					},
+				},
+				Smtp: email.SmtpConfig{
+					Hostname: smtpConfig.Hostname,
+					Port:     smtpConfig.Port,
+					Username: smtpConfig.Username,
+					Password: smtpConfig.Password,
+				},
+			}); err != nil {
+				log(common.LogLevelWarn, fmt.Sprintf("failed to send email, send user their verification code[%s] manually", user.EmailVerificationCode))
+			}
+		} else {
+			log(common.LogLevelWarn, fmt.Sprintf("smtp is not available, send user their verification code[%s] manually", user.EmailVerificationCode))
+		}
+	}
+
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleCreateUserV1Output{
 		Id:    *user.Id,
 		Email: user.Email,
@@ -105,4 +156,20 @@ func handleListUsersV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", users)
+}
+
+func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	log(common.LogLevelDebug, "this endpoint verifies a user")
+	vars := mux.Vars(r)
+	verificationCode := vars["verificationCode"]
+	userInstance, err := models.VerifyUserV1(models.VerifyUserV1Opts{
+		Db:               db,
+		VerificationCode: verificationCode,
+	})
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify user", err)
+		return
+	}
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userInstance)
 }

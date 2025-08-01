@@ -49,6 +49,7 @@ var Command = &cobra.Command{
 		}
 
 		controllerUrl := viper.GetString("controller-url")
+		logrus.Debugf("creating new client...")
 		client, err := controller.NewClient(controller.NewClientOpts{
 			ControllerUrl: controllerUrl,
 			Id:            "opsicle/initialize/user",
@@ -64,6 +65,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to receive an email or password")
 		}
 
+		logrus.Debugf("sending request to server...")
 		createUserV1Output, err := client.CreateUserV1(controller.CreateUserV1Input{
 			Email:    email,
 			Password: password,

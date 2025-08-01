@@ -1,14 +1,12 @@
 package emailsender
 
 import (
-	"bytes"
-	"encoding/base64"
 	"fmt"
-	"mime/multipart"
-	"mime/quotedprintable"
-	"net/smtp"
-	"net/textproto"
 	"opsicle/internal/cli"
+	"opsicle/internal/common"
+	"opsicle/internal/common/images"
+	"opsicle/internal/email"
+	"time"
 
 	_ "embed"
 
@@ -18,10 +16,7 @@ import (
 )
 
 //go:embed template.html
-var templateEmailBody string
-
-//go:embed image.png
-var imageBytes []byte
+var templateEmailBody []byte
 
 var flags cli.Flags = cli.Flags{
 	{
@@ -103,72 +98,44 @@ var Command = &cobra.Command{
 		senderName := viper.GetString("sender-name")
 		logrus.Infof("sending message from address[%s] to address[%s]...", senderEmail, receiverEmail)
 
-		var buf bytes.Buffer
-		writer := multipart.NewWriter(&buf)
+		serviceLogs := make(chan common.ServiceLog, 64)
+		common.StartServiceLogLoop(serviceLogs)
 
-		// Headers
-		headers := make(map[string]string)
-		headers["From"] = fmt.Sprintf("%s <%s>", senderName, senderEmail)
-		headers["To"] = fmt.Sprintf("%s <%s>", receiverName, receiverEmail)
-		headers["Subject"] = "Test email from Opsicle notifications"
-		headers["MIME-Version"] = "1.0"
-		headers["Content-Type"] = "multipart/related; boundary=" + writer.Boundary()
+		opsicleCatMimeType, opsicleCatData := images.GetOpsicleCat()
+		if err := email.SendSmtp(email.SendSmtpOpts{
+			ServiceLogs: serviceLogs,
 
-		for k, v := range headers {
-			fmt.Fprintf(&buf, "%s: %s\r\n", k, v)
-		}
-		fmt.Fprint(&buf, "\r\n")
-
-		// HTML Part
-		htmlPart, _ := writer.CreatePart(map[string][]string{
-			"Content-Type":              {"text/html; charset=UTF-8"},
-			"Content-Transfer-Encoding": {"quoted-printable"},
-		})
-		qp := quotedprintable.NewWriter(htmlPart)
-		qp.Write([]byte(templateEmailBody))
-		qp.Close()
-
-		// Image Part
-		imageHeader := make(textproto.MIMEHeader)
-		imageHeader.Set("Content-Type", "image/png")
-		imageHeader.Set("Content-Transfer-Encoding", "base64")
-		imageHeader.Set("Content-ID", "<image.png>")
-		imageHeader.Set("Content-Disposition", "inline; filename=\"image.png\"")
-		imagePart, _ := writer.CreatePart(imageHeader)
-		encoded := make([]byte, base64.StdEncoding.EncodedLen(len(imageBytes)))
-		base64.StdEncoding.Encode(encoded, imageBytes)
-		for i := 0; i < len(encoded); i += 76 {
-			end := i + 76
-			if end > len(encoded) {
-				end = len(encoded)
-			}
-			imagePart.Write(encoded[i:end])
-			imagePart.Write([]byte("\r\n"))
+			To: []email.User{
+				{
+					Address: receiverEmail,
+					Name:    receiverName,
+				},
+			},
+			Sender: email.User{
+				Address: senderEmail,
+				Name:    senderName,
+			},
+			Smtp: email.SmtpConfig{
+				Hostname: smtpHost,
+				Port:     smtpPort,
+				Username: smtpUsername,
+				Password: smtpPassword,
+			},
+			Message: email.Message{
+				Body:  templateEmailBody,
+				Title: "Test email from Opsicle Notifications",
+				Images: map[string]email.MessageAttachment{
+					"image.png": {
+						Type: opsicleCatMimeType,
+						Data: opsicleCatData,
+					},
+				},
+			},
+		}); err != nil {
+			return fmt.Errorf("failed to trigger email: %s", err)
 		}
 
-		writer.Close()
-
-		for i := 0; i < len(encoded); i += 76 {
-			end := i + 76
-			if end > len(encoded) {
-				end = len(encoded)
-			}
-			imagePart.Write(encoded[i:end])
-			imagePart.Write([]byte("\r\n"))
-		}
-
-		// Compose full message with MIME headers
-		auth := smtp.PlainAuth("", smtpUsername, smtpPassword, smtpHost)
-		if err := smtp.SendMail(
-			smtpAddr,
-			auth,
-			senderEmail,
-			[]string{receiverEmail},
-			buf.Bytes(),
-		); err != nil {
-			return fmt.Errorf("failed to send email: %s", err)
-		}
-		logrus.Infof("email sent successfully to address[%s]", receiverEmail)
+		<-time.After(500 * time.Millisecond)
 		return nil
 	},
 }

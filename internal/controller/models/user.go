@@ -14,13 +14,19 @@ type AddUserToOrgV1Opts struct {
 }
 
 type User struct {
-	Id           *string    `json:"id"`
-	Email        string     `json:"email"`
-	Password     *string    `json:"password"`
-	PasswordHash *string    `json:"passwordHash"`
-	Org          *Org       `json:"org"`
-	JoinedOrgAt  *time.Time `json:"joinedOrgAt"`
-	Type         UserType   `json:"type"`
+	Id                    *string    `json:"id"`
+	Email                 string     `json:"email"`
+	EmailVerificationCode string     `json:"email_verification_code"`
+	Password              *string    `json:"password"`
+	PasswordHash          *string    `json:"passwordHash"`
+	CreatedAt             time.Time  `json:"createdAt"`
+	IsDeleted             bool       `json:"isDeleted"`
+	DeletedAt             *time.Time `json:"deletedAt"`
+	IsDisabled            bool       `json:"isDisabled"`
+	DisabledAt            *time.Time `json:"disabledAt"`
+	Org                   *Org       `json:"org"`
+	JoinedOrgAt           *time.Time `json:"joinedOrgAt"`
+	Type                  UserType   `json:"type"`
 }
 
 func (u User) AddToOrgV1(opts AddUserToOrgV1Opts) error {
@@ -47,6 +53,10 @@ func (u User) AddToOrgV1(opts AddUserToOrgV1Opts) error {
 		return fmt.Errorf("failed to insert only 1 user")
 	}
 	return nil
+}
+
+func (u User) IsVerified() bool {
+	return u.EmailVerificationCode == ""
 }
 
 func (u User) ValidatePassword() bool {

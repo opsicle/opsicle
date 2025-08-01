@@ -3,6 +3,7 @@ package controller
 import (
 	"database/sql"
 	"net/http"
+	"net/url"
 	"opsicle/internal/common"
 
 	"opsicle/internal/controller/docs"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"github.com/swaggo/swag"
 )
@@ -19,6 +21,8 @@ type HttpApplicationOpts struct {
 	AdminToken          string
 	SessionSigningToken string
 	DatabaseConnection  *sql.DB
+	EmailConfig         *SmtpServerConfig
+	PublicServerUrl     *url.URL
 	ServiceLogs         chan<- common.ServiceLog
 }
 
@@ -41,6 +45,35 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 
 	if opts.SessionSigningToken != "" {
 		models.SetSessionSigningToken(opts.SessionSigningToken)
+	}
+
+	if opts.EmailConfig == nil {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "email is not enabled")
+	} else {
+		smtpConfig = *opts.EmailConfig
+		if err := smtpConfig.VerifyConnection(); err != nil {
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to authenticate with the provided smtp configuration", err)
+			smtpConfig = SmtpServerConfig{}
+		}
+	}
+	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "email status: %v", smtpConfig.IsSet())
+
+	if publicServerUrl == "" {
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "the public server url has not been set, some urls issued might not be accurate")
+	}
+
+	if serviceLogs == nil {
+		noopServiceLogs := make(chan common.ServiceLog, 32)
+		go func() {
+			if _, ok := <-noopServiceLogs; !ok {
+				logrus.Infof("what")
+				return
+			}
+		}()
+		var logsReceiver chan<- common.ServiceLog = noopServiceLogs
+		SetServiceLogs(&logsReceiver)
+	} else {
+		SetServiceLogs(&opts.ServiceLogs)
 	}
 
 	handler := mux.NewRouter()

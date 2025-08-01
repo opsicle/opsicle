@@ -7,7 +7,7 @@ import (
 	"opsicle/internal/common"
 	"opsicle/internal/controller"
 	"opsicle/internal/database"
-	"strings"
+	"opsicle/internal/email"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -22,9 +22,9 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "storage-path",
-		DefaultValue: "./.opsicle",
-		Usage:        "specifies the path to a directory where Opsicle data resides",
+		Name:         "listen-addr",
+		DefaultValue: "0.0.0.0:54321",
+		Usage:        "specifies the listen address of the server",
 		Type:         cli.FlagTypeString,
 	},
 	{
@@ -63,6 +63,12 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
+		Name:         "public-server-url",
+		DefaultValue: "",
+		Usage:        "specifies a url where the controller server can be accessed via - required for emails to work properly",
+		Type:         cli.FlagTypeString,
+	},
+	{
 		Name:         "redis-addr",
 		DefaultValue: "localhost:6379",
 		Usage:        "defines the hostname (including port) of the redis server",
@@ -81,9 +87,15 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "listen-addr",
-		DefaultValue: "0.0.0.0:54321",
-		Usage:        "specifies the listen address of the server",
+		Name:         "sender-email",
+		DefaultValue: "noreply@notification.opsicle.io",
+		Usage:        "defines the notification sender's address",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "sender-name",
+		DefaultValue: "Opsicle Notifications",
+		Usage:        "defines the notification sender's name",
 		Type:         cli.FlagTypeString,
 	},
 	{
@@ -93,11 +105,28 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "storage-mode",
-		Short:        's',
-		DefaultValue: common.StorageFilesystem,
-		Usage:        fmt.Sprintf("specifies what type of storage we are using, one of ['%s']", strings.Join(common.Storages, "'")),
+		Name:         "smtp-username",
+		DefaultValue: "noreply@notification.opsicle.io",
+		Usage:        "defines the smtp server user's email address",
 		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "smtp-password",
+		DefaultValue: "",
+		Usage:        "defines the smtp server user's password",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "smtp-hostname",
+		DefaultValue: "smtp.eu.mailgun.org",
+		Usage:        "defines the smtp server's hostname",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "smtp-port",
+		DefaultValue: 587,
+		Usage:        "defines the smtp server's port",
+		Type:         cli.FlagTypeInteger,
 	},
 }
 
@@ -145,6 +174,7 @@ var Command = &cobra.Command{
 		logrus.Debugf("established connection to cache")
 
 		logrus.Infof("initialising application...")
+
 		sessionSigningToken := viper.GetString("session-signing-token")
 		controllerOpts := controller.HttpApplicationOpts{
 			DatabaseConnection:  databaseConnection,
@@ -153,17 +183,46 @@ var Command = &cobra.Command{
 		}
 		adminToken := viper.GetString("admin-api-token")
 		if adminToken != "" {
+			logrus.Infof("initialising admin endpoints...")
 			if len(adminToken) < 36 {
 				return fmt.Errorf("admin token must be 36 characters or longer for security purposes (hint: use a uuid)")
 			}
 			controllerOpts.AdminToken = adminToken
+			logrus.Infof("admin endpoints are available")
+		}
+
+		logrus.Infof("initialising email...")
+		smtpHost := viper.GetString("smtp-hostname")
+		smtpPort := viper.GetInt("smtp-port")
+		smtpUsername := viper.GetString("smtp-username")
+		smtpPassword := viper.GetString("smtp-password")
+		senderEmail := viper.GetString("sender-email")
+		senderName := viper.GetString("sender-name")
+		controllerOpts.EmailConfig = &controller.SmtpServerConfig{
+			Hostname: smtpHost,
+			Port:     smtpPort,
+			Username: smtpUsername,
+			Password: smtpPassword,
+			Sender: email.User{
+				Address: senderEmail,
+				Name:    senderName,
+			},
+		}
+		logrus.Infof("initialised email")
+
+		logrus.Infof("initialising application server...")
+		httpServerDone := make(chan common.Done)
+		listenAddress := viper.GetString("listen-addr")
+		publicUrl := viper.GetString("public-server-url")
+		if publicUrl == "" {
+			publicUrl = fmt.Sprintf("http://%s", listenAddress)
+		}
+		if err := controller.SetPublicServerUrl(publicUrl); err != nil {
+			return fmt.Errorf("failed to set the public url: %s", err)
 		}
 		controllerHandler := controller.GetHttpApplication(controllerOpts)
 		logrus.Debugf("initialised application")
 
-		logrus.Infof("initialising server...")
-		httpServerDone := make(chan common.Done)
-		listenAddress := viper.GetString("listen-addr")
 		server, err := common.NewHttpServer(common.NewHttpServerOpts{
 			Addr:        listenAddress,
 			Done:        httpServerDone,

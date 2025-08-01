@@ -52,7 +52,7 @@ func CreateUserV1(opts CreateUserV1Opts) error {
 		return fmt.Errorf("models.CreateUserV1: failed to hash password: %s", err)
 	}
 	userType := opts.Type
-	emailVerificationCode, err := common.GenerateRandomString(16)
+	emailVerificationCode, err := common.GenerateRandomString(32)
 	if err != nil {
 		return fmt.Errorf("models.CreateUserV1: failed to generate a random string: %s", err)
 	}
