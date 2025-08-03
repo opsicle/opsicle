@@ -3,8 +3,10 @@ package auth
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -16,6 +18,46 @@ const (
 	hashKeyLen  = 32
 	hashSaltLen = 16
 )
+
+func IsPasswordValid(password string) (bool, error) {
+	var errs []error
+
+	if len(password) < 12 {
+		errs = append(errs, errors.New("password must be at least 12 characters long"))
+	}
+
+	var hasUpper, hasLower, hasNumber, hasSymbol bool
+
+	for _, ch := range password {
+		switch {
+		case unicode.IsUpper(ch):
+			hasUpper = true
+		case unicode.IsLower(ch):
+			hasLower = true
+		case unicode.IsDigit(ch):
+			hasNumber = true
+		case unicode.IsPunct(ch) || unicode.IsSymbol(ch):
+			hasSymbol = true
+		}
+	}
+
+	if !hasUpper {
+		errs = append(errs, errors.New("password must contain at least one uppercase letter"))
+	}
+	if !hasLower {
+		errs = append(errs, errors.New("password must contain at least one lowercase letter"))
+	}
+	if !hasNumber {
+		errs = append(errs, errors.New("password must contain at least one number"))
+	}
+	if !hasSymbol {
+		errs = append(errs, errors.New("password must contain at least one symbol or punctuation character"))
+	}
+	if len(errs) > 0 {
+		return false, errors.Join(errs...)
+	}
+	return true, nil
+}
 
 func HashPassword(password string) (string, error) {
 	salt := make([]byte, hashSaltLen)

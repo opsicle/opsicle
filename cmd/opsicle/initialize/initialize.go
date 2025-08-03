@@ -2,14 +2,12 @@ package initialize
 
 import (
 	"opsicle/cmd/opsicle/initialize/controller"
-	"opsicle/cmd/opsicle/initialize/user"
 
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	Command.AddCommand(controller.Command)
-	Command.AddCommand(user.Command)
 }
 
 var Command = &cobra.Command{

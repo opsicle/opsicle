@@ -8,6 +8,7 @@ import (
 	"opsicle/cmd/opsicle/list"
 	"opsicle/cmd/opsicle/login"
 	"opsicle/cmd/opsicle/logout"
+	"opsicle/cmd/opsicle/register"
 	"opsicle/cmd/opsicle/run"
 	"opsicle/cmd/opsicle/start"
 	"opsicle/cmd/opsicle/validate"
@@ -54,9 +55,12 @@ func init() {
 	Command.AddCommand(list.Command)
 	Command.AddCommand(login.Command)
 	Command.AddCommand(logout.Command)
+	Command.AddCommand(register.Command)
 	Command.AddCommand(run.Command)
 	Command.AddCommand(start.Command)
 	Command.AddCommand(validate.Command)
+	Command.SilenceErrors = true
+	Command.SilenceUsage = true
 
 	flags.AddToCommand(Command, true)
 

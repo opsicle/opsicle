@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/mail"
+	"opsicle/internal/auth"
 	"opsicle/internal/common"
 	"opsicle/internal/common/images"
 	"opsicle/internal/controller/models"
@@ -62,8 +62,12 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("processing request to create user[%s]", requestData.Email))
 
-	if _, err := mail.ParseAddress(requestData.Email); err != nil {
+	if !auth.IsEmailValid(requestData.Email) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid email address", err)
+		return
+	}
+	if _, err := auth.IsPasswordValid(requestData.Password); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid password", err)
 		return
 	}
 

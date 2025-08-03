@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/mail"
+	"opsicle/internal/auth"
 	"opsicle/internal/common"
 	"opsicle/internal/controller/models"
 	"strings"
@@ -49,7 +49,7 @@ func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, "received request to create a superadmin")
 
-	if _, err := mail.ParseAddress(input.Email); err != nil {
+	if !auth.IsEmailValid(input.Email) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid email address", err)
 		return
 	}
