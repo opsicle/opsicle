@@ -127,7 +127,7 @@ var Command = &cobra.Command{
 			}
 			var sidebar strings.Builder
 			sort.Strings(commandList)
-			sidebar.WriteString("* [Home](/)\n")
+			sidebar.WriteString("* [🏘 Home](/)\n")
 			sidebar.WriteString("* [opsicle](cli/opsicle \"Opsicle CLI\")\n")
 			for _, cmd := range commandList {
 				commandName := strings.Split(cmd, ".")

@@ -1,5 +1,5 @@
-* [Home](/)
-* [opsicle](cli/opsicle)
+* [🏘 Home](/)
+* [opsicle](cli/opsicle "Opsicle CLI")
   * [completion](cli/opsicle_completion.md "Opsicle CLI: opsicle completion")
     * [bash](cli/opsicle_completion_bash.md "Opsicle CLI: opsicle completion bash")
     * [fish](cli/opsicle_completion_fish.md "Opsicle CLI: opsicle completion fish")
