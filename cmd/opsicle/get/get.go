@@ -20,6 +20,7 @@ var Command = &cobra.Command{
 	Use:     "get",
 	Aliases: []string{"g"},
 	Short:   "Retrieves resources in Opsicle",
+	GroupID: "read",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},

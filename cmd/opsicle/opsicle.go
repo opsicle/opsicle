@@ -17,10 +17,13 @@ import (
 	"opsicle/internal/common"
 	"opsicle/internal/config"
 	"os"
+	"path"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 	"github.com/spf13/viper"
 )
 
@@ -32,19 +35,34 @@ var availableLogLevels = []string{
 	string(common.LogLevelError),
 }
 
-var flags cli.Flags = cli.Flags{
+var persistentFlags cli.Flags = cli.Flags{
 	{
 		Name:         "log-level",
 		Short:        'l',
 		DefaultValue: "info",
-		Usage:        fmt.Sprintf("sets the log level (one of [%s])", strings.Join(availableLogLevels, ", ")),
+		Usage:        fmt.Sprintf("Sets the log level (one of [%s])", strings.Join(availableLogLevels, ", ")),
 		Type:         cli.FlagTypeString,
 	},
 	{
 		Name:         "config-path",
 		Short:        'c',
 		DefaultValue: "~/.opsicle/config",
-		Usage:        "defines the location of the global configuration used",
+		Usage:        "Defines the location of the global configuration used",
+		Type:         cli.FlagTypeString,
+	},
+}
+
+var flags cli.Flags = cli.Flags{
+	{
+		Name:         "docs",
+		DefaultValue: false,
+		Usage:        "When this flag is specified, generates Markdown documentation for the CLI application",
+		Type:         cli.FlagTypeBool,
+	},
+	{
+		Name:         "docs-path",
+		DefaultValue: "./docs/cli",
+		Usage:        "Specifies the location to generate documentation in",
 		Type:         cli.FlagTypeString,
 	},
 }
@@ -61,14 +79,44 @@ func init() {
 	Command.AddCommand(start.Command)
 	Command.AddCommand(validate.Command)
 	Command.AddCommand(verify.Command)
+	Command.AddGroup(&cobra.Group{
+		ID:    "create",
+		Title: "CREATE",
+	})
+	Command.AddGroup(&cobra.Group{
+		ID:    "read",
+		Title: "READ",
+	})
+	Command.AddGroup(&cobra.Group{
+		ID:    "update",
+		Title: "UPDATE",
+	})
+	Command.AddGroup(&cobra.Group{
+		ID:    "delete",
+		Title: "DELETE",
+	})
+	Command.AddGroup(&cobra.Group{
+		ID:    "app",
+		Title: "APP",
+	})
+	Command.AddGroup(&cobra.Group{
+		ID:    "auth",
+		Title: "AUTH",
+	})
+	Command.AddGroup(&cobra.Group{
+		ID:    "utils",
+		Title: "UTILITIES",
+	})
 	Command.SilenceErrors = true
 	Command.SilenceUsage = true
 
-	flags.AddToCommand(Command, true)
+	persistentFlags.AddToCommand(Command, true)
+	flags.AddToCommand(Command)
 
 	logrus.SetOutput(os.Stderr)
 	cobra.OnInitialize(func() {
-		flags.BindViper(Command, true)
+		persistentFlags.BindViper(Command, true)
+		flags.BindViper(Command)
 		cli.InitLogging(viper.GetString("log-level"))
 		configPath := viper.GetString("config-path")
 		logrus.Debugf("using configuration at path[%s]", configPath)
@@ -82,6 +130,46 @@ var Command = &cobra.Command{
 	Use:   "opsicle",
 	Short: "Runbook automations by Platform Engineers for Platform Engineers",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		isGenerateDocs := viper.GetBool("docs")
+		if isGenerateDocs {
+			docsPath := viper.GetString("docs-path")
+			logrus.Infof("generating documentation at path[%s]", docsPath)
+			err := os.MkdirAll(docsPath, 0755)
+			if err != nil {
+				return err
+			}
+			commandMap := map[string]bool{}
+			if err := doc.GenMarkdownTreeCustom(cmd, docsPath, func(in string) string {
+				logrus.Infof("filePrepender: %s", in)
+				return ""
+			}, func(in string) string {
+				logrus.Infof("linkHandler: %s", in)
+				commandMap[in] = true
+				return fmt.Sprintf("cli/%s", in)
+			}); err != nil {
+				return fmt.Errorf("failed to generate markdown tree")
+			}
+			commandList := []string{}
+			for k, _ := range commandMap {
+				commandList = append(commandList, k)
+			}
+			var sidebar strings.Builder
+			sort.Strings(commandList)
+			sidebar.WriteString("* [Home](/)\n")
+			sidebar.WriteString("* [opsicle](cli/opsicle)\n")
+			for _, cmd := range commandList {
+				commandName := strings.Split(cmd, ".")
+				commandParts := strings.Split(commandName[0], "_")
+				if len(commandParts) > 1 {
+					for i := 0; i < len(commandParts)-1; i++ {
+						sidebar.WriteString("  ")
+					}
+					sidebar.WriteString(fmt.Sprintf("* [%s](cli/%s)\n", commandParts[len(commandParts)-1], cmd))
+				}
+			}
+			os.WriteFile(path.Join(docsPath, "_sidebar.md"), []byte(sidebar.String()), 0755)
+		}
+
 		return cmd.Help()
 	},
 }

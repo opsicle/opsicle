@@ -14,6 +14,7 @@ var Command = &cobra.Command{
 	Use:     "initialize",
 	Aliases: []string{"init", "i"},
 	Short:   "Initialises Opsicle",
+	GroupID: "utils",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},

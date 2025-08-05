@@ -31,8 +31,9 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:   "login",
-	Short: "Logs into Opsicle from your terminal",
+	Use:     "login",
+	Short:   "Logs into Opsicle from your terminal",
+	GroupID: "auth",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},
