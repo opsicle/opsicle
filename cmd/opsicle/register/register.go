@@ -131,7 +131,12 @@ var Command = &cobra.Command{
 
 		logrus.Debugf("successfully created user[%s] with id[%s]", createUserV1Output.Email, createUserV1Output.Id)
 
-		logrus.Infof("user[%s] created successfully! login using 'opsicle login'", createUserV1Output.Email)
+		fmt.Printf("We've successfully created an account using the email '%s'\n", createUserV1Output.Email)
+		fmt.Printf("Next steps:\n")
+		fmt.Printf("  1. Check your inbox for a verification code\n")
+		fmt.Printf("  2. Run `opsicle verify email`\n")
+		fmt.Printf("  3. Paste your verification code when prompted\n")
+		fmt.Printf("  4. Enjoy Opsicle!\n")
 		return nil
 	},
 }

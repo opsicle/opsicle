@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -99,7 +98,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to write session token to path[%s]: %s", sessionFilePath, err)
 		}
 
-		logrus.Infof("opened session[%s]: welcome to opsicle!", sessionId)
+		fmt.Printf("Welcome to\n%s\nSession ID: %s\n", cli.Logo, sessionId)
 		return nil
 	},
 }

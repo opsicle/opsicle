@@ -41,9 +41,6 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 		if err != nil {
 			return nil, fmt.Errorf("models.CreateSessionV1: failed to get org instance: %s", err)
 		}
-		if orgInstance == nil {
-			return nil, fmt.Errorf("models.CreateSessionV1: failed to find a org")
-		}
 	}
 	userInstance, err := GetUserV1(GetUserV1Opts{
 		Db:    opts.Db,
@@ -52,16 +49,18 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 	if err != nil {
 		return nil, fmt.Errorf("models.CreateSessionV1: failed to get user instance: %s", err)
 	}
-	if orgInstance.Id != nil {
-		orgUserInstance, err := orgInstance.GetUserV1(GetOrgUserV1Opts{
-			Db:     opts.Db,
-			UserId: *userInstance.Id,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("models.CreateSessionV1: failed to get user org membership: %s", err)
-		}
-		if orgUserInstance == nil {
-			return nil, fmt.Errorf("models.CreateSessionV1: failed to get a user belonging to the specified organisation")
+	if orgInstance != nil {
+		if orgInstance.Id != nil {
+			orgUserInstance, err := orgInstance.GetUserV1(GetOrgUserV1Opts{
+				Db:     opts.Db,
+				UserId: *userInstance.Id,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("models.CreateSessionV1: failed to get user org membership: %s", err)
+			}
+			if orgUserInstance == nil {
+				return nil, fmt.Errorf("models.CreateSessionV1: failed to get a user belonging to the specified organisation")
+			}
 		}
 	}
 
@@ -71,12 +70,14 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 	}
 	sessionId := uuid.NewString()
 	orgCode := ""
-	if orgInstance.Code != "" {
-		orgCode = orgInstance.Code
-	}
 	orgId := ""
-	if orgInstance.Id != nil {
-		orgId = *orgInstance.Id
+	if orgInstance != nil {
+		if orgInstance.Code != "" {
+			orgCode = orgInstance.Code
+		}
+		if orgInstance.Id != nil {
+			orgId = *orgInstance.Id
+		}
 	}
 	jwtToken, err := auth.GenerateJwt(auth.GenerateJwtOpts{
 		Audience: opts.Source,

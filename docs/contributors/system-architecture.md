@@ -4,27 +4,31 @@ This page documents the architecture of Opsicle at various levels
 
 ## Deployment
 
-> Last updated 2025-07-26
+> Last updated 2025-08-05
+
 
 ```mermaid
-flowchart LR;
+flowchart TD;
   approver[Approver]
   cache[Cache]
   controller[Controller]
-  database[Database]
+  rdbms[RDBMS]
+  documentDb[Document DB]
   idp[[Identity Provider]]
   slack[Slack]
   telegram[Telegram]
   webapp[Web Application]
   user((User))
   subgraph Data Persistence
-  database
   cache
+  documentDb
+  rdbms
   end
   subgraph Applications
-  controller--->|stores all data|database
-  controller--->|stores session info|cache
-  approver<--->|stores state of approval requests|cache
+  controller--->|platform data|rdbms
+  controller--->|audit data|documentDb
+  controller--->|session info|cache
+  approver--->|approval requests|cache
   controller--->|sends approval requests|approver
   approver-.->|pingback via webhook|controller
   webapp--->|via API calls|controller

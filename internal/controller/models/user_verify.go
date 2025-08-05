@@ -9,6 +9,8 @@ type VerifyUserV1Opts struct {
 	Db *sql.DB
 
 	VerificationCode string
+	UserAgent        string
+	IpAddress        string
 }
 
 func VerifyUserV1(opts VerifyUserV1Opts) (*User, error) {
@@ -53,10 +55,18 @@ func VerifyUserV1(opts VerifyUserV1Opts) (*User, error) {
 
 	sqlStmt = `
 	UPDATE users
-		SET email_verification_code = ''
+		SET email_verification_code = '',
+				is_email_verified = true,
+				email_verified_at = NOW(),
+				email_verified_by_user_agent = ?,
+				email_verified_by_ip_address = ?
 		WHERE id = ?;
 	`
-	sqlArgs = []any{*userInstance.Id}
+	sqlArgs = []any{
+		opts.UserAgent,
+		opts.IpAddress,
+		*userInstance.Id,
+	}
 	stmt, err = opts.Db.Prepare(sqlStmt)
 	if err != nil {
 		return nil, fmt.Errorf("models.VerifyUserV1: failed to prepare insert statement: %s", err)

@@ -12,6 +12,7 @@ import (
 	"opsicle/cmd/opsicle/run"
 	"opsicle/cmd/opsicle/start"
 	"opsicle/cmd/opsicle/validate"
+	"opsicle/cmd/opsicle/verify"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/config"
@@ -59,6 +60,7 @@ func init() {
 	Command.AddCommand(run.Command)
 	Command.AddCommand(start.Command)
 	Command.AddCommand(validate.Command)
+	Command.AddCommand(verify.Command)
 	Command.SilenceErrors = true
 	Command.SilenceUsage = true
 

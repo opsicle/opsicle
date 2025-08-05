@@ -32,7 +32,7 @@ func GetOrgV1(opts GetOrgV1Opts) (*Org, error) {
 		id,
 		name,
 		created_at,
-		updated_at,
+		last_updated_at,
 		is_deleted,
 		deleted_at,
 		is_disabled,

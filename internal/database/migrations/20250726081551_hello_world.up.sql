@@ -1,12 +1,17 @@
+CREATE SCHEMA IF NOT EXISTS `opsicle`;
+
 CREATE TABLE IF NOT EXISTS `users` (
     id              VARCHAR(36) PRIMARY KEY,
     email           VARCHAR(255) NOT NULL,
-    email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
     email_verification_code TEXT NOT NULL,
+    is_email_verified  BOOLEAN NOT NULL DEFAULT FALSE,
+    email_verified_at DATETIME,
+    email_verified_by_user_agent TEXT,
+    email_verified_by_ip_address TEXT,
     password_hash   TEXT,
     `type`          VARCHAR(64) NOT NULL DEFAULT 'user',
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME DEFAULT NULL,
+    last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     is_deleted      BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at      DATETIME,
     is_disabled     BOOLEAN NOT NULL DEFAULT FALSE,
@@ -23,7 +28,7 @@ CREATE TABLE IF NOT EXISTS `orgs` (
     motd          TEXT,
     created_by    VARCHAR(36) NOT NULL,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    DATETIME DEFAULT NULL,
+    last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     is_scheduled_for_deletion BOOLEAN NOT NULL DEFAULT FALSE,
     is_deleted    BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at    DATETIME,
@@ -47,7 +52,7 @@ CREATE TABLE IF NOT EXISTS `approval_policies` (
     name            VARCHAR(255) NOT NULL,
     policy_json     JSON NOT NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at  DATETIME DEFAULT NULL,
+    last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     is_deleted  BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at  DATETIME,
     FOREIGN KEY (org_id) REFERENCES `orgs`(id)
@@ -60,7 +65,7 @@ CREATE TABLE IF NOT EXISTS `automation_templates` (
     description     TEXT,
     content         TEXT NOT NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME DEFAULT NULL,
+    last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (org_id) REFERENCES `orgs`(id)
 );
 
@@ -139,7 +144,7 @@ CREATE TABLE IF NOT EXISTS `org_config_sso` (
   `userinfo_url` TEXT,
   `scopes` TEXT,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (`org_id`) REFERENCES `orgs` (`id`) ON DELETE CASCADE
 );
 
@@ -150,7 +155,7 @@ CREATE TABLE IF NOT EXISTS `org_config_sso_mapping` (
   `field` VARCHAR(64) NOT NULL,
   `source` VARCHAR(255) NOT NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (`org_id`) REFERENCES `orgs` (`id`) ON DELETE CASCADE
 );
 
@@ -160,7 +165,7 @@ CREATE TABLE IF NOT EXISTS `org_config_security` (
     force_mfa                    BOOLEAN NOT NULL DEFAULT FALSE,
     session_timeout              INT NOT NULL,
     blanket_approval_policy_id   VARCHAR(36),
-    updated_at                   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (org_id) REFERENCES `orgs`(id),
     FOREIGN KEY (blanket_approval_policy_id) REFERENCES `approval_policies`(id)
 );
@@ -243,7 +248,7 @@ CREATE TABLE IF NOT EXISTS `user_profiles` (
     department        VARCHAR(255),
     team              VARCHAR(255),
     created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at        DATETIME DEFAULT NULL,
+    last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES `users`(id)
 );
 
@@ -253,6 +258,6 @@ CREATE TABLE IF NOT EXISTS `user_mfa` (
     `secret`          TEXT,
     config_json     JSON,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME DEFAULT NULL,
+    last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES `users`(id)
 );

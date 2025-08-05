@@ -138,7 +138,19 @@ func (m *PromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
-			if s == "left" || s == "up" || s == "shift+tab" {
+			if s == "left" {
+				if m.focusIndex >= len(m.inputs) {
+					m.focusIndex--
+				} else {
+					break
+				}
+			} else if s == "right" {
+				if m.focusIndex >= len(m.inputs) {
+					m.focusIndex++
+				} else {
+					break
+				}
+			} else if s == "up" || s == "shift+tab" {
 				m.focusIndex--
 			} else {
 				m.focusIndex++
@@ -199,6 +211,7 @@ func (m PromptModel) View() string {
 			}
 			fmt.Fprintf(&b, "\n")
 		}
+		fmt.Fprintf(&b, "\n")
 	}
 
 	return b.String()

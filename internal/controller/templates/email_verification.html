@@ -18,6 +18,13 @@
       border-radius: 8px;
       margin: 0px;
     }
+    pre {
+      background-color: #111111;
+      color: #eeeeee;
+      display: block;
+      padding: 8px;
+      text-align: center;
+    }
     img {
       border-radius: 8px;
       max-width: 100%;
@@ -64,23 +71,19 @@
 
     <p>
       This request came from the IP address <code>${REMOTE_ADDR}</code> with the
-      user agent <code>${USER_AGENT}</code>. If this was you, click the button
-      below to verify your email address and get started:
+      user agent <code>${USER_AGENT}</code>.
+    </p>
+    <p>
+      If this was you, the verification code to enter into your terminal is as follows:
+    </p>
+    <pre>${EMAIL_VERIFICATION_CODE}</pre>
+    <p>
+      You can also click the button below to verify your email address:
     </p>
 
     <a class="cta-button" href="${CONTROLLER_URL}/api/v1/verification/${EMAIL_VERIFICATION_CODE}" target="_blank">
       Verify my Email
     </a>
-
-    <p>
-      If the button above didn't work, try copying the following link and pasting
-      it in your browser
-    </p>
-    <p>
-      <code>
-        ${CONTROLLER_URL}/api/v1/verification/${EMAIL_VERIFICATION_CODE}
-      </code>
-    </p>
 
     <p>
       If this wasn't you and you have no idea why you're receiving this email,

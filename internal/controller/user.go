@@ -170,6 +170,8 @@ func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
 	userInstance, err := models.VerifyUserV1(models.VerifyUserV1Opts{
 		Db:               db,
 		VerificationCode: verificationCode,
+		UserAgent:        r.UserAgent(),
+		IpAddress:        r.RemoteAddr,
 	})
 	if err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify user", err)

@@ -66,7 +66,8 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to remove file at path[%s], please do it yourself: %s", sessionFilePath, err)
 		}
 
-		logrus.Infof("session[%s] is closed: see you again!", sessionId)
+		fmt.Printf("\n%s\nSession ID '%s' is now closed\n", cli.Logo, sessionId)
+		fmt.Printf("See you again <3\n")
 		return nil
 	},
 }
