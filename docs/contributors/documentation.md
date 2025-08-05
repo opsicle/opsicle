@@ -26,3 +26,17 @@ The CLI documentation is done via the `github.com/spf13/cobra/docs` package. To 
 ```sh
 go run ./cmd/docsgen;
 ```
+
+## Sitemap generation
+
+To generate the sitemap, visit https://docsify-sitemap.js.org/ and use:
+
+| Property | Value |
+| --- | --- |
+| Website URL | `https://docs.opsicle.io` |
+| Repository Owner (Username) | `opsicle` |
+| Repository Name | `opsicle` |
+| Base Directory | `/docs` |
+| Branch | `main` |
+
+Copy and paste the generated `sitemap.xml` into `./docs/sitemap.xml`
