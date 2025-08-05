@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://docs.opsicle.io/</loc>
+    <priority>1.0</priority>
+  </url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/README</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/_sidebar</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/_sidebar</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_create</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_create_approval-request</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_create_org</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_get</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_get_approval-request</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_get_approval</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_get_org</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_get_users</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_initialize</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_initialize_controller</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_list</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_list_approval-request</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_login</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_logout</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_register</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_run</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_run_approval</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_run_automation</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_run_automationtemplate</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_run_migrations</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_start</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_start_approver</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_start_controller</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_start_helper</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_start_helper_emailsender</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_start_helper_httpreceiver</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_start_helper_telegrambot</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_start_helper_totpgenerator</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_start_worker</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_validate</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_validate_automationtemplate</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_verify</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/cli/opsicle_verify_email</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/contributors/documentation</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/contributors/setting-up</loc>
+  <priority>0.8</priority>
+</url>
+<url>
+  <loc>https://docs.opsicle.io/#/docs/contributors/system-architecture</loc>
+  <priority>0.8</priority>
+</url>
+</urlset>
