@@ -105,6 +105,9 @@ docs_controller:
 		--parseDependencyLevel 1
 	sed -i 's|swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)||g' ./internal/controller/docs/docs.go
 
+docs_site:
+	docsify serve ./docs
+
 migration:
 	migrate create -dir ./internal/database/migrations -ext sql new
 

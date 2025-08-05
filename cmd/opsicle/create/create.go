@@ -15,7 +15,6 @@ func init() {
 var Command = &cobra.Command{
 	Use:     "create",
 	Aliases: []string{"create", "a", "c", "+"},
-	GroupID: "create",
 	Short:   "Creates/creates resources in Opsicle",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()

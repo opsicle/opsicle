@@ -40,10 +40,9 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:     "register",
-	Short:   "Register for an Opsicle platform account",
-	Long:    "Register for an account on an Opsicle instance. If you are using your own instance, set the value of the --controller-url flag to your controller's address (this address needs to be reachable from your host machine)",
-	GroupID: "auth",
+	Use:   "register",
+	Short: "Register for an Opsicle platform account",
+	Long:  "Register for an account on an Opsicle instance. If you are using your own instance, set the value of the --controller-url flag to your controller's address (this address needs to be reachable from your host machine)",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},

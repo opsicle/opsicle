@@ -18,6 +18,7 @@ opsicle [flags]
 
 ### SEE ALSO
 
+* [opsicle completion](cli/opsicle_completion.md)	 - Generate the autocompletion script for the specified shell
 * [opsicle create](cli/opsicle_create.md)	 - Creates/creates resources in Opsicle
 * [opsicle get](cli/opsicle_get.md)	 - Retrieves resources in Opsicle
 * [opsicle initialize](cli/opsicle_initialize.md)	 - Initialises Opsicle

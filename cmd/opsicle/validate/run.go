@@ -14,7 +14,6 @@ var Command = &cobra.Command{
 	Use:     "validate",
 	Aliases: []string{"v"},
 	Short:   "Validates resource manifests",
-	GroupID: "utils",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},

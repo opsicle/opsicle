@@ -79,34 +79,6 @@ func init() {
 	Command.AddCommand(start.Command)
 	Command.AddCommand(validate.Command)
 	Command.AddCommand(verify.Command)
-	Command.AddGroup(&cobra.Group{
-		ID:    "create",
-		Title: "CREATE",
-	})
-	Command.AddGroup(&cobra.Group{
-		ID:    "read",
-		Title: "READ",
-	})
-	Command.AddGroup(&cobra.Group{
-		ID:    "update",
-		Title: "UPDATE",
-	})
-	Command.AddGroup(&cobra.Group{
-		ID:    "delete",
-		Title: "DELETE",
-	})
-	Command.AddGroup(&cobra.Group{
-		ID:    "app",
-		Title: "APP",
-	})
-	Command.AddGroup(&cobra.Group{
-		ID:    "auth",
-		Title: "AUTH",
-	})
-	Command.AddGroup(&cobra.Group{
-		ID:    "utils",
-		Title: "UTILITIES",
-	})
 	Command.SilenceErrors = true
 	Command.SilenceUsage = true
 
@@ -156,7 +128,7 @@ var Command = &cobra.Command{
 			var sidebar strings.Builder
 			sort.Strings(commandList)
 			sidebar.WriteString("* [Home](/)\n")
-			sidebar.WriteString("* [opsicle](cli/opsicle)\n")
+			sidebar.WriteString("* [opsicle](cli/opsicle \"Opsicle CLI\")\n")
 			for _, cmd := range commandList {
 				commandName := strings.Split(cmd, ".")
 				commandParts := strings.Split(commandName[0], "_")
@@ -164,10 +136,11 @@ var Command = &cobra.Command{
 					for i := 0; i < len(commandParts)-1; i++ {
 						sidebar.WriteString("  ")
 					}
-					sidebar.WriteString(fmt.Sprintf("* [%s](cli/%s)\n", commandParts[len(commandParts)-1], cmd))
+					sidebar.WriteString(fmt.Sprintf("* [%s](cli/%s \"Opsicle CLI: %s\")\n", commandParts[len(commandParts)-1], cmd, strings.Join(commandParts, " ")))
 				}
 			}
 			os.WriteFile(path.Join(docsPath, "_sidebar.md"), []byte(sidebar.String()), 0755)
+			return nil
 		}
 
 		return cmd.Help()

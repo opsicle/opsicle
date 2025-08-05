@@ -11,9 +11,8 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:     "verify",
-	Short:   "Verifies your account on Opsicle",
-	GroupID: "auth",
+	Use:   "verify",
+	Short: "Verifies your account on Opsicle",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},
