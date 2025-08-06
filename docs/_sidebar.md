@@ -9,3 +9,7 @@
 * **👨🏼‍💻 Technical Documentation**
   * [⚒️ CLI documentation](cli/opsicle.md "Opsicle: CLI documentation")
   * [🙊 It's all in YAML](yaml-for-dummies.md "Opsicle: All about YAML")
+* **👀 Check us out**
+  * [☁️ Opsicle Cloud](https://opsicle.cloud)
+  * [✨ Opsicle Website](https://opsicle.io)
+  * [📄 Github](https://github.com/opsicle)
