@@ -1,10 +1,17 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	ErrorJwtTokenExpired   = errors.New("token has expired")
+	ErrorJwtTokenSignature = errors.New("failed to validate token signature")
+	ErrorJwtClaims         = errors.New("failed to receive expected token claims")
 )
 
 // Claims defines the structure of the JWT payload.
@@ -65,19 +72,19 @@ func ValidateJWT(jwtSecret, tokenStr string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		// Ensure the signing method is HMAC
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("failed to validate token signing method")
+			return nil, ErrorJwtTokenSignature
 		}
 		return []byte(jwtSecret), nil
 	})
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
-		return nil, fmt.Errorf("failed to validate token claims structure")
+		return nil, ErrorJwtClaims
 	}
 	if claims.ExpiresAt == nil {
 		return claims, nil
 	}
 	if time.Now().After(claims.ExpiresAt.Time) {
-		return claims, fmt.Errorf("token has expired")
+		return claims, ErrorJwtTokenExpired
 	}
 	if !token.Valid || err != nil {
 		return claims, fmt.Errorf("token is invalid: %s", err)

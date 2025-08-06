@@ -6,12 +6,17 @@ import (
 	"path/filepath"
 )
 
+const (
+	CurrentSessionFilename = "current"
+	CurrentSessionPath     = "/.opsicle/session"
+)
+
 func GetSessionToken() (sessionToken string, sessionFilePath string, err error) {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to determine user's home directory: %s", err)
 	}
-	sessionPath := filepath.Join(userHomeDir, "/.opsicle/session")
+	sessionPath := filepath.Join(userHomeDir, CurrentSessionPath)
 	fileInfo, err := os.Lstat(sessionPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -26,7 +31,7 @@ func GetSessionToken() (sessionToken string, sessionFilePath string, err error) 
 	if !fileInfo.IsDir() {
 		return "", "", fmt.Errorf("path[%s] exists but is not a directory, it should be", sessionPath)
 	}
-	sessionFilePath = filepath.Join(sessionPath, "current")
+	sessionFilePath = filepath.Join(sessionPath, CurrentSessionFilename)
 	fileInfo, err = os.Lstat(sessionFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -49,23 +54,8 @@ func DeleteSessionToken() (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to determine user's home directory: %s", err)
 	}
-	sessionPath := filepath.Join(userHomeDir, "/.opsicle/session")
-	fileInfo, err := os.Lstat(sessionPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if err := os.MkdirAll(sessionPath, os.ModePerm); err != nil {
-				return fmt.Errorf("failed to provision configuration directory at path[%s]: %s", sessionPath, err)
-			}
-			fileInfo, _ = os.Lstat(sessionPath)
-		} else {
-			return fmt.Errorf("path[%s] for session information does not exist: %s", sessionPath, err)
-		}
-	}
-	if !fileInfo.IsDir() {
-		return fmt.Errorf("path[%s] exists but is not a directory, it should be", sessionPath)
-	}
-	sessionFilePath := filepath.Join(sessionPath, "current")
-	fileInfo, err = os.Lstat(sessionFilePath)
+	sessionFilePath := filepath.Join(userHomeDir, CurrentSessionPath, CurrentSessionFilename)
+	fileInfo, err := os.Lstat(sessionFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil

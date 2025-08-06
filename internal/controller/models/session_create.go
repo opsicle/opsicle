@@ -26,6 +26,7 @@ type CreateSessionV1Opts struct {
 
 	IpAddress string
 	UserAgent string
+	Hostname  string
 	Source    string
 	ExpiresIn time.Duration
 }
@@ -84,6 +85,7 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 		Ext: map[string]string{
 			"ip": opts.IpAddress,
 			"ua": opts.UserAgent,
+			"hn": opts.Hostname,
 		},
 		Id:       sessionId,
 		Issuer:   "opsicle/controller",

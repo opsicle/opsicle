@@ -81,9 +81,12 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create controller client: %s", err)
 		}
-		createSessionInput := controller.CreateSessionV1Opts{
+		hostname, _ := os.Hostname()
+
+		createSessionInput := controller.CreateSessionV1Input{
 			Email:    model.GetEmail(),
 			Password: model.GetPassword(),
+			Hostname: hostname,
 		}
 		orgCode := model.GetOrganisation()
 		if orgCode != "" {

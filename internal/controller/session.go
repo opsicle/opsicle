@@ -16,7 +16,7 @@ func registerSessionRoutes(opts RouteRegistrationOpts) {
 
 	v1.HandleFunc("", handleCreateSessionV1).Methods(http.MethodPost)
 	v1.HandleFunc("", handleGetSessionV1).Methods(http.MethodGet)
-	v1.HandleFunc("", handleStopSessionV1).Methods(http.MethodDelete)
+	v1.HandleFunc("", handleDeleteSessionV1).Methods(http.MethodDelete)
 }
 
 type handleCreateSessionV1Input struct {
@@ -28,6 +28,9 @@ type handleCreateSessionV1Input struct {
 
 	// Password is the user's password
 	Password string `json:"password"`
+
+	// Hostname is the user's machine's hostname
+	Hostname string `json:"hostname"`
 }
 
 // handleCreateSessionV1 godoc
@@ -71,6 +74,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 
 		IpAddress: r.RemoteAddr,
 		UserAgent: r.UserAgent(),
+		Hostname:  input.Hostname,
 		Source:    "api",
 		ExpiresIn: 12 * time.Hour,
 	})
@@ -121,7 +125,13 @@ func handleGetSessionV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", sessionInfo)
 }
 
-// handleStopSessionV1 godoc
+type handleDeleteSessionV1Output struct {
+	SessionId    string
+	IsSuccessful bool
+	Message      string
+}
+
+// handleDeleteSessionV1 godoc
 // @Summary      Logs the current user out
 // @Description  This endpoint deletes the session which the user is currently using
 // @Tags         controller-service
@@ -131,7 +141,7 @@ func handleGetSessionV1(w http.ResponseWriter, r *http.Request) {
 // @Success      200 {object} commonHttpResponse "ok"
 // @Failure      403 {object} commonHttpResponse "forbidden"
 // @Router       /api/v1/session [delete]
-func handleStopSessionV1(w http.ResponseWriter, r *http.Request) {
+func handleDeleteSessionV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	authorizationHeader := r.Header.Get("Authorization")
 	if strings.Index(authorizationHeader, "Bearer ") != 0 {
@@ -139,17 +149,23 @@ func handleStopSessionV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
-	log(common.LogLevelDebug, "retrieved an authorizationToken successfully")
+	log(common.LogLevelDebug, "retrieved an authorization token successfully")
 
 	sessionId, err := models.DeleteSessionV1(models.DeleteSessionV1Opts{
 		BearerToken: authorizationToken,
 		CachePrefix: sessionCachePrefix,
 	})
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to delete session", err)
+		log(common.LogLevelWarn, fmt.Sprintf("failed to delete session: %s", err))
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleDeleteSessionV1Output{
+			SessionId:    "",
+			IsSuccessful: false,
+		})
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("session[%s] has been deleted", sessionId))
-
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", sessionId)
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleDeleteSessionV1Output{
+		SessionId:    sessionId,
+		IsSuccessful: true,
+	})
 }
