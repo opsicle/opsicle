@@ -455,7 +455,7 @@ func handleTelegramMfaResponse(opts handleTelegramMfaResponseOpts) {
 			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to remove mfa request message with id[%v] for unknown reasons", opts.MfaRequestMessageId)
 		}
 		if err := opts.Bot.ReplyMessage(opts.ChatId, int(approvalMessageId), getTelegramMfaRejectedMessage(*approvalRequest, opts.SenderId, opts.SenderUsername)); err != nil {
-			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send mfa failure message to chat[%v] as reply to message[%s]:", opts.ChatId, int(approvalMessageId), err)
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send mfa failure message to chat[%v] as reply to message[%v]: %s", opts.ChatId, int(approvalMessageId), err)
 			if err := opts.Bot.ReplyMessage(opts.ChatId, opts.MessageId, getTelegramSystemErrorMessage()); err != nil {
 				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send error response to user: %s", err)
 			}

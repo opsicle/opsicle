@@ -11,6 +11,30 @@ const (
 	CurrentSessionPath     = "/.opsicle/session"
 )
 
+func GetSessionTokenPath() (string, error) {
+	userHomeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine user's home directory: %s", err)
+	}
+	sessionPath := filepath.Join(userHomeDir, CurrentSessionPath)
+	fileInfo, err := os.Lstat(sessionPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(sessionPath, os.ModePerm); err != nil {
+				return "", fmt.Errorf("failed to provision configuration directory at path[%s]: %s", sessionPath, err)
+			}
+			fileInfo, _ = os.Lstat(sessionPath)
+		} else {
+			return "", fmt.Errorf("path[%s] for session information does not exist: %s", sessionPath, err)
+		}
+	}
+	if !fileInfo.IsDir() {
+		return "", fmt.Errorf("path[%s] exists but is not a directory, it should be", sessionPath)
+	}
+	sessionFilePath := filepath.Join(sessionPath, CurrentSessionFilename)
+	return sessionFilePath, nil
+}
+
 func GetSessionToken() (sessionToken string, sessionFilePath string, err error) {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {

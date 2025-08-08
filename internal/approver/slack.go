@@ -84,7 +84,7 @@ func (s *slackNotifier) SendApprovalRequest(req *ApprovalRequest) (string, notif
 			s.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "sending slack message to channel[%s/%s]", channelId, channelName)
 			sentChannelId, messageTimestamp, err := s.Client.PostMessage(channelId, slack.MsgOptionBlocks(blocks.BlockSet...))
 			if err != nil {
-				s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send slack message to channel[%s] with id[%s]: %w", channelName, channelId, err)
+				s.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to send slack message to channel[%s] with id[%s]: %s", channelName, channelId, err)
 				notification.Error = err
 				continue
 			} else {

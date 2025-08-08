@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"os/user"
+	"path/filepath"
 )
 
 type NewClientOpts struct {
@@ -23,11 +26,22 @@ type NewClientBearerAuthOpts struct {
 }
 
 func NewClient(opts NewClientOpts) (*Client, error) {
+	var hostname, username string
+	if host, err := os.Hostname(); err == nil {
+		hostname = host
+	} else {
+		hostname = "unknown-host"
+	}
+	if user, _ := user.Current(); user != nil {
+		username = user.Username
+	} else {
+		username = "unknown-user"
+	}
 	client := &Client{
 		BasicAuth:  opts.BasicAuth,
 		BearerAuth: opts.BearerAuth,
 		HttpClient: &http.Client{},
-		Id:         opts.Id,
+		Id:         filepath.Join(opts.Id, fmt.Sprintf("%s@%s", username, hostname)),
 	}
 
 	controllerUrl, err := url.Parse(opts.ControllerUrl)

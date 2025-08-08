@@ -83,7 +83,7 @@ func CreateUserV1(opts CreateUserV1Opts) error {
 		var orgId string
 		orgQueryStmt, err := opts.Db.Prepare(`SELECT id FROM orgs WHERE code = ?`)
 		if err != nil {
-			return fmt.Errorf("models.CreateUserV1: failed to prepare select statement for org[%s]: %s", opts.OrgCode, err)
+			return fmt.Errorf("models.CreateUserV1: failed to prepare select statement for org[%s]: %s", *opts.OrgCode, err)
 		}
 		row := orgQueryStmt.QueryRow(opts.OrgCode)
 		if row.Err() != nil {
