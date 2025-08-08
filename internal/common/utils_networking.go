@@ -18,6 +18,7 @@ func ParseCidrs(cidrs []string) (validCidrs []*net.IPNet, warnings []string, err
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("provided cidr[%s] is invalid, it was skipped", cidr))
+			continue
 		}
 		parsed = append(parsed, network)
 	}
