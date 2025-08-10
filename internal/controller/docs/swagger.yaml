@@ -7,10 +7,23 @@ definitions:
       success:
         type: boolean
     type: object
+  controller.handleCreateOrgV1Input:
+    properties:
+      code:
+        type: string
+      name:
+        type: string
+    type: object
   controller.handleCreateSessionV1Input:
     properties:
       email:
         description: Email is the user's email address
+        type: string
+      hostname:
+        description: Hostname is the user's machine's hostname
+        type: string
+      orgCode:
+        description: OrgCode is the user's organisation code
         type: string
       password:
         description: Password is the user's password
@@ -19,6 +32,60 @@ definitions:
 info:
   contact: {}
 paths:
+  /api/v1/org:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves the current organisation that the current user is signed
+        in via
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+        "403":
+          description: forbidden
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+        "500":
+          description: internal server error
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+      summary: Retrieves the current organisation
+      tags:
+      - controller-service
+    post:
+      consumes:
+      - application/json
+      description: Creates a new organisation and assigns the user identified by their
+        token as the administrator of the organisation
+      parameters:
+      - description: User credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controller.handleCreateOrgV1Input'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+        "403":
+          description: forbidden
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+        "500":
+          description: internal server error
+          schema:
+            $ref: '#/definitions/controller.commonHttpResponse'
+      summary: Creates a new organisation
+      tags:
+      - controller-service
   /api/v1/session:
     delete:
       consumes:

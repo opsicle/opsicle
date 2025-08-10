@@ -108,6 +108,9 @@ docs_controller:
 docs_site:
 	docsify serve ./docs
 
+docs_cli:
+	go run . --docs
+
 migration:
 	migrate create -dir ./internal/database/migrations -ext sql new
 

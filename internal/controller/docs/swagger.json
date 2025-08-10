@@ -4,6 +4,85 @@
         "contact": {}
     },
     "paths": {
+        "/api/v1/org": {
+            "get": {
+                "description": "Retrieves the current organisation that the current user is signed in via",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "controller-service"
+                ],
+                "summary": "Retrieves the current organisation",
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "$ref": "#/definitions/controller.commonHttpResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.commonHttpResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.commonHttpResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates a new organisation and assigns the user identified by their token as the administrator of the organisation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "controller-service"
+                ],
+                "summary": "Creates a new organisation",
+                "parameters": [
+                    {
+                        "description": "User credentials",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controller.handleCreateOrgV1Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "$ref": "#/definitions/controller.commonHttpResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/controller.commonHttpResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/controller.commonHttpResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/session": {
             "get": {
                 "security": [
@@ -128,11 +207,30 @@
                 }
             }
         },
+        "controller.handleCreateOrgV1Input": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "controller.handleCreateSessionV1Input": {
             "type": "object",
             "properties": {
                 "email": {
                     "description": "Email is the user's email address",
+                    "type": "string"
+                },
+                "hostname": {
+                    "description": "Hostname is the user's machine's hostname",
+                    "type": "string"
+                },
+                "orgCode": {
+                    "description": "OrgCode is the user's organisation code",
                     "type": "string"
                 },
                 "password": {
