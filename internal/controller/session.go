@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -79,11 +80,14 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		ExpiresIn: 12 * time.Hour,
 	})
 	if err != nil {
+		if errors.Is(err, models.ErrorCredentialsAuthenticationFailed) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to create session", err)
+			return
+		} else if errors.Is(err, models.ErrorUserEmailNotVerified) {
+			common.SendHttpFailResponse(w, r, http.StatusLocked, "failed to create session", err)
+			return
+		}
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create session", err)
-		return
-	}
-	if sessionToken == nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to create session due to invalid credentials", nil)
 		return
 	}
 	log(common.LogLevelDebug, "successfully issued session token")

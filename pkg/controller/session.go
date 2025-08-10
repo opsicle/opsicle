@@ -23,7 +23,7 @@ func (c Client) CreateSessionV1(opts CreateSessionV1Input) (string, string, erro
 	controllerUrl.Path = "/api/v1/session"
 	requestBodyData, err := json.Marshal(opts)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to marshal data: %s", err)
+		return "", "", fmt.Errorf("failed to marshal input data: %s", err)
 	}
 	requestBody := bytes.NewBuffer(requestBodyData)
 	httpRequest, err := http.NewRequest(
@@ -50,8 +50,13 @@ func (c Client) CreateSessionV1(opts CreateSessionV1Input) (string, string, erro
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read response body: %s", err)
 	}
-	if httpResponse.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
+	switch httpResponse.StatusCode {
+	case http.StatusBadRequest:
+		return "", "", fmt.Errorf("user credentials failed: %w", ErrorUserLoginFailed)
+	case http.StatusLocked:
+		return "", "", fmt.Errorf("user email is not verified: %w", ErrorUserEmailNotVerified)
+	case http.StatusInternalServerError:
+		return "", "", fmt.Errorf("received an unknown error (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {

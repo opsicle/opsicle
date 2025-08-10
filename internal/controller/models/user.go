@@ -16,7 +16,9 @@ type AddUserToOrgV1Opts struct {
 type User struct {
 	Id                    *string    `json:"id"`
 	Email                 string     `json:"email"`
-	EmailVerificationCode string     `json:"email_verification_code"`
+	IsEmailVerified       bool       `json:"isEmailVerfieid"`
+	EmailVerificationCode string     `json:"emailVerificationCode"`
+	EmailVerifiedAt       *time.Time `json:"emailVerifiedAt"`
 	Password              *string    `json:"password"`
 	PasswordHash          *string    `json:"passwordHash"`
 	CreatedAt             time.Time  `json:"createdAt"`

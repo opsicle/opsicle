@@ -27,8 +27,14 @@ func GetUserV1(opts GetUserV1Opts) (*User, error) {
 	SELECT
     users.id AS user_id,
     users.email,
+    users.is_email_verified,
     users.email_verification_code,
-    users.password_hash AS password_hash
+    users.email_verified_at,
+    users.password_hash,
+    users.is_disabled,
+    users.disabled_at,
+    users.is_deleted,
+    users.deleted_at
 		FROM users
 			WHERE %s = ?`,
 		selectionField,
@@ -47,8 +53,14 @@ func GetUserV1(opts GetUserV1Opts) (*User, error) {
 	if err := row.Scan(
 		&userInstance.Id,
 		&userInstance.Email,
+		&userInstance.IsEmailVerified,
 		&userInstance.EmailVerificationCode,
+		&userInstance.EmailVerifiedAt,
 		&userInstance.PasswordHash,
+		&userInstance.IsDisabled,
+		&userInstance.DisabledAt,
+		&userInstance.IsDeleted,
+		&userInstance.DeletedAt,
 	); err != nil {
 		return nil, fmt.Errorf("failed to get user row: %s", err)
 	}

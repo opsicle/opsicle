@@ -134,7 +134,14 @@ var Command = &cobra.Command{
 		}
 		sessionId, sessionToken, err := client.CreateSessionV1(createSessionInput)
 		if err != nil {
-			return fmt.Errorf("failed to create session: %s", err)
+			if errors.Is(err, controller.ErrorUserEmailNotVerified) {
+				fmt.Println("⚠️  Verify your email first using `opsicle verify email`")
+				return fmt.Errorf("email has not been verified")
+			} else if errors.Is(err, controller.ErrorUserLoginFailed) {
+				fmt.Println("⚠️  The provided credentials doesn't seem correct, try again")
+				return fmt.Errorf("credentials validation failed")
+			}
+			return fmt.Errorf("failed to create session for unexpected reasons: %s", err)
 		}
 
 		sessionFilePath, err := controller.GetSessionTokenPath()

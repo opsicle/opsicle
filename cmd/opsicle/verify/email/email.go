@@ -47,7 +47,7 @@ var Command = &cobra.Command{
 
 		fmt.Printf("Welcome to\n%s\n", cli.Logo)
 		if inputCode == "" {
-			fmt.Printf("To get started, we'll need a couple of details from you:\n\n")
+			fmt.Printf("Enter the verification code that you should've received via email:\n\n")
 		}
 
 		model := cli.CreatePrompt(cli.PromptOpts{

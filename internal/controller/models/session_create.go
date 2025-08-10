@@ -67,7 +67,13 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 
 	userInstance.Password = &opts.Password
 	if !userInstance.ValidatePassword() {
-		return nil, nil
+		return nil, ErrorCredentialsAuthenticationFailed
+	} else if !userInstance.IsEmailVerified {
+		return nil, ErrorUserEmailNotVerified
+	} else if userInstance.IsDisabled {
+		return nil, ErrorUserDisabled
+	} else if userInstance.IsDeleted {
+		return nil, ErrorUserDeleted
 	}
 	sessionId := uuid.NewString()
 	orgCode := ""
