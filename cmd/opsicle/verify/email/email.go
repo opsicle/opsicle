@@ -40,7 +40,8 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_, _, err := controller.GetSessionToken()
 		if err == nil {
-			return fmt.Errorf("looks like you're already logged in, run `opsicle logout` first before running this command")
+			fmt.Println("You are currently logged in, log out first with `opsicle logout` if you are trying to verify another account")
+			return fmt.Errorf("failed to verify email: user is already logged in")
 		}
 
 		inputCode := viper.GetString("code")
@@ -101,7 +102,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to verify user")
 		}
 
-		logrus.Debugf("successfully verified user[%s]", verifyUserV1Output.Email)
+		logrus.Debugf("successfully verified user[%s]", verifyUserV1Output.Data.Email)
 
 		fmt.Printf("Thank you for verifying your email address!\n")
 		fmt.Printf("Next steps:\n")

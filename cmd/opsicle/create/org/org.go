@@ -91,7 +91,7 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create an org: %s", err)
 		}
-		logrus.Infof("successfully created org[%s]", createOrgOutput.Code)
+		logrus.Infof("successfully created org[%s]", createOrgOutput.Data.Code)
 
 		return nil
 	},

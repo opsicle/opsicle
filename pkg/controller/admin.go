@@ -9,7 +9,7 @@ import (
 	"opsicle/internal/common"
 )
 
-type InitV1Opts struct {
+type InitV1Input struct {
 	AdminApiToken string `json:"-"`
 
 	Email string `json:"email"`
@@ -17,17 +17,23 @@ type InitV1Opts struct {
 	Password string `json:"password"`
 }
 
-type initV1EndpointResponse struct {
+type InitV1Output struct {
+	Data InitV1OutputData
+
+	http.Response
+}
+
+type InitV1OutputData struct {
 	UserId string `json:"userId"`
 	OrgId  string `json:"orgId"`
 }
 
-func (c Client) InitV1(opts InitV1Opts) (userId, orgId string, err error) {
+func (c Client) InitV1(opts InitV1Input) (*InitV1Output, error) {
 	controllerUrl := *c.ControllerUrl
 	controllerUrl.Path = "/admin/v1/init"
 	requestBodyData, err := json.Marshal(opts)
 	if err != nil {
-		return "", "", fmt.Errorf("admin.InitV1: failed to marshal data: %s", err)
+		return nil, fmt.Errorf("admin.InitV1: failed to marshal data: %s", err)
 	}
 	requestBody := bytes.NewBuffer(requestBodyData)
 	httpRequest, err := http.NewRequest(
@@ -36,33 +42,35 @@ func (c Client) InitV1(opts InitV1Opts) (userId, orgId string, err error) {
 		requestBody,
 	)
 	if err != nil {
-		return "", "", fmt.Errorf("admin.InitV1: failed to create http request: %s", err)
+		return nil, fmt.Errorf("admin.InitV1: failed to create http request: %s", err)
 	}
 	httpRequest.Header.Add("Content-Type", "application/json")
 	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle/controller-sdk/client-%s", c.Id))
 	httpRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", opts.AdminApiToken))
 	httpResponse, err := c.HttpClient.Do(httpRequest)
 	if err != nil {
-		return "", "", fmt.Errorf("admin.InitV1: failed to execute http request: %s", err)
+		return nil, fmt.Errorf("admin.InitV1: failed to execute http request: %s", err)
 	}
+	output := InitV1Output{Response: *httpResponse}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return "", "", fmt.Errorf("admin.InitV1: failed to read response body: %s", err)
+		return &output, fmt.Errorf("admin.InitV1: failed to read response body: %s", err)
 	}
 	if httpResponse.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("admin.InitV1: failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
+		return &output, fmt.Errorf("admin.InitV1: failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return "", "", fmt.Errorf("admin.InitV1: failed to parse response from controller service: %s", err)
+		return &output, fmt.Errorf("admin.InitV1: failed to parse response from controller service: %s", err)
 	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
-		return "", "", fmt.Errorf("admin.InitV1: failed to parse response data from controller service: %s", err)
+		return &output, fmt.Errorf("admin.InitV1: failed to parse response data from controller service: %s", err)
 	}
-	var endpointResponse initV1EndpointResponse
-	if err := json.Unmarshal(responseData, &endpointResponse); err != nil {
-		return "", "", fmt.Errorf("admin.InitV1: failed to derive business response data from controller: %s", err)
+	var data InitV1OutputData
+	if err := json.Unmarshal(responseData, &data); err != nil {
+		return &output, fmt.Errorf("admin.InitV1: failed to derive business response data from controller: %s", err)
 	}
-	return endpointResponse.UserId, endpointResponse.OrgId, nil
+	output.Data = data
+	return &output, nil
 }

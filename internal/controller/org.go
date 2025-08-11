@@ -14,7 +14,7 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 
 	v1 := opts.Router.PathPrefix("/v1/org").Subrouter()
 
-	v1.Handle("", requiresAuth(http.HandlerFunc(handleGetCurrentOrgV1))).Methods(http.MethodGet)
+	v1.Handle("", requiresAuth(http.HandlerFunc(handleGetOrgsV1))).Methods(http.MethodGet)
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleCreateOrgV1))).Methods(http.MethodPost)
 }
 
@@ -84,7 +84,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleGetCurrentOrgV1 godoc
+// handleGetOrgsV1 godoc
 // @Summary      Retrieves the current organisation
 // @Description  Retrieves the current organisation that the current user is signed in via
 // @Tags         controller-service
@@ -94,29 +94,20 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 // @Failure      403 {object} commonHttpResponse "forbidden"
 // @Failure      500 {object} commonHttpResponse "internal server error"
 // @Router       /api/v1/org [get]
-func handleGetCurrentOrgV1(w http.ResponseWriter, r *http.Request) {
+func handleGetOrgsV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	session := r.Context().Value(authRequestContext).(identity)
 
-	if session.OrganizationId == nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "user is not logged into an organisation", nil)
-		return
-	}
+	log(common.LogLevelDebug, fmt.Sprintf("retrieving organisations that user[%s] is in", session.UserId))
 
-	log(common.LogLevelDebug, fmt.Sprintf("retrieving org[%s]...", *session.OrganizationId))
-
-	orgInstance, err := models.GetOrgV1(models.GetOrgV1Opts{
-		Db: db,
-		Id: session.OrganizationId,
+	orgs, err := models.ListUserOrgsV1(models.ListUserOrgsV1Opts{
+		Db:     db,
+		UserId: session.UserId,
 	})
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, fmt.Sprintf("failed to retrieve org[%s]", session.OrganizationId), err)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, fmt.Sprintf("failed to retrieve orgs that user[%s] is in", session.UserId), err)
 		return
 	}
-	if _, err := orgInstance.LoadUserCountV1(models.LoadOrgUserCountV1Opts{Db: db}); err != nil {
-		log(common.LogLevelWarn, fmt.Sprintf("failed to get user count of org[%s]: %s", *session.OrganizationId, err))
-	}
-	log(common.LogLevelDebug, fmt.Sprintf("successfully retrieved org[%s]", *session.OrganizationId))
 
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", orgInstance)
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", orgs)
 }

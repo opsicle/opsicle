@@ -16,12 +16,11 @@ import (
 )
 
 func registerUserRoutes(opts RouteRegistrationOpts) {
-	requiresAuth := getRouteAuther(opts.ServiceLogs)
+	// requiresAuth := getRouteAuther(opts.ServiceLogs)
 
 	v1 := opts.Router.PathPrefix("/v1/users").Subrouter()
 
 	v1.HandleFunc("", handleCreateUserV1).Methods(http.MethodPost)
-	v1.Handle("", requiresAuth(http.HandlerFunc(handleListUsersV1))).Methods(http.MethodGet)
 
 	v1 = opts.Router.PathPrefix("/v1/verification").Subrouter()
 
@@ -138,28 +137,6 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 		Id:    *user.Id,
 		Email: user.Email,
 	})
-}
-
-func handleListUsersV1(w http.ResponseWriter, r *http.Request) {
-	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	log(common.LogLevelDebug, "this endpoint retrieves users from the current user's organisation")
-	session := r.Context().Value(authRequestContext).(identity)
-
-	if session.OrganizationId == nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "user is not logged into an organisation", nil)
-		return
-	}
-
-	users, err := models.ListUsersV1(models.ListUsersV1Opts{
-		Db:      db,
-		OrgCode: *session.OrganizationCode,
-	})
-	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not ok", err)
-		return
-	}
-
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", users)
 }
 
 func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {

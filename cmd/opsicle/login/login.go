@@ -132,7 +132,7 @@ var Command = &cobra.Command{
 		if organisation != "" {
 			createSessionInput.OrgCode = &organisation
 		}
-		sessionId, sessionToken, err := client.CreateSessionV1(createSessionInput)
+		createSessionOutput, err := client.CreateSessionV1(createSessionInput)
 		if err != nil {
 			if errors.Is(err, controller.ErrorUserEmailNotVerified) {
 				fmt.Println("⚠️  Verify your email first using `opsicle verify email`")
@@ -148,11 +148,11 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to get session token path: %s", err)
 		}
-		if err := os.WriteFile(sessionFilePath, []byte(sessionToken), 0600); err != nil {
+		if err := os.WriteFile(sessionFilePath, []byte(createSessionOutput.SessionToken), 0600); err != nil {
 			return fmt.Errorf("failed to write session token to path[%s]: %s", sessionFilePath, err)
 		}
 
-		fmt.Printf("Welcome back!\nSession ID: %s\n", sessionId)
+		fmt.Printf("Welcome back!\nSession ID: %s\n", createSessionOutput.SessionId)
 		return nil
 	},
 }

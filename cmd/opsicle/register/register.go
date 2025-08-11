@@ -129,9 +129,9 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create user: %s", err)
 		}
 
-		logrus.Debugf("successfully created user[%s] with id[%s]", createUserV1Output.Email, createUserV1Output.Id)
+		logrus.Debugf("successfully created user[%s] with id[%s]", createUserV1Output.Data.Email, createUserV1Output.Data.Id)
 
-		fmt.Printf("We've successfully created an account using the email '%s'\n", createUserV1Output.Email)
+		fmt.Printf("We've successfully created an account using the email '%s'\n", createUserV1Output.Data.Email)
 		fmt.Printf("Next steps:\n")
 		fmt.Printf("  1. Check your inbox for a verification code\n")
 		fmt.Printf("  2. Run `opsicle verify email`\n")

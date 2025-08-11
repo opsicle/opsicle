@@ -18,12 +18,19 @@ type CreateSessionV1Input struct {
 	Hostname string  `json:"hostname"`
 }
 
-func (c Client) CreateSessionV1(opts CreateSessionV1Input) (string, string, error) {
+type CreateSessionV1Output struct {
+	SessionId    string
+	SessionToken string
+
+	http.Response
+}
+
+func (c Client) CreateSessionV1(opts CreateSessionV1Input) (*CreateSessionV1Output, error) {
 	controllerUrl := *c.ControllerUrl
 	controllerUrl.Path = "/api/v1/session"
 	requestBodyData, err := json.Marshal(opts)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to marshal input data: %s", err)
+		return nil, fmt.Errorf("failed to marshal input data: %s", err)
 	}
 	requestBody := bytes.NewBuffer(requestBodyData)
 	httpRequest, err := http.NewRequest(
@@ -32,7 +39,7 @@ func (c Client) CreateSessionV1(opts CreateSessionV1Input) (string, string, erro
 		requestBody,
 	)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create http request to create a session: %s", err)
+		return nil, fmt.Errorf("failed to create http request to create a session: %s", err)
 	}
 	httpRequest.Header.Add("Content-Type", "application/json")
 	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle/controller-sdk/client-%s", c.Id))
@@ -44,47 +51,51 @@ func (c Client) CreateSessionV1(opts CreateSessionV1Input) (string, string, erro
 	}
 	httpResponse, err := c.HttpClient.Do(httpRequest)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to execute http request to create session: %s", err)
+		return nil, fmt.Errorf("failed to execute http request to create session: %s", err)
 	}
+	output := &CreateSessionV1Output{Response: *httpResponse}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to read response body: %s", err)
+		return output, fmt.Errorf("failed to read response body: %s", err)
 	}
 	switch httpResponse.StatusCode {
 	case http.StatusBadRequest:
-		return "", "", fmt.Errorf("user credentials failed: %w", ErrorUserLoginFailed)
+		return output, fmt.Errorf("user credentials failed: %w", ErrorUserLoginFailed)
 	case http.StatusLocked:
-		return "", "", fmt.Errorf("user email is not verified: %w", ErrorUserEmailNotVerified)
+		return output, fmt.Errorf("user email is not verified: %w", ErrorUserEmailNotVerified)
 	case http.StatusInternalServerError:
-		return "", "", fmt.Errorf("received an unknown error (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
+		return output, fmt.Errorf("received an unknown error (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return "", "", fmt.Errorf("failed to parse response from controller service: %s", err)
+		return output, fmt.Errorf("failed to parse response from controller service: %s", err)
 	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to parse response data from controller service: %s", err)
+		return output, fmt.Errorf("failed to parse response data from controller service: %s", err)
 	}
 	var token models.SessionToken
 	if err := json.Unmarshal(responseData, &token); err != nil {
-		return "", "", fmt.Errorf("failed to parse response from controller service into a session token: %s", err)
+		return output, fmt.Errorf("failed to parse response from controller service into a session token: %s", err)
 	}
-	return token.SessionId, token.Value, nil
+	output.SessionId = token.SessionId
+	output.SessionToken = token.Value
+	return output, nil
 }
 
 type DeleteSessionV1Output struct {
-	// SessionId is only populated if the call to the controller was
-	// successful as indicated by the `.IsSuccessful` property
-	SessionId string
-
-	// IsSuccessful indicates whether a session was deleted
-	IsSuccessful bool
-
-	// Message includes any other details sent by the controller service
-	Message string
+	Data DeleteSessionV1OutputData
 
 	http.Response
+}
+
+type DeleteSessionV1OutputData struct {
+	// SessionId is only populated if the call to the controller was
+	// successful as indicated by the `.IsSuccessful` property
+	SessionId string `json:"sessionId"`
+
+	// IsSuccessful indicates whether a session was deleted
+	IsSuccessful bool `json:"isSuccessful"`
 }
 
 func (c Client) DeleteSessionV1() (*DeleteSessionV1Output, error) {
@@ -110,33 +121,36 @@ func (c Client) DeleteSessionV1() (*DeleteSessionV1Output, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute http request to create session: %s", err)
 	}
-	output := &DeleteSessionV1Output{
-		IsSuccessful: false,
-		Response:     *httpResponse,
-	}
+	output := DeleteSessionV1Output{Response: *httpResponse}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return output, fmt.Errorf("failed to read response body: %s", err)
+		return &output, fmt.Errorf("failed to read response body: %s", err)
 	}
 	if httpResponse.StatusCode != http.StatusOK {
-		return output, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
+		return &output, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return output, fmt.Errorf("failed to parse response from controller service: %s", err)
+		return &output, fmt.Errorf("failed to parse response from controller service: %s", err)
 	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
-		return output, fmt.Errorf("failed to parse response data from controller service: %s", err)
+		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
 	}
-	if err := json.Unmarshal(responseData, output); err != nil {
-		return output, fmt.Errorf("failed to unmarshal response data into expected output: %s", err)
+	var data DeleteSessionV1OutputData
+	if err := json.Unmarshal(responseData, &data); err != nil {
+		return &output, fmt.Errorf("failed to unmarshal response data into expected output: %s", err)
 	}
-	output.Response = *httpResponse
-	return output, nil
+	output.Data = data
+	return &output, nil
 }
 
 type ValidateSessionV1Output struct {
+	Data     ValidateSessionV1OutputData
+	Response http.Response
+}
+
+type ValidateSessionV1OutputData struct {
 	IsExpired bool      `json:"isExpired"`
 	ExpiresAt time.Time `json:"expiresAt"`
 	StartedAt time.Time `json:"startedAt"`
@@ -145,8 +159,6 @@ type ValidateSessionV1Output struct {
 	UserType  string    `json:"userType"`
 	OrgCode   *string   `json:"orgCode"`
 	OrgId     *string   `json:"orgId"`
-
-	Response http.Response
 }
 
 func (c Client) ValidateSessionV1() (*ValidateSessionV1Output, error) {
@@ -183,12 +195,11 @@ func (c Client) ValidateSessionV1() (*ValidateSessionV1Output, error) {
 	if err != nil {
 		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
 	}
-	if err := json.Unmarshal(responseData, &output); err != nil {
+	var data ValidateSessionV1OutputData
+	if err := json.Unmarshal(responseData, &data); err != nil {
 		return &output, fmt.Errorf("failed to parse final response data from controller service: %s", err)
 	}
-	output.IsExpired = output.ExpiresAt.Before(time.Now())
-	if httpResponse.StatusCode != http.StatusOK {
-		return &output, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
-	}
+	output.Data = data
+	output.Data.IsExpired = data.ExpiresAt.Before(time.Now())
 	return &output, nil
 }

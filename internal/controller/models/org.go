@@ -66,6 +66,16 @@ type Org struct {
 
 	// UserCount stores the number of users registered to the organisation
 	UserCount *int `json:"userCount"`
+
+	// MemberType defines the type of membership of the current user, only
+	// available when the organisation was queried as part of a user's
+	// request regarding which organisations they belong to
+	MemberType *string `json:"memberType"`
+
+	// JoinedAt is an optionally available field for when a user requests
+	// for organisations they belong to - this will be used as the timestamp
+	// when the user joined the org
+	JoinedAt *time.Time `json:"joinedAt"`
 }
 
 type AddUserToOrgV1 struct {

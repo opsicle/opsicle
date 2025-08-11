@@ -11,10 +11,14 @@ import (
 )
 
 type CreateOrgV1Output struct {
-	Id   string `json:"id"`
-	Code string `json:"code"`
+	Data CreateOrgV1OutputData
 
 	http.Response
+}
+
+type CreateOrgV1OutputData struct {
+	Id   string `json:"id"`
+	Code string `json:"code"`
 }
 
 type CreateOrgV1Input struct {
@@ -66,15 +70,20 @@ func (c Client) CreateOrgV1(input CreateOrgV1Input) (*CreateOrgV1Output, error) 
 	if err != nil {
 		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
 	}
-	fmt.Println(string(responseData))
-	if err := json.Unmarshal(responseData, &output); err != nil {
+	var data CreateOrgV1OutputData
+	if err := json.Unmarshal(responseData, &data); err != nil {
 		return &output, fmt.Errorf("failed to unmarshal response data into output: %s", err)
 	}
-	output.Response = *httpResponse
+	output.Data = data
 	return &output, nil
 }
 
 type GetOrgV1Output struct {
+	Data GetOrgV1OutputData
+	http.Response
+}
+
+type GetOrgV1OutputData struct {
 	Id         string     `json:"id"`
 	Code       string     `json:"code"`
 	Type       string     `json:"type"`
@@ -91,7 +100,7 @@ type GetOrgV1Output struct {
 }
 
 // GetOrgV1 retrieves the current organisation
-func (c Client) GetOrgV1() (*GetOrgV1Output, *http.Response, error) {
+func (c Client) GetOrgV1() (*GetOrgV1Output, error) {
 	controllerUrl := *c.ControllerUrl
 	controllerUrl.Path = "/api/v1/org"
 	httpRequest, err := http.NewRequest(
@@ -100,7 +109,7 @@ func (c Client) GetOrgV1() (*GetOrgV1Output, *http.Response, error) {
 		nil,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create http request to create a session: %s", err)
+		return nil, fmt.Errorf("failed to create http request to create a session: %s", err)
 	}
 	httpRequest.Header.Add("Content-Type", "application/json")
 	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle/controller-sdk/client-%s", c.Id))
@@ -112,26 +121,28 @@ func (c Client) GetOrgV1() (*GetOrgV1Output, *http.Response, error) {
 	}
 	httpResponse, err := c.HttpClient.Do(httpRequest)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to execute http request to create session: %s", err)
+		return nil, fmt.Errorf("failed to execute http request to create session: %s", err)
 	}
+	output := GetOrgV1Output{Response: *httpResponse}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return nil, httpResponse, fmt.Errorf("failed to read response body: %s", err)
+		return &output, fmt.Errorf("failed to read response body: %s", err)
 	}
 	if httpResponse.StatusCode != http.StatusOK {
-		return nil, httpResponse, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
+		return &output, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return nil, httpResponse, fmt.Errorf("failed to parse response from controller service: %s", err)
+		return &output, fmt.Errorf("failed to parse response from controller service: %s", err)
 	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
-		return nil, httpResponse, fmt.Errorf("failed to parse response data from controller service: %s", err)
+		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
 	}
-	var output GetOrgV1Output
-	if err := json.Unmarshal(responseData, &output); err != nil {
-		return nil, httpResponse, fmt.Errorf("failed to unmarshal response data into output: %s", err)
+	var data GetOrgV1OutputData
+	if err := json.Unmarshal(responseData, &data); err != nil {
+		return &output, fmt.Errorf("failed to unmarshal response data into output: %s", err)
 	}
-	return &output, httpResponse, nil
+	output.Data = data
+	return &output, nil
 }

@@ -110,7 +110,7 @@ func handleGetSessionV1(w http.ResponseWriter, r *http.Request) {
 
 	authorizationHeader := r.Header.Get("Authorization")
 	if strings.Index(authorizationHeader, "Bearer ") != 0 {
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to receive a valid authorization header", nil)
+		common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to receive a valid authorization header")
 		return
 	}
 	authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
@@ -121,7 +121,7 @@ func handleGetSessionV1(w http.ResponseWriter, r *http.Request) {
 		CachePrefix: sessionCachePrefix,
 	})
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to validate provided token", err, sessionInfo)
+		common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to retrieve session details")
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("session[%s] is valid and has %s time left", sessionInfo.Id, sessionInfo.TimeLeft))
@@ -130,9 +130,8 @@ func handleGetSessionV1(w http.ResponseWriter, r *http.Request) {
 }
 
 type handleDeleteSessionV1Output struct {
-	SessionId    string
-	IsSuccessful bool
-	Message      string
+	SessionId    string `json:"sessionId"`
+	IsSuccessful bool   `json:"isSuccessful"`
 }
 
 // handleDeleteSessionV1 godoc

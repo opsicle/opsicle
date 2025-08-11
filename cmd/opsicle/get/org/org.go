@@ -57,9 +57,9 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create client for approver service: %s", err)
 		}
 
-		org, httpResponse, err := client.GetOrgV1()
+		org, err := client.GetOrgV1()
 		if err != nil {
-			if httpResponse.StatusCode == http.StatusUnauthorized {
+			if org.StatusCode == http.StatusUnauthorized {
 				if err := controller.DeleteSessionToken(); err != nil {
 					logrus.Warnf("failed to remove session token: %s", err)
 				}

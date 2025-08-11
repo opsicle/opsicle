@@ -22,12 +22,15 @@ type CreateUserV1Input struct {
 }
 
 type CreateUserV1Output struct {
+	Data CreateUserV1OutputData
+	http.Response
+}
+
+type CreateUserV1OutputData struct {
 	Id      string  `json:"id"`
 	Email   string  `json:"email"`
 	OrgCode *string `json:"orgCode"`
 	OrgId   *string `json:"orgId"`
-
-	http.Response
 }
 
 func (c Client) CreateUserV1(input CreateUserV1Input) (*CreateUserV1Output, error) {
@@ -68,10 +71,11 @@ func (c Client) CreateUserV1(input CreateUserV1Input) (*CreateUserV1Output, erro
 	if err != nil {
 		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
 	}
-	if err := json.Unmarshal(responseData, &output); err != nil {
+	var data CreateUserV1OutputData
+	if err := json.Unmarshal(responseData, &data); err != nil {
 		return &output, fmt.Errorf("failed to unmarshal response data into output: %s", err)
 	}
-	output.Response = *httpResponse
+	output.Data = data
 	return &output, nil
 }
 
@@ -144,9 +148,13 @@ type VerifyUserV1Input struct {
 }
 
 type VerifyUserV1Output struct {
-	Email string `json:"email"`
+	Data VerifyUserV1OutputData
 
 	http.Response
+}
+
+type VerifyUserV1OutputData struct {
+	Email string `json:"email"`
 }
 
 func (c Client) VerifyUserV1(opts VerifyUserV1Input) (*VerifyUserV1Output, error) {
@@ -188,9 +196,10 @@ func (c Client) VerifyUserV1(opts VerifyUserV1Input) (*VerifyUserV1Output, error
 	if err != nil {
 		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
 	}
-	if err := json.Unmarshal(responseData, &output); err != nil {
+	var data VerifyUserV1OutputData
+	if err := json.Unmarshal(responseData, &data); err != nil {
 		return &output, fmt.Errorf("failed to unmarshal response data into output: %s", err)
 	}
-	output.Response = *httpResponse
+	output.Data = data
 	return &output, nil
 }

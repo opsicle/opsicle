@@ -64,7 +64,7 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create controller client: %s", err)
 		}
-		userId, orgId, err := client.InitV1(controller.InitV1Opts{
+		initOutput, err := client.InitV1(controller.InitV1Input{
 			AdminApiToken: adminApiToken,
 			Email:         adminEmail,
 			Password:      adminPassword,
@@ -73,7 +73,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create `root` organisation and user: %s", err)
 		}
 
-		logrus.Debugf("created user[%s] in org[%s]", userId, orgId)
+		logrus.Debugf("created user[%s] in org[%s]", initOutput.Data.UserId, initOutput.Data.OrgId)
 
 		logrus.Infof("`root` organisation and user created successfully! login using 'opsicle login'")
 		return nil

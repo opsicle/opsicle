@@ -60,11 +60,11 @@ var Command = &cobra.Command{
 				}
 			}
 		}
-		if deleteSessionOutput.IsSuccessful {
+		if deleteSessionOutput.Data.IsSuccessful {
 			if err := controller.DeleteSessionToken(); err != nil {
 				return fmt.Errorf("failed to remove file at path[%s], please do it yourself: %s", sessionFilePath, err)
 			}
-			fmt.Printf("Session ID '%s' is now closed\n", deleteSessionOutput.SessionId)
+			fmt.Printf("Session ID '%s' is now closed\n", deleteSessionOutput.Data.SessionId)
 			fmt.Println("See you again <3")
 		}
 		return nil

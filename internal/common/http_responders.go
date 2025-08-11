@@ -23,17 +23,18 @@ func SendHttpFailResponse(
 	request *http.Request,
 	statusCode int,
 	message string,
-	errorDetails error,
-	data ...any,
+	errorCode ...error,
 ) {
 	log := request.Context().Value(HttpContextLogger).(HttpRequestLogger)
-	log(LogLevelError, fmt.Sprintf("%s: %s", message, errorDetails))
+	log(LogLevelError, message)
 	responseData := HttpResponse{
 		Message: message,
 		Success: false,
 	}
-	if len(data) > 0 {
-		responseData.Data = data[0]
+	if len(errorCode) > 0 {
+		responseData.Data = errorCode[0].Error()
+	} else {
+		responseData.Data = "generic_error"
 	}
 	res, _ := json.Marshal(responseData)
 	responseWriter.WriteHeader(statusCode)

@@ -73,6 +73,9 @@ func GetSessionToken() (sessionToken string, sessionFilePath string, err error) 
 	return sessionToken, sessionFilePath, nil
 }
 
+// DeleteSessionToken removes the current session token. Returns an error only
+// if something failed while performing checks; does not return an error if the
+// session token file does not exist
 func DeleteSessionToken() (err error) {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -91,6 +94,5 @@ func DeleteSessionToken() (err error) {
 	if err := os.Remove(sessionFilePath); err != nil {
 		return fmt.Errorf("failed to remove session file at path[%s]: %s", sessionFilePath, err)
 	}
-
 	return nil
 }
