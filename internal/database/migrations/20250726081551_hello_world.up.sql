@@ -256,6 +256,7 @@ CREATE TABLE IF NOT EXISTS `user_mfa` (
     id              VARCHAR(36) PRIMARY KEY,
     user_id         VARCHAR(36) NOT NULL,
     `secret`          TEXT,
+    `type`          TEXT,
     config_json     JSON,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,

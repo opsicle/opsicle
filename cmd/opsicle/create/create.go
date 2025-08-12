@@ -2,6 +2,7 @@ package create
 
 import (
 	"opsicle/cmd/opsicle/create/approval_request"
+	"opsicle/cmd/opsicle/create/mfa"
 	"opsicle/cmd/opsicle/create/org"
 
 	"github.com/spf13/cobra"
@@ -9,6 +10,7 @@ import (
 
 func init() {
 	Command.AddCommand(approval_request.Command)
+	Command.AddCommand(mfa.Command)
 	Command.AddCommand(org.Command)
 }
 

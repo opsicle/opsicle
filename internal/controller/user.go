@@ -16,11 +16,16 @@ import (
 )
 
 func registerUserRoutes(opts RouteRegistrationOpts) {
-	// requiresAuth := getRouteAuther(opts.ServiceLogs)
+	requiresAuth := getRouteAuther(opts.ServiceLogs)
 
 	v1 := opts.Router.PathPrefix("/v1/users").Subrouter()
 
 	v1.HandleFunc("", handleCreateUserV1).Methods(http.MethodPost)
+
+	v1 = opts.Router.PathPrefix("/v1/user").Subrouter()
+
+	v1.Handle("/mfas", requiresAuth(http.HandlerFunc(handleListUserMfasV1))).Methods(http.MethodGet)
+	v1.HandleFunc("/mfas", handleListUserMfaTypesV1).Methods(http.MethodOptions)
 
 	v1 = opts.Router.PathPrefix("/v1/verification").Subrouter()
 
@@ -136,6 +141,44 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleCreateUserV1Output{
 		Id:    *user.Id,
 		Email: user.Email,
+	})
+}
+
+func handleListUserMfasV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	log(common.LogLevelDebug, fmt.Sprintf("retrieving user[%s]'s available mfas", session.UserId))
+
+	userMfas, err := models.ListUserMfasV1(models.ListUserMfasV1Opts{
+		Db: db,
+		Id: session.UserId,
+	})
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list user mfas", err)
+		return
+	}
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userMfas)
+
+}
+
+type handleListUserMfaTypesV1Response []handleListUserMfaTypesV1ResponseType
+
+type handleListUserMfaTypesV1ResponseType struct {
+	Description string `json:"description"`
+	Label       string `json:"label"`
+	Value       string `json:"value"`
+}
+
+func handleListUserMfaTypesV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	log(common.LogLevelDebug, "list of all available user mfa types requested")
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleListUserMfaTypesV1Response{
+		{
+			Value:       "totp",
+			Label:       "TOTP Token",
+			Description: "A time-based one-time-password (via authenticator app)",
+		},
 	})
 }
 

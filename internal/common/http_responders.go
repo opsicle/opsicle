@@ -14,7 +14,7 @@ type HttpResponse struct {
 
 func GetNotFoundHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		SendHttpFailResponse(w, r, http.StatusNotFound, "not found", fmt.Errorf("endpoint[%s] not found", r.URL.Path))
+		SendHttpFailResponse(w, r, http.StatusNotFound, "not found", fmt.Errorf("no handler for method[%s] at endpoint[%s]", r.Method, r.URL.Path))
 	}
 }
 

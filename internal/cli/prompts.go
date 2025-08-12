@@ -94,6 +94,7 @@ type PromptModel struct {
 	inputPrompts      []PromptInput
 	inputReverseIndex map[int]string
 	inputIndex        map[string]int
+	isQuitting        bool
 	outputs           map[string]string
 
 	exitCode PromptExitCode
@@ -125,6 +126,7 @@ func (m *PromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			m.exitCode = PromptCancelled
+			m.isQuitting = true
 			return m, tea.Quit
 
 		// Set focus to next input
@@ -135,6 +137,7 @@ func (m *PromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// fmt.Printf("focusIndex[%v], len(m.inputs)[%v]\n", m.focusIndex, len(m.inputs))
 				m.buttons[m.focusIndex-len(m.inputs)].Handle(m)
 				// fmt.Printf("exit code: %v\n", m.exitCode)
+				m.isQuitting = true
 				return m, tea.Quit
 			}
 
@@ -204,11 +207,15 @@ func (m PromptModel) View() string {
 			}
 		}
 
-		if len(m.buttons) > 0 {
-			fmt.Fprintf(&b, "\n\n")
-			for i := range m.buttons {
-				fmt.Fprintf(&b, "%s\t", m.buttons[i].Render(m.focusIndex == len(m.inputs)+i))
+		if !m.isQuitting {
+			if len(m.buttons) > 0 {
+				fmt.Fprintf(&b, "\n\n")
+				for i := range m.buttons {
+					fmt.Fprintf(&b, "%s\t", m.buttons[i].Render(m.focusIndex == len(m.inputs)+i))
+				}
+				fmt.Fprintf(&b, "\n")
 			}
+		} else {
 			fmt.Fprintf(&b, "\n")
 		}
 		fmt.Fprintf(&b, "\n")

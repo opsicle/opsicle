@@ -26,9 +26,17 @@ type User struct {
 	DeletedAt             *time.Time `json:"deletedAt"`
 	IsDisabled            bool       `json:"isDisabled"`
 	DisabledAt            *time.Time `json:"disabledAt"`
+	Mfas                  []UserMfa  `json:"mfa"`
 	Org                   *Org       `json:"org"`
 	JoinedOrgAt           *time.Time `json:"joinedOrgAt"`
 	Type                  UserType   `json:"type"`
+}
+
+type UserMfa struct {
+	Id            string     `json:"id"`
+	Type          string     `json:"type"`
+	CreatedAt     *time.Time `json:"createdAt"`
+	LastUpdatedAt *time.Time `json:"lastUpdatedAt"`
 }
 
 func (u User) AddToOrgV1(opts AddUserToOrgV1Opts) error {
