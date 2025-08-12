@@ -7,6 +7,7 @@
     * [zsh](cli/opsicle_completion_zsh.md "Opsicle CLI: opsicle completion zsh")
   * [create](cli/opsicle_create.md "Opsicle CLI: opsicle create")
     * [approval-request](cli/opsicle_create_approval-request.md "Opsicle CLI: opsicle create approval-request")
+    * [mfa](cli/opsicle_create_mfa.md "Opsicle CLI: opsicle create mfa")
     * [org](cli/opsicle_create_org.md "Opsicle CLI: opsicle create org")
   * [get](cli/opsicle_get.md "Opsicle CLI: opsicle get")
     * [approval-request](cli/opsicle_get_approval-request.md "Opsicle CLI: opsicle get approval-request")

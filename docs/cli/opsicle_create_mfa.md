@@ -1,18 +1,17 @@
-## opsicle create org
+## opsicle create mfa
 
-Creates a new organisation
+Creates an MFA for the current user (you must be logged-in before running this)
 
 ```
-opsicle create org [flags]
+opsicle create mfa [flags]
 ```
 
 ### Options
 
 ```
-  -u, --controller-url string   defines the url where the controller service is accessible at (default "http://localhost:54321")
-  -h, --help                    help for org
-      --org-code string         code of the orgnaisation to be created
-      --org-name string         name of the orgnaisation to be created
+      --controller-url string   Defines the url where the controller service is accessible at (default "http://localhost:54321")
+  -h, --help                    help for mfa
+      --password history        Your password for verification (ideally, use an environment variable so the literal value doesn't show up in history)
 ```
 
 ### Options inherited from parent commands
