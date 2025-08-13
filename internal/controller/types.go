@@ -6,6 +6,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
+var (
+	MfaTypeTotp = "totp"
+)
+
 type commonHttpResponse common.HttpResponse
 
 type RouteRegistrationOpts struct {

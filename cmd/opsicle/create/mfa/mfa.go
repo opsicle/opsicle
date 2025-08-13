@@ -3,6 +3,7 @@ package mfa
 import (
 	"errors"
 	"fmt"
+	"opsicle/internal/auth"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
 
@@ -40,7 +41,7 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionToken, _, err := controller.GetSessionToken()
 		if err != nil {
-			fmt.Println("You must be logged-in to run this command")
+			fmt.Println("⚠️ You must be logged-in to run this command")
 			return fmt.Errorf("login is required")
 		}
 
@@ -63,6 +64,9 @@ var Command = &cobra.Command{
 		logrus.Debug("retrieving current user's registered mfa methods...")
 		listUserMfasOutput, err := client.ListUserMfasV1(controller.ListUserMfasV1Input{})
 		if err != nil {
+			if errors.Is(err, controller.ErrorAuthRequired) {
+				controller.DeleteSessionToken()
+			}
 			return fmt.Errorf("failed to list user mfas: %s", err)
 		}
 		if len(listUserMfasOutput.Data) == 0 {
@@ -117,9 +121,13 @@ var Command = &cobra.Command{
 		if mfaTypeSelector.GetExitCode() == cli.PromptCancelled {
 			return errors.New("user cancelled")
 		}
-		selectedMfaType := mfaTypeSelector.GetValue()
+		mfaType := mfaTypeSelector.GetValue()
 
-		fmt.Printf("✅ Awesome, let's register a new MFA of type [%s]\n", mfaTypeSelector.GetLabel())
+		if mfaType == "" {
+			return fmt.Errorf("failed to get a valid type of mfa")
+		}
+
+		fmt.Printf("✅ Awesome, we'll register a new MFA of type [%s]\n", mfaTypeSelector.GetLabel())
 
 		// password verification
 
@@ -155,9 +163,73 @@ var Command = &cobra.Command{
 		}
 		password := model.GetValue("password")
 
+		if password == "" {
+			return fmt.Errorf("failed to receive a password")
+		}
+
 		fmt.Println("⏳ Hang on, we're processing your request...")
 
-		logrus.Debugf("register mfa[%s] with password[%s]", selectedMfaType, password)
+		createUserMfaOutput, err := client.CreateUserMfaV1(controller.CreateUserMfaV1Input{
+			Password: password,
+			MfaType:  mfaType,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create user mfa: %s", err)
+		}
+
+		qrCode, err := auth.GetTotpQrCode(auth.GetTotpQrCodeOpts{
+			Issuer:    "opsicle.io",
+			AccountId: createUserMfaOutput.Data.UserEmail,
+			Secret:    createUserMfaOutput.Data.Secret,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get a qr code: %s", err)
+		}
+
+		fmt.Printf(
+			"🤳 Use your authenticator app to scan the following QR code: %s"+
+				"⌨️  Alternatively enter the following TOTP seed into your authenticator app:\n\n\t%s\n\n",
+			qrCode,
+			createUserMfaOutput.Data.Secret,
+		)
+
+		model = cli.CreatePrompt(cli.PromptOpts{
+			Buttons: []cli.PromptButton{
+				{
+					Label: "Verify",
+					Type:  cli.PromptButtonSubmit,
+				},
+				{
+					Label: "Cancel / Ctrl + C",
+					Type:  cli.PromptButtonCancel,
+				},
+			},
+			Inputs: []cli.PromptInput{
+				{
+					Id:          "totp",
+					Placeholder: "Your 6-digit generated TOTP token",
+					Type:        cli.PromptString,
+				},
+			},
+		})
+		prompt = tea.NewProgram(model)
+		if _, err := prompt.Run(); err != nil {
+			return fmt.Errorf("failed to get user input: %s", err)
+		}
+		if model.GetExitCode() == cli.PromptCancelled {
+			return errors.New("user cancelled")
+		}
+		totp := model.GetValue("totp")
+
+		_, err = client.VerifyUserMfaV1(controller.VerifyUserMfaV1Input{
+			Id:    createUserMfaOutput.Data.Id,
+			Value: totp,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to verify user mfa: %s", err)
+		}
+
+		fmt.Printf("✅ MFA successfully registered (MFA ID: %s)", createUserMfaOutput.Data.Id)
 
 		return nil
 	},

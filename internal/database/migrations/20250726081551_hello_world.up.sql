@@ -257,6 +257,8 @@ CREATE TABLE IF NOT EXISTS `user_mfa` (
     user_id         VARCHAR(36) NOT NULL,
     `secret`          TEXT,
     `type`          TEXT,
+    `is_verified`   BOOLEAN NOT NULL DEFAULT false,
+    `verified_at`   DATETIME,
     config_json     JSON,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_updated_at      DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,

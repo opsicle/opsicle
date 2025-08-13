@@ -9,7 +9,7 @@ import (
 type ListUserMfasV1Opts struct {
 	Db *sql.DB
 
-	Id string
+	UserId string
 }
 
 func ListUserMfasV1(opts ListUserMfasV1Opts) ([]UserMfa, error) {
@@ -17,12 +17,15 @@ func ListUserMfasV1(opts ListUserMfasV1Opts) ([]UserMfa, error) {
 	SELECT
 		id,
     type,
+		is_verified,
+		verified_at,
 		created_at,
 		last_updated_at
 		FROM user_mfa
 			WHERE user_id = ?
+				AND is_verified = true
 	`
-	sqlArgs := []any{opts.Id}
+	sqlArgs := []any{opts.UserId}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
 		return nil, fmt.Errorf("models.ListUserMfasV1: failed to prepare insert statement: %s", err)
@@ -39,6 +42,8 @@ func ListUserMfasV1(opts ListUserMfasV1Opts) ([]UserMfa, error) {
 		if err := rows.Scan(
 			&userMfa.Id,
 			&userMfa.Type,
+			&userMfa.IsVerified,
+			&userMfa.VerifiedAt,
 			&userMfa.CreatedAt,
 			&userMfa.LastUpdatedAt,
 		); err != nil {

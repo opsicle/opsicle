@@ -24,6 +24,8 @@ func registerUserRoutes(opts RouteRegistrationOpts) {
 
 	v1 = opts.Router.PathPrefix("/v1/user").Subrouter()
 
+	v1.Handle("/mfa", requiresAuth(http.HandlerFunc(handleCreateUserMfaV1))).Methods(http.MethodPost)
+	v1.Handle("/mfa/{mfaId}", requiresAuth(http.HandlerFunc(handleVerifyUserMfaV1))).Methods(http.MethodPost)
 	v1.Handle("/mfas", requiresAuth(http.HandlerFunc(handleListUserMfasV1))).Methods(http.MethodGet)
 	v1.HandleFunc("/mfas", handleListUserMfaTypesV1).Methods(http.MethodOptions)
 
@@ -144,16 +146,144 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type handleCreateUserMfaV1Input struct {
+	Password string `json:"password"`
+	MfaType  string `json:"mfaType"`
+}
+
+func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data")
+		return
+	}
+
+	var input handleCreateUserMfaV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data")
+		return
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("creating mfa of type[%s] for user[%s]", input.MfaType, session.UserId))
+
+	user, err := models.GetUserV1(models.GetUserV1Opts{
+		Db: db,
+		Id: &session.UserId,
+	})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s]: %s", session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user")
+		return
+	}
+
+	if !auth.ValidatePassword(input.Password, *user.PasswordHash) {
+		log(common.LogLevelError, "failed to validate user password")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate user's current password", ErrorInvalidPasword)
+		return
+	}
+
+	switch input.MfaType {
+	case MfaTypeTotp:
+		totpSeed, err := auth.CreateTotpSeed("opsicle", user.Email)
+		if err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create totp seed")
+			return
+		}
+
+		userMfa, err := models.CreateUserMfaV1(models.CreateUserMfaV1Opts{
+			Db: db,
+
+			UserId: session.UserId,
+			Secret: &totpSeed,
+			Type:   MfaTypeTotp,
+		})
+		if err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user totp mfa")
+			return
+		}
+
+		userMfa.UserEmail = &user.Email
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userMfa)
+	default:
+		common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to recognise type of mfa", ErrorUnrecognisedMfaType)
+		return
+	}
+}
+
+type handleVerifyUserMfaV1Input struct {
+	Value string `json:"value"`
+}
+
+func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+
+	vars := mux.Vars(r)
+	mfaId := vars["mfaId"]
+
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data")
+		return
+	}
+
+	var input handleVerifyUserMfaV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data")
+		return
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("verifying mfa[%s] for user[%s]", mfaId, session.UserId))
+
+	userMfa, err := models.GetUserMfaV1(models.GetUserMfaV1Opts{
+		Db: db,
+		Id: mfaId,
+	})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to get mfa[%s] for user[%s]: %s", mfaId, session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user mfa")
+		return
+	}
+
+	if userMfa.Secret == nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user mfa details")
+		return
+	}
+
+	switch userMfa.Type {
+	case MfaTypeTotp:
+		isValid, err := auth.ValidateTotpToken(*userMfa.Secret, input.Value)
+		if err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate provided totp token")
+			return
+		} else if !isValid {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "provided totp token is not valid")
+			return
+		}
+		if err := models.VerifyUserMfaV1(models.VerifyUserMfaV1Opts{
+			Db: db,
+			Id: mfaId,
+		}); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify mfa")
+			return
+		}
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok")
+	}
+
+}
+
 func handleListUserMfasV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	session := r.Context().Value(authRequestContext).(identity)
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving user[%s]'s available mfas", session.UserId))
 
 	userMfas, err := models.ListUserMfasV1(models.ListUserMfasV1Opts{
-		Db: db,
-		Id: session.UserId,
+		Db:     db,
+		UserId: session.UserId,
 	})
 	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to list user[%s] mfas: %s", session.UserId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list user mfas", err)
 		return
 	}
@@ -175,7 +305,7 @@ func handleListUserMfaTypesV1(w http.ResponseWriter, r *http.Request) {
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleListUserMfaTypesV1Response{
 		{
-			Value:       "totp",
+			Value:       MfaTypeTotp,
 			Label:       "TOTP Token",
 			Description: "A time-based one-time-password (via authenticator app)",
 		},

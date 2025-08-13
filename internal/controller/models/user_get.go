@@ -16,7 +16,7 @@ func GetUserV1(opts GetUserV1Opts) (*User, error) {
 	selectionField := "`users`.`email`"
 	selectionValue := ""
 	if opts.Id != nil {
-		selectionField = "`users`.`id"
+		selectionField = "`users`.`id`"
 		selectionValue = *opts.Id
 	} else if opts.Email != nil {
 		selectionValue = *opts.Email
