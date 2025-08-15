@@ -1,7 +1,7 @@
 package initialize
 
 import (
-	"opsicle/cmd/opsicle/initialize/controller"
+	"opsicle/cmd/opsicle/admin/initialize/controller"
 
 	"github.com/spf13/cobra"
 )

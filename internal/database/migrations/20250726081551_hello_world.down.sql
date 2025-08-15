@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS `user_login`;
 DROP TABLE IF EXISTS `user_mfa`;
 DROP TABLE IF EXISTS `user_profiles`;
 DROP TABLE IF EXISTS `user_permissions`;

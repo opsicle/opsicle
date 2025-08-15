@@ -146,8 +146,9 @@ func (c Client) DeleteSessionV1() (*DeleteSessionV1Output, error) {
 }
 
 type ValidateSessionV1Output struct {
-	Data     ValidateSessionV1OutputData
-	Response http.Response
+	Data ValidateSessionV1OutputData
+
+	http.Response
 }
 
 type ValidateSessionV1OutputData struct {
@@ -191,15 +192,23 @@ func (c Client) ValidateSessionV1() (*ValidateSessionV1Output, error) {
 	if err := json.Unmarshal(responseBody, &response); err != nil {
 		return &output, fmt.Errorf("failed to parse response from controller service: %s", err)
 	}
+	if output.Response.StatusCode != http.StatusOK {
+		var err error
+		switch response.Data.(string) {
+		case ErrorAuthRequired.Error():
+			err = ErrorAuthRequired
+		default:
+			err = ErrorGeneric
+		}
+		return &output, err
+	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
 		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
 	}
-	var data ValidateSessionV1OutputData
-	if err := json.Unmarshal(responseData, &data); err != nil {
-		return &output, fmt.Errorf("failed to parse final response data from controller service: %s", err)
+	if err := json.Unmarshal(responseData, &output.Data); err != nil {
+		return &output, fmt.Errorf("failed to parse final response data (%s) from controller service: %s", string(responseData), err)
 	}
-	output.Data = data
-	output.Data.IsExpired = data.ExpiresAt.Before(time.Now())
+	output.Data.IsExpired = output.Data.ExpiresAt.Before(time.Now())
 	return &output, nil
 }

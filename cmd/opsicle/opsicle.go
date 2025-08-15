@@ -2,9 +2,9 @@ package opsicle
 
 import (
 	"fmt"
+	"opsicle/cmd/opsicle/admin"
 	"opsicle/cmd/opsicle/create"
 	"opsicle/cmd/opsicle/get"
-	"opsicle/cmd/opsicle/initialize"
 	"opsicle/cmd/opsicle/list"
 	"opsicle/cmd/opsicle/login"
 	"opsicle/cmd/opsicle/logout"
@@ -70,7 +70,7 @@ var flags cli.Flags = cli.Flags{
 func init() {
 	Command.AddCommand(create.Command)
 	Command.AddCommand(get.Command)
-	Command.AddCommand(initialize.Command)
+	Command.AddCommand(admin.Command)
 	Command.AddCommand(list.Command)
 	Command.AddCommand(login.Command)
 	Command.AddCommand(logout.Command)

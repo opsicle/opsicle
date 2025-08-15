@@ -3,7 +3,8 @@ package controller
 import "fmt"
 
 var (
-	ErrorAuthRequired         = fmt.Errorf("auth required")
-	ErrorUserLoginFailed      = fmt.Errorf("login failed")
-	ErrorUserEmailNotVerified = fmt.Errorf("email not verified")
+	ErrorAuthRequired         = fmt.Errorf("auth_required")
+	ErrorUserLoginFailed      = fmt.Errorf("login_failed")
+	ErrorUserEmailNotVerified = fmt.Errorf("email_not_verified")
+	ErrorGeneric              = fmt.Errorf("generic_error")
 )

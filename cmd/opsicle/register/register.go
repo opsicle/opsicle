@@ -47,9 +47,40 @@ var Command = &cobra.Command{
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, _, err := controller.GetSessionToken()
+		var client *controller.Client
+		var err error
+
+		controllerUrl := viper.GetString("controller-url")
+
+		sessionToken, sessionFilePath, err := controller.GetSessionToken()
 		if err == nil {
-			return fmt.Errorf("looks like you're already logged in, run `opsicle logout` first before running this command")
+			client, err = controller.NewClient(controller.NewClientOpts{
+				BearerAuth: &controller.NewClientBearerAuthOpts{
+					Token: sessionToken,
+				},
+				ControllerUrl: controllerUrl,
+				Id:            "opsicle/register",
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create controller client: %s", err)
+			}
+			if _, err := client.ValidateSessionV1(); err != nil {
+				if errors.Is(err, controller.ErrorAuthRequired) {
+					if err := controller.DeleteSessionToken(); err != nil {
+						return fmt.Errorf("failed to delete session token at `%s`: %s\ndo it yourself before re-running this command:\n```\nrm -rf %s\n```", sessionFilePath, err, sessionFilePath)
+					}
+					fmt.Println("💬 You've been automatically logged out of your previous session that is no longer valid")
+				}
+			}
+		}
+
+		logrus.Debugf("creating new client...")
+		client, err = controller.NewClient(controller.NewClientOpts{
+			ControllerUrl: controllerUrl,
+			Id:            "opsicle/register",
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create controller client: %s", err)
 		}
 
 		inputEmail := viper.GetString("email")
@@ -108,16 +139,6 @@ var Command = &cobra.Command{
 		}
 		if len(authErrors) > 0 {
 			return fmt.Errorf("failed to validate credentials:\n%s", errors.Join(authErrors...))
-		}
-
-		controllerUrl := viper.GetString("controller-url")
-		logrus.Debugf("creating new client...")
-		client, err := controller.NewClient(controller.NewClientOpts{
-			ControllerUrl: controllerUrl,
-			Id:            "opsicle/initialize/user",
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create controller client: %s", err)
 		}
 
 		logrus.Debugf("sending request to server...")

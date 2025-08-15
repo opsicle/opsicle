@@ -185,7 +185,7 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch input.MfaType {
-	case MfaTypeTotp:
+	case models.MfaTypeTotp:
 		totpSeed, err := auth.CreateTotpSeed("opsicle", user.Email)
 		if err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create totp seed")
@@ -197,7 +197,7 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 
 			UserId: session.UserId,
 			Secret: &totpSeed,
-			Type:   MfaTypeTotp,
+			Type:   models.MfaTypeTotp,
 		})
 		if err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user totp mfa")
@@ -252,7 +252,7 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch userMfa.Type {
-	case MfaTypeTotp:
+	case models.MfaTypeTotp:
 		isValid, err := auth.ValidateTotpToken(*userMfa.Secret, input.Value)
 		if err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate provided totp token")
@@ -305,7 +305,7 @@ func handleListUserMfaTypesV1(w http.ResponseWriter, r *http.Request) {
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleListUserMfaTypesV1Response{
 		{
-			Value:       MfaTypeTotp,
+			Value:       models.MfaTypeTotp,
 			Label:       "TOTP Token",
 			Description: "A time-based one-time-password (via authenticator app)",
 		},

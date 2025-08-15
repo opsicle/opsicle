@@ -121,7 +121,7 @@ func handleGetSessionV1(w http.ResponseWriter, r *http.Request) {
 		CachePrefix: sessionCachePrefix,
 	})
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to retrieve session details")
+		common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to retrieve session details", ErrorAuthRequired)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("session[%s] is valid and has %s time left", sessionInfo.Id, sessionInfo.TimeLeft))
