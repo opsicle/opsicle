@@ -38,12 +38,12 @@ func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelInfo, "this endpoint initialises the server")
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", nil)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body")
 		return
 	}
 	var input initHandlerV1Input
 	if err := json.Unmarshal(requestBody, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", nil)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body")
 		return
 	}
 

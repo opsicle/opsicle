@@ -22,7 +22,20 @@ type CreateSessionV1Output struct {
 	SessionId    string
 	SessionToken string
 
+	// MfaType is only populated if `ErrorMfaRequired` is returned
+	// in the `error` return
+	MfaType *string
+
+	// LoginId is only populated if `ErrorMfaRequired` is returned
+	// in the `error` return
+	LoginId *string
+
 	http.Response
+}
+
+type createSessionV1MfaRequiredResponse struct {
+	LoginId string `json:"loginId"`
+	MfaType string `json:"mfaType"`
 }
 
 func (c Client) CreateSessionV1(opts CreateSessionV1Input) (*CreateSessionV1Output, error) {
@@ -59,6 +72,22 @@ func (c Client) CreateSessionV1(opts CreateSessionV1Input) (*CreateSessionV1Outp
 		return output, fmt.Errorf("failed to read response body: %s", err)
 	}
 	switch httpResponse.StatusCode {
+	case http.StatusUnauthorized:
+		var response common.HttpResponse
+		if err := json.Unmarshal(responseBody, &response); err != nil {
+			return output, fmt.Errorf("failed to parse response from controller service: %s", err)
+		}
+		responseData, err := json.Marshal(response.Data)
+		if err != nil {
+			return output, fmt.Errorf("failed to parse response data: %s", err)
+		}
+		var mfaRequiredResponse createSessionV1MfaRequiredResponse
+		if err := json.Unmarshal(responseData, &mfaRequiredResponse); err != nil {
+			return output, fmt.Errorf("failed to parse mfa required response data: %s", err)
+		}
+		output.MfaType = &mfaRequiredResponse.MfaType
+		output.LoginId = &mfaRequiredResponse.LoginId
+		return output, ErrorMfaRequired
 	case http.StatusBadRequest:
 		return output, fmt.Errorf("user credentials failed: %w", ErrorUserLoginFailed)
 	case http.StatusLocked:
@@ -73,6 +102,70 @@ func (c Client) CreateSessionV1(opts CreateSessionV1Input) (*CreateSessionV1Outp
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
 		return output, fmt.Errorf("failed to parse response data from controller service: %s", err)
+	}
+	var token models.SessionToken
+	if err := json.Unmarshal(responseData, &token); err != nil {
+		return output, fmt.Errorf("failed to parse response from controller service into a session token: %s", err)
+	}
+	output.SessionId = token.SessionId
+	output.SessionToken = token.Value
+	return output, nil
+}
+
+type StartSessionWithMfaV1Input struct {
+	Hostname string `json:"hostname"`
+	LoginId  string `json:"-"`
+	MfaType  string `json:"mfaType"`
+	MfaToken string `json:"mfaToken"`
+}
+
+func (c Client) StartSessionWithMfaV1(opts StartSessionWithMfaV1Input) (*CreateSessionV1Output, error) {
+	controllerUrl := *c.ControllerUrl
+	controllerUrl.Path = fmt.Sprintf("/api/v1/session/mfa/%s", opts.LoginId)
+	requestBodyData, err := json.Marshal(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal input data: %s", err)
+	}
+	requestBody := bytes.NewBuffer(requestBodyData)
+	httpRequest, err := http.NewRequest(
+		http.MethodPost,
+		controllerUrl.String(),
+		requestBody,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http request to create a session: %s", err)
+	}
+	httpRequest.Header.Add("Content-Type", "application/json")
+	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle/controller-sdk/client-%s", c.Id))
+	if c.BasicAuth != nil {
+		httpRequest.SetBasicAuth(c.BasicAuth.Username, c.BasicAuth.Password)
+	}
+	if c.BearerAuth != nil {
+		httpRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.BearerAuth.Token))
+	}
+	httpResponse, err := c.HttpClient.Do(httpRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute http request to create session: %s", err)
+	}
+	output := &CreateSessionV1Output{Response: *httpResponse}
+	if httpResponse.StatusCode >= 500 {
+		return output, fmt.Errorf("failed to reach server (got status code: %v)", httpResponse.StatusCode)
+	}
+	responseBody, err := io.ReadAll(httpResponse.Body)
+	if err != nil {
+		return output, fmt.Errorf("failed to read response body: %s", err)
+	}
+	var response common.HttpResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return output, fmt.Errorf("failed to parse response from controller service: %s", err)
+	}
+	responseData, err := json.Marshal(response.Data)
+	if err != nil {
+		return output, fmt.Errorf("failed to parse response data from controller service: %s", err)
+	}
+	if httpResponse.StatusCode != http.StatusOK {
+		errData := string(responseData)
+		return output, fmt.Errorf("failed to receive a successful response (status code: %v): %w", httpResponse.StatusCode, errData)
 	}
 	var token models.SessionToken
 	if err := json.Unmarshal(responseData, &token); err != nil {

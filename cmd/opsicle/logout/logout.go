@@ -33,9 +33,8 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionToken, sessionFilePath, err := controller.GetSessionToken()
 		if err != nil {
-			logrus.Debugf("session token not available: %s", err)
-			fmt.Println("You are not logged in, log in using `opsicle login`")
-			return nil
+			fmt.Println("⚠️ You are not logged in, log in using `opsicle login`")
+			return fmt.Errorf("you are not logged in")
 		}
 
 		controllerUrl := viper.GetString("controller-url")

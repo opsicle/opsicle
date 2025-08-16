@@ -10,6 +10,10 @@ import (
 	"opsicle/internal/controller/models"
 )
 
+const (
+	MfaTypeTotp = "totp"
+)
+
 type ListUserMfasV1Input struct{}
 
 type ListUserMfasV1Output struct {

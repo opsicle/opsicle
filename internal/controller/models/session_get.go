@@ -22,8 +22,6 @@ func GetSessionV1(opts GetSessionV1Opts) (*Session, error) {
 			ExpiresAt: claims.ExpiresAt.Time,
 			StartedAt: claims.IssuedAt.Time,
 			TimeLeft:  time.Until(claims.ExpiresAt.Time).String(),
-			OrgCode:   &claims.OrgCode,
-			OrgId:     &claims.OrgId,
 			UserId:    claims.UserID,
 			Username:  claims.Username,
 		}

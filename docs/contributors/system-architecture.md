@@ -2,6 +2,29 @@
 
 This page documents the architecture of Opsicle at various levels
 
+## Packages
+
+> Last updated 2025-08-16
+
+```mermaid
+flowchart TD;
+  ui[UI]
+  cmd[CLI Tool]
+  controller[Controller Service/API]
+  pcontroller[./pkg/controller]
+  icontroller[./internal/controller]
+  models[./internal/controller/models]
+  db[database]
+
+  ui -->|via HTTP| controller
+  cmd -->|uses as SDK| pcontroller
+  pcontroller -->|provides SDK for| controller
+  controller -->|routes to| icontroller
+  icontroller -->|uses| models
+  models -->|queries| db
+  db -.->|responds with data| models
+```
+
 ## Deployment
 
 > Last updated 2025-08-05

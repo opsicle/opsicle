@@ -44,24 +44,24 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(authRequestContext).(identity)
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", nil)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body")
 		return
 	}
 	log(common.LogLevelDebug, "successfully read body into bytes")
 	var input handleCreateOrgV1Input
 	if err := json.Unmarshal(requestBody, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", nil)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body")
 		return
 	}
 
 	log(common.LogLevelDebug, "successfully parsed body into expected input class")
 
 	if len(input.Name) < 4 {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org name should be longer than 4 characters", nil)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org name should be longer than 4 characters")
 		return
 	}
 	if len(input.Code) < 4 {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org code should be longer than 4 characters", nil)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org code should be longer than 4 characters")
 		return
 	}
 

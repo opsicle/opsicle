@@ -8,6 +8,7 @@ import (
 	"opsicle/pkg/controller"
 	"os"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -22,21 +23,21 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "org",
+		Name:         "email",
 		DefaultValue: "",
-		Usage:        "Defines the codeword of the organisation you are logging into",
+		Usage:        "The email address to login to Opsicle with",
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "email",
+		Name:         "mfa-token",
 		DefaultValue: "",
-		Usage:        "the email address you are signing up to Opsicle with",
+		Usage:        "If specified, the command will automatically include this token in your login attempt",
 		Type:         cli.FlagTypeString,
 	},
 	{
 		Name:         "password",
 		DefaultValue: "",
-		Usage:        "the password for your account to be used with your email address to authenticate",
+		Usage:        "The password for your account to be used with your email address to authenticate",
 		Type:         cli.FlagTypeString,
 	},
 }
@@ -54,7 +55,8 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_, _, err := controller.GetSessionToken()
 		if err == nil {
-			return fmt.Errorf("looks like you're already logged in, run `opsicle logout` first before running this command")
+			fmt.Println("⚠️ You're already logged in, run `opsicle logout` first before running this command")
+			return fmt.Errorf("you are already logged in")
 		}
 
 		inputEmail := viper.GetString("email")
@@ -112,7 +114,6 @@ var Command = &cobra.Command{
 			return fmt.Errorf("email invalid")
 		}
 		password := model.GetValue("password")
-		organisation := model.GetValue("organisation")
 
 		controllerUrl := viper.GetString("controller-url")
 		client, err := controller.NewClient(controller.NewClientOpts{
@@ -129,19 +130,69 @@ var Command = &cobra.Command{
 			Password: password,
 			Hostname: hostname,
 		}
-		if organisation != "" {
-			createSessionInput.OrgCode = &organisation
-		}
+
 		createSessionOutput, err := client.CreateSessionV1(createSessionInput)
 		if err != nil {
-			if errors.Is(err, controller.ErrorUserEmailNotVerified) {
+			switch true {
+			case errors.Is(err, controller.ErrorUserEmailNotVerified):
 				fmt.Println("⚠️  Verify your email first using `opsicle verify email`")
 				return fmt.Errorf("email has not been verified")
-			} else if errors.Is(err, controller.ErrorUserLoginFailed) {
+
+			case errors.Is(err, controller.ErrorUserLoginFailed):
 				fmt.Println("⚠️  The provided credentials doesn't seem correct, try again")
 				return fmt.Errorf("credentials validation failed")
+
+			case errors.Is(err, controller.ErrorMfaRequired):
+				fmt.Println("💡 We've detected that MFA is enabled on your account, please enter your MFA token:")
+				loginId := *createSessionOutput.LoginId
+				mfaType := *createSessionOutput.MfaType
+				switch mfaType {
+				case controller.MfaTypeTotp:
+					mfaModel := cli.CreatePrompt(cli.PromptOpts{
+						Buttons: []cli.PromptButton{
+							{
+								Label: "Submit",
+								Type:  cli.PromptButtonSubmit,
+							},
+							{
+								Label: "Cancel / Ctrl + C",
+								Type:  cli.PromptButtonCancel,
+							},
+						},
+						Inputs: []cli.PromptInput{
+							{
+								Id:          "mfa-token",
+								Placeholder: "Your MFA Token",
+								Type:        cli.PromptString,
+								Value:       viper.GetString("mfa-token"),
+							},
+						},
+					})
+					mfaPrompt := tea.NewProgram(mfaModel)
+					if _, err := mfaPrompt.Run(); err != nil {
+						return fmt.Errorf("failed to get user input: %s", err)
+					}
+					if model.GetExitCode() == cli.PromptCancelled {
+						fmt.Println("We couldn't get an MFA code from you")
+						return errors.New("failed to get user mfa")
+					}
+					mfaToken := mfaModel.GetValue("mfa-token")
+					createSessionOutput, err = client.StartSessionWithMfaV1(controller.StartSessionWithMfaV1Input{
+						Hostname: hostname,
+						LoginId:  loginId,
+						MfaType:  mfaType,
+						MfaToken: mfaToken,
+					})
+					if err != nil {
+						fmt.Println("⚠️ Unfortunately, we couldn't authenticate you")
+						logrus.Debugf("failed to start session: %s", err)
+						return errors.New("failed to start session")
+					}
+
+				default:
+					return fmt.Errorf("failed to create session for unexpected reasons: %s", err)
+				}
 			}
-			return fmt.Errorf("failed to create session for unexpected reasons: %s", err)
 		}
 
 		sessionFilePath, err := controller.GetSessionTokenPath()

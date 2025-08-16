@@ -280,7 +280,7 @@ func handleListUserMfasV1(w http.ResponseWriter, r *http.Request) {
 
 	userMfas, err := models.ListUserMfasV1(models.ListUserMfasV1Opts{
 		Db:     db,
-		UserId: session.UserId,
+		UserId: &session.UserId,
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list user[%s] mfas: %s", session.UserId, err))

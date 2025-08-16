@@ -19,8 +19,6 @@ type Claims struct {
 	Ext      map[string]string `json:"ext"`
 	UserID   string            `json:"userId"`
 	Username string            `json:"username"`
-	OrgCode  string            `json:"orgCode"`
-	OrgId    string            `json:"orgId"`
 	jwt.RegisteredClaims
 }
 
@@ -44,8 +42,6 @@ func GenerateJwt(opts GenerateJwtOpts) (string, error) {
 	claims := Claims{
 		UserID:   opts.UserId,
 		Username: opts.Username,
-		OrgCode:  opts.OrgCode,
-		OrgId:    opts.OrgId,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Audience:  jwt.ClaimStrings{opts.Audience},
 			ID:        opts.Id,

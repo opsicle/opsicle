@@ -70,7 +70,7 @@ type UserMfa struct {
 	Id            string     `json:"id"`
 	Type          string     `json:"type"`
 	ConfigJson    *string    `json:"configJson"`
-	Secret        *string    `json:"secret"`
+	Secret        *string    `json:"-"`
 	UserId        string     `json:"userId"`
 	UserEmail     *string    `json:"userEmail"`
 	IsVerified    bool       `json:"isVerified"`
