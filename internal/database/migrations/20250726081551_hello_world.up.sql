@@ -1,7 +1,7 @@
 CREATE SCHEMA IF NOT EXISTS `opsicle`;
 CREATE TABLE IF NOT EXISTS `users` (
     `id` VARCHAR(36) PRIMARY KEY,
-    `email` VARCHAR(255) NOT NULL,
+    `email` VARCHAR(255) NOT NULL UNIQUE,
     `email_verification_code` TEXT NOT NULL,
     `is_email_verified` BOOLEAN NOT NULL DEFAULT FALSE,
     `email_verified_at` DATETIME,

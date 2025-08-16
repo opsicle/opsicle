@@ -129,6 +129,7 @@ type CreateUserMfaV1Input struct {
 
 type CreateUserMfaV1Output struct {
 	Data CreateUserMfaV1OutputData
+
 	http.Response
 }
 

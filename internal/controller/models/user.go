@@ -65,16 +65,3 @@ func (u User) IsVerified() bool {
 func (u User) ValidatePassword() bool {
 	return auth.ValidatePassword(*u.Password, *u.PasswordHash)
 }
-
-type UserMfa struct {
-	Id            string     `json:"id"`
-	Type          string     `json:"type"`
-	ConfigJson    *string    `json:"configJson"`
-	Secret        *string    `json:"-"`
-	UserId        string     `json:"userId"`
-	UserEmail     *string    `json:"userEmail"`
-	IsVerified    bool       `json:"isVerified"`
-	VerifiedAt    *time.Time `json:"verifiedAt"`
-	CreatedAt     *time.Time `json:"createdAt"`
-	LastUpdatedAt *time.Time `json:"lastUpdatedAt"`
-}

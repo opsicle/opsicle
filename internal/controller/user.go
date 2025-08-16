@@ -287,7 +287,7 @@ func handleListUserMfasV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list user mfas", err)
 		return
 	}
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userMfas)
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userMfas.GetRedacted())
 
 }
 

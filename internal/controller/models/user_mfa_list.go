@@ -32,7 +32,7 @@ func (o ListUserMfasV1Opts) Validate() error {
 	return nil
 }
 
-func ListUserMfasV1(opts ListUserMfasV1Opts) ([]UserMfa, error) {
+func ListUserMfasV1(opts ListUserMfasV1Opts) (UserMfas, error) {
 	if err := opts.Validate(); err != nil {
 		return nil, fmt.Errorf("models.ListUserMfasV1: failed to validate input: %w", err)
 	}
@@ -72,7 +72,7 @@ func ListUserMfasV1(opts ListUserMfasV1Opts) ([]UserMfa, error) {
 		return nil, fmt.Errorf("models.ListUserMfasV1: failed to query: %s", err)
 	}
 
-	output := []UserMfa{}
+	output := UserMfas{}
 	for rows.Next() {
 		userMfa := UserMfa{}
 		if err := rows.Scan(
