@@ -8,6 +8,7 @@ import (
 
 type HttpResponse struct {
 	Data    any    `json:"data"`
+	Code    string `json:"code"`
 	Message string `json:"message"`
 	Success bool   `json:"success"`
 }
@@ -23,18 +24,18 @@ func SendHttpFailResponse(
 	request *http.Request,
 	statusCode int,
 	message string,
-	errorCode ...error,
+	errorCode error,
+	data ...any,
 ) {
 	log := request.Context().Value(HttpContextLogger).(HttpRequestLogger)
 	log(LogLevelError, message)
 	responseData := HttpResponse{
+		Code:    errorCode.Error(),
 		Message: message,
 		Success: false,
 	}
-	if len(errorCode) > 0 {
-		responseData.Data = errorCode[0].Error()
-	} else {
-		responseData.Data = "generic_error"
+	if len(data) > 0 {
+		responseData.Data = data[0]
 	}
 	res, _ := json.Marshal(responseData)
 	responseWriter.WriteHeader(statusCode)
@@ -49,6 +50,7 @@ func SendHttpSuccessResponse(
 	data ...any,
 ) {
 	responseData := HttpResponse{
+		Code:    "success",
 		Message: message,
 		Success: true,
 	}

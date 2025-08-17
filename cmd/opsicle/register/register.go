@@ -147,7 +147,7 @@ var Command = &cobra.Command{
 			Password: password,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create user: %s", err)
+			return fmt.Errorf("failed to create user: %w", err)
 		}
 
 		logrus.Debugf("successfully created user[%s] with id[%s]", createUserV1Output.Data.Email, createUserV1Output.Data.Id)

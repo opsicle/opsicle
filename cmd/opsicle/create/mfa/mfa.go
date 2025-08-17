@@ -168,12 +168,17 @@ var Command = &cobra.Command{
 		}
 
 		fmt.Println("⏳ Hang on, we're processing your request...")
+		fmt.Println("")
 
 		createUserMfaOutput, err := client.CreateUserMfaV1(controller.CreateUserMfaV1Input{
 			Password: password,
 			MfaType:  mfaType,
 		})
 		if err != nil {
+			if errors.Is(err, controller.ErrorInvalidCredentials) {
+				fmt.Println("❌ Your password didn't seem to match, try again maybe?")
+				return fmt.Errorf("primary authentication failed")
+			}
 			return fmt.Errorf("failed to create user mfa: %s", err)
 		}
 

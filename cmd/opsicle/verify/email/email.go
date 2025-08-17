@@ -86,7 +86,7 @@ var Command = &cobra.Command{
 		logrus.Debugf("creating new client...")
 		client, err := controller.NewClient(controller.NewClientOpts{
 			ControllerUrl: controllerUrl,
-			Id:            "opsicle/initialize/user",
+			Id:            "opsicle/verify/email",
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create controller client: %s", err)
@@ -99,7 +99,7 @@ var Command = &cobra.Command{
 		if err != nil {
 			fmt.Printf("We couldn't verify the code that you have sent :/\n")
 			logrus.Debugf("failed to verify user: %s", err)
-			return fmt.Errorf("failed to verify user")
+			return fmt.Errorf("failed to verify user: %w", err)
 		}
 
 		logrus.Debugf("successfully verified user[%s]", verifyUserV1Output.Data.Email)

@@ -57,9 +57,9 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create client for approver service: %s", err)
 		}
 
-		users, err := client.ListUsersV1()
+		listUsersOutput, err := client.ListUsersV1()
 		if err != nil {
-			if users.Response.StatusCode == http.StatusUnauthorized {
+			if listUsersOutput.Response.StatusCode == http.StatusUnauthorized {
 				if err := controller.DeleteSessionToken(); err != nil {
 					logrus.Warnf("failed to remove session token: %s", err)
 				}
@@ -67,7 +67,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to retrieve users: %s", err)
 		}
 
-		o, _ := json.MarshalIndent(users.Users, "", "  ")
+		o, _ := json.MarshalIndent(listUsersOutput.Data, "", "  ")
 		fmt.Println(string(o))
 		return nil
 	},

@@ -134,18 +134,19 @@ var Command = &cobra.Command{
 		createSessionOutput, err := client.CreateSessionV1(createSessionInput)
 		if err != nil {
 			switch true {
-			case errors.Is(err, controller.ErrorUserEmailNotVerified):
+			case errors.Is(err, controller.ErrorEmailUnverified):
 				fmt.Println("⚠️  Verify your email first using `opsicle verify email`")
 				return fmt.Errorf("email has not been verified")
 
-			case errors.Is(err, controller.ErrorUserLoginFailed):
+			case errors.Is(err, controller.ErrorInvalidCredentials):
 				fmt.Println("⚠️  The provided credentials doesn't seem correct, try again")
 				return fmt.Errorf("credentials validation failed")
 
 			case errors.Is(err, controller.ErrorMfaRequired):
 				fmt.Println("💡 We've detected that MFA is enabled on your account, please enter your MFA token:")
-				loginId := *createSessionOutput.LoginId
-				mfaType := *createSessionOutput.MfaType
+				loginId := *createSessionOutput.Data.LoginId
+				mfaType := *createSessionOutput.Data.MfaType
+				fmt.Printf("%s: %s\n", mfaType, loginId)
 				switch mfaType {
 				case controller.MfaTypeTotp:
 					mfaModel := cli.CreatePrompt(cli.PromptOpts{
@@ -172,9 +173,9 @@ var Command = &cobra.Command{
 					if _, err := mfaPrompt.Run(); err != nil {
 						return fmt.Errorf("failed to get user input: %s", err)
 					}
-					if model.GetExitCode() == cli.PromptCancelled {
-						fmt.Println("We couldn't get an MFA code from you")
-						return errors.New("failed to get user mfa")
+					if mfaModel.GetExitCode() == cli.PromptCancelled {
+						fmt.Println("😥 We couldn't get an MFA code from you")
+						return errors.New("user cancelled action")
 					}
 					mfaToken := mfaModel.GetValue("mfa-token")
 					createSessionOutput, err = client.StartSessionWithMfaV1(controller.StartSessionWithMfaV1Input{
@@ -185,6 +186,9 @@ var Command = &cobra.Command{
 					})
 					if err != nil {
 						fmt.Println("⚠️ Unfortunately, we couldn't authenticate you")
+						if errors.Is(err, controller.ErrorMfaTokenInvalid) {
+							return errors.New("invalid mfa token")
+						}
 						logrus.Debugf("failed to start session: %s", err)
 						return errors.New("failed to start session")
 					}
@@ -192,6 +196,8 @@ var Command = &cobra.Command{
 				default:
 					return fmt.Errorf("failed to create session for unexpected reasons: %s", err)
 				}
+			default:
+				return fmt.Errorf("failed to create session for unexpected reasons: %s", err)
 			}
 		}
 
@@ -199,11 +205,11 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to get session token path: %s", err)
 		}
-		if err := os.WriteFile(sessionFilePath, []byte(createSessionOutput.SessionToken), 0600); err != nil {
+		if err := os.WriteFile(sessionFilePath, []byte(createSessionOutput.Data.SessionToken), 0600); err != nil {
 			return fmt.Errorf("failed to write session token to path[%s]: %s", sessionFilePath, err)
 		}
 
-		fmt.Printf("Welcome back!\nSession ID: %s\n", createSessionOutput.SessionId)
+		fmt.Printf("👋🏼 Welcome back!\nSession ID: %s\n", createSessionOutput.Data.SessionId)
 		return nil
 	},
 }

@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -41,6 +42,9 @@ func GetUserLoginV1(opts GetUserLoginV1Input) (*UserLogin, error) {
 		&userLogin.IsPendingMfa,
 		&userLogin.ExpiresAt,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("models.GetUserLoginV1: failed to find a row: %w", ErrorNotFound)
+		}
 		return nil, fmt.Errorf("models.GetUserLoginV1: failed to retrieve user login: %w", err)
 	}
 	return &userLogin, nil

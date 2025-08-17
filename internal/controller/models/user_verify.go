@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -50,6 +51,9 @@ func VerifyUserV1(opts VerifyUserV1Opts) (*User, error) {
 		&userInstance.IsDisabled,
 		&userInstance.DisabledAt,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("no rows found: %w", ErrorNotFound)
+		}
 		return nil, fmt.Errorf("failed to get user row: %s", err)
 	}
 

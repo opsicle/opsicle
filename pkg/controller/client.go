@@ -1,12 +1,18 @@
 package controller
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"opsicle/internal/common"
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 )
 
 type NewClientOpts struct {
@@ -57,6 +63,52 @@ func NewClient(opts NewClientOpts) (*Client, error) {
 	return client, nil
 }
 
+type request struct {
+	Method string
+	Path   string
+	Data   any
+	Output any
+}
+
+func (c request) Validate() error {
+	errs := []error{}
+	if c.Output == nil {
+		errs = append(errs, ErrorOutputNil)
+	} else if reflect.TypeOf(c.Output).Kind() != reflect.Ptr {
+		errs = append(errs, ErrorOutputNotPointer)
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+type clientOutput struct {
+	code    error
+	message string
+
+	http.Response
+}
+
+func (c clientOutput) Error() error {
+	if c.code == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: %s", c.code, c.message)
+}
+
+func (c clientOutput) GetErrorCode() error {
+	return c.code
+}
+
+func (c clientOutput) GetStatusCode() int {
+	return c.Response.StatusCode
+}
+
+func (c clientOutput) GetResponse() http.Response {
+	return c.Response
+}
+
 type Client struct {
 	// ControllerUrl is the URL where the approver service is accessible
 	// at
@@ -69,4 +121,91 @@ type Client struct {
 
 	// Id will be included in the user-agent for identification
 	Id string
+}
+
+func (c Client) WithAuth(auth ...string) Client {
+	if len(auth) == 1 {
+		c.BearerAuth.Token = auth[0]
+	} else if len(auth) == 2 {
+		c.BasicAuth.Username = auth[0]
+		c.BasicAuth.Password = auth[1]
+	}
+	return c
+}
+
+func (c Client) addRequiredHeaders(httpRequest *http.Request) {
+	httpRequest.Header.Add("Content-Type", "application/json")
+	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle/controller-sdk/client-%s", c.Id))
+	if c.BasicAuth != nil {
+		httpRequest.SetBasicAuth(c.BasicAuth.Username, c.BasicAuth.Password)
+	}
+	if c.BearerAuth != nil {
+		httpRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.BearerAuth.Token))
+	}
+}
+
+func (c Client) do(input request) (*clientOutput, error) {
+	controllerUrl := *c.ControllerUrl
+	controllerUrl.Path = input.Path
+	var requestBody *bytes.Buffer = nil
+	if input.Data != nil {
+		inputData, err := json.Marshal(input.Data)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %s", ErrorClientMarshalInput, err)
+		}
+		requestBody = bytes.NewBuffer(inputData)
+	}
+	var httpRequest *http.Request
+	var httpRequestError error
+	if requestBody != nil {
+		httpRequest, httpRequestError = http.NewRequest(
+			input.Method,
+			controllerUrl.String(),
+			requestBody,
+		)
+	} else {
+		httpRequest, httpRequestError = http.NewRequest(
+			input.Method,
+			controllerUrl.String(),
+			nil,
+		)
+	}
+	if httpRequestError != nil {
+		return nil, fmt.Errorf("%w: %s", ErrorClientRequestCreation, httpRequestError)
+	}
+	c.addRequiredHeaders(httpRequest)
+	httpResponse, err := c.HttpClient.Do(httpRequest)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrorClientRequestExecution, err)
+	}
+	output := &clientOutput{Response: *httpResponse}
+	if !isControllerResponse(httpResponse) {
+		return output, ErrorClientResponseNotFromController
+	}
+	if httpResponse.StatusCode == http.StatusMethodNotAllowed {
+		return output, ErrorInvalidEndpoint
+	}
+	responseBody, err := io.ReadAll(httpResponse.Body)
+	if err != nil {
+		return output, fmt.Errorf("%w: %s", ErrorClientResponseReading, err)
+	}
+	var response common.HttpResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return output, fmt.Errorf("%w: %s", ErrorClientUnmarshalResponse, err)
+	}
+	output.message = response.Message
+	output.code = errors.New(response.Code)
+	if response.Data != nil {
+		responseData, err := json.Marshal(response.Data)
+		if err != nil {
+			return output, fmt.Errorf("%w: %s", ErrorClientMarshalResponseData, err)
+		}
+		if err := json.Unmarshal(responseData, &input.Output); err != nil {
+			return output, fmt.Errorf("%w: %s", ErrorClientUnmarshalOutput, err)
+		}
+	}
+	if !response.Success {
+		return output, fmt.Errorf("%w: received status code %v: %w", ErrorClientUnsuccessfulResponse, output.GetStatusCode(), output.GetErrorCode())
+	}
+	return output, nil
 }

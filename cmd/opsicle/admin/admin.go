@@ -14,7 +14,7 @@ func init() {
 
 var Command = &cobra.Command{
 	Use:   "admin",
-	Short: "Privileged management commands for Opsicle",
+	Short: "Privileged direct-to-dataabse management commands for Opsicle administrators",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},

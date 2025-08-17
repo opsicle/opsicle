@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -157,13 +158,13 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
 		return
 	}
 
 	var input handleCreateUserMfaV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("creating mfa of type[%s] for user[%s]", input.MfaType, session.UserId))
@@ -174,13 +175,13 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s]: %s", session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user")
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", ErrorDatabaseIssue)
 		return
 	}
 
 	if !auth.ValidatePassword(input.Password, *user.PasswordHash) {
 		log(common.LogLevelError, "failed to validate user password")
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate user's current password", ErrorInvalidPasword)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate user's current password", ErrorInvalidCredentials)
 		return
 	}
 
@@ -188,7 +189,7 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	case models.MfaTypeTotp:
 		totpSeed, err := auth.CreateTotpSeed("opsicle", user.Email)
 		if err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create totp seed")
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create totp seed", ErrorCodeIssue)
 			return
 		}
 
@@ -200,7 +201,7 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 			Type:   models.MfaTypeTotp,
 		})
 		if err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user totp mfa")
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user totp mfa", ErrorDatabaseIssue)
 			return
 		}
 
@@ -216,6 +217,12 @@ type handleVerifyUserMfaV1Input struct {
 	Value string `json:"value"`
 }
 
+type handleVerifyUserMfaV1Output struct {
+	Id     string `json:"id"`
+	Type   string `json:"type"`
+	UserId string `json:"userId"`
+}
+
 func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	session := r.Context().Value(authRequestContext).(identity)
@@ -225,13 +232,13 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
 		return
 	}
 
 	var input handleVerifyUserMfaV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("verifying mfa[%s] for user[%s]", mfaId, session.UserId))
@@ -242,12 +249,7 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get mfa[%s] for user[%s]: %s", mfaId, session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user mfa")
-		return
-	}
-
-	if userMfa.Secret == nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user mfa details")
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user mfa", ErrorDatabaseIssue)
 		return
 	}
 
@@ -255,20 +257,24 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	case models.MfaTypeTotp:
 		isValid, err := auth.ValidateTotpToken(*userMfa.Secret, input.Value)
 		if err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate provided totp token")
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate provided totp token", ErrorTotpInvalid)
 			return
 		} else if !isValid {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "provided totp token is not valid")
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "provided totp token is not valid", ErrorTotpInvalid)
 			return
 		}
 		if err := models.VerifyUserMfaV1(models.VerifyUserMfaV1Opts{
 			Db: db,
 			Id: mfaId,
 		}); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify mfa")
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify mfa", ErrorDatabaseIssue)
 			return
 		}
-		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok")
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleVerifyUserMfaV1Output{
+			Id:     userMfa.Id,
+			Type:   userMfa.Type,
+			UserId: userMfa.UserId,
+		})
 	}
 
 }
@@ -324,7 +330,11 @@ func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
 		IpAddress:        r.RemoteAddr,
 	})
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify user", err)
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify user", ErrorInvalidVerificationCode)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify user", ErrorInvalidVerificationCode)
 		return
 	}
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userInstance)

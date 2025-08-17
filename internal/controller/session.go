@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -49,6 +50,11 @@ type handleCreateSessionV1MfaRequiredResponse struct {
 	MfaType string `json:"mfaType"`
 }
 
+type handleCreateSessionV1Output struct {
+	SessionId    string `json:"sessionId"`
+	SessionToken string `json:"sessionToken"`
+}
+
 // handleCreateSessionV1 godoc
 // @Summary      Creates a session for the user credentials specified in the body
 // @Description  This endpoint creates a session for the user
@@ -65,19 +71,19 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, "successfully read body into bytes")
 	var input handleCreateSessionV1Input
 	if err := json.Unmarshal(requestBody, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, "successfully parsed body into expected input class")
 
 	if input.Email == "" {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive a valid org email")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive a valid org email", ErrorInvalidInput)
 		return
 	}
 	userInstance, err := models.GetUserV1(models.GetUserV1Opts{
@@ -85,19 +91,19 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		Email: &input.Email,
 	})
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to receive a valid user")
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to receive a valid user", ErrorDatabaseIssue)
 		return
 	}
 
 	userInstance.Password = &input.Password
 	if !userInstance.ValidatePassword() {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to create session", err)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to create session", ErrorInvalidCredentials)
 		return
 	} else if !userInstance.IsEmailVerified {
-		common.SendHttpFailResponse(w, r, http.StatusLocked, "failed to create session", err)
+		common.SendHttpFailResponse(w, r, http.StatusLocked, "failed to create session", ErrorEmailUnverified)
 		return
 	} else if userInstance.IsDisabled || userInstance.IsDeleted {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create session", err)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create session", ErrorAccountSuspended)
 		return
 	}
 
@@ -107,7 +113,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list user's mfas: %s", err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list user's mfas")
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list user's mfas", ErrorDatabaseIssue)
 		return
 	} else if len(userMfas) > 0 {
 		userLoginId, err := models.CreateUserLoginV1(models.CreateUserLoginV1Input{
@@ -117,12 +123,12 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to create a user login attempt: %s", err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user login", ErrorGeneric)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user login", ErrorDatabaseIssue)
 			return
 		}
 		log(common.LogLevelDebug, fmt.Sprintf("responding with request for mfa from user[%s]", input.Email))
 
-		common.SendHttpSuccessResponse(w, r, http.StatusUnauthorized, "provide mfa token", handleCreateSessionV1MfaRequiredResponse{
+		common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "provide mfa token", ErrorMfaRequired, handleCreateSessionV1MfaRequiredResponse{
 			LoginId: userLoginId,
 			MfaType: userMfas[rand.IntN(len(userMfas))].Type,
 		})
@@ -133,6 +139,10 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		Db:     db,
 		UserId: *userInstance.Id,
 	})
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user login entry", err)
+		return
+	}
 	log(common.LogLevelDebug, fmt.Sprintf("logged user login attempt as login[%s]", userLoginId))
 
 	sessionToken, err := models.CreateSessionV1(models.CreateSessionV1Opts{
@@ -151,7 +161,10 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 	log(common.LogLevelDebug, "successfully issued session token")
 
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", sessionToken)
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleCreateSessionV1Output{
+		SessionId:    sessionToken.SessionId,
+		SessionToken: sessionToken.Value,
+	})
 }
 
 // handleGetSessionV1 godoc
@@ -169,7 +182,7 @@ func handleGetSessionV1(w http.ResponseWriter, r *http.Request) {
 
 	authorizationHeader := r.Header.Get("Authorization")
 	if strings.Index(authorizationHeader, "Bearer ") != 0 {
-		common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to receive a valid authorization header")
+		common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to receive a valid authorization header", ErrorAuthRequired)
 		return
 	}
 	authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
@@ -207,7 +220,7 @@ func handleDeleteSessionV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	authorizationHeader := r.Header.Get("Authorization")
 	if strings.Index(authorizationHeader, "Bearer ") != 0 {
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to receive a valid authorization header")
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to receive a valid authorization header", ErrorAuthRequired)
 		return
 	}
 	authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
@@ -253,13 +266,13 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", ErrorGeneric)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, "successfully read body into bytes")
 	var input handleStartSessionWithMfaV1Input
 	if err := json.Unmarshal(requestBody, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", ErrorGeneric)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, "successfully parsed body into expected input class")
@@ -271,7 +284,11 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 		LoginId: loginId,
 	})
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user login", ErrorGeneric)
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user login", ErrorInvalidInput)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user login", ErrorInvalidInput)
 		return
 	}
 
@@ -302,7 +319,7 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 				valid, err := auth.ValidateTotpToken(*userMfa.Secret, input.MfaToken)
 				if err != nil || !valid {
 					log(common.LogLevelError, fmt.Sprintf("failed to validate mfa for user[%s] of type[%s]", *user.Id, userMfa.Type))
-					common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to authenticate user mfa", ErrorGeneric)
+					common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to authenticate user mfa", ErrorMfaTokenInvalid)
 					return
 				}
 				if err := models.SetUserLoginMfaSucceededV1(models.SetUserLoginMfaSucceededV1Input{
@@ -310,7 +327,7 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 					Id: loginId,
 				}); err != nil {
 					log(common.LogLevelError, fmt.Sprintf("failed to set mfa status for user[%s]'s login[%s] to truthy", *user.Id, userLogin.Id))
-					common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to authenticate user mfa", ErrorGeneric)
+					common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to authenticate user mfa", ErrorDatabaseIssue)
 					return
 				}
 				createSessionInput := models.CreateSessionV1Opts{
