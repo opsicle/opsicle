@@ -11,6 +11,9 @@ func TestControllerErrors(t *testing.T) {
 	if pkgController.ErrorAuthRequired.Error() != intController.ErrorAuthRequired.Error() {
 		t.Errorf("expected ErrorAuthRequired to be consistent across pkg/controller and internal/controller")
 	}
+	if pkgController.ErrorEmailExists.Error() != intController.ErrorEmailExists.Error() {
+		t.Errorf("expected ErrorEmailExists to be consistent across pkg/controller and internal/controller")
+	}
 	if pkgController.ErrorGeneric.Error() != intController.ErrorGeneric.Error() {
 		t.Errorf("expected ErrorGeneric to be consistent across pkg/controller and internal/controller")
 	}

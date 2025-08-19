@@ -39,7 +39,18 @@ func SendHttpFailResponse(
 	}
 	res, _ := json.Marshal(responseData)
 	responseWriter.WriteHeader(statusCode)
-	responseWriter.Write(res)
+	select {
+	case <-request.Context().Done():
+		log(LogLevelError, fmt.Sprintf("client[%s] disconnected before response, aborting sending of response", request.RemoteAddr))
+		return
+	default:
+	}
+	byteCount, err := responseWriter.Write(res)
+	if err != nil {
+		log(LogLevelError, fmt.Sprintf("failed to write response: %s", err))
+		return
+	}
+	log(LogLevelTrace, fmt.Sprintf("responded with %v bytes", byteCount))
 }
 
 func SendHttpSuccessResponse(
@@ -49,6 +60,7 @@ func SendHttpSuccessResponse(
 	message string,
 	data ...any,
 ) {
+	log := request.Context().Value(HttpContextLogger).(HttpRequestLogger)
 	responseData := HttpResponse{
 		Code:    "success",
 		Message: message,
@@ -59,5 +71,16 @@ func SendHttpSuccessResponse(
 	}
 	res, _ := json.Marshal(responseData)
 	responseWriter.WriteHeader(statusCode)
-	responseWriter.Write(res)
+	select {
+	case <-request.Context().Done():
+		log(LogLevelError, fmt.Sprintf("client[%s] disconnected before response, aborting sending of response", request.RemoteAddr))
+		return
+	default:
+	}
+	byteCount, err := responseWriter.Write(res)
+	if err != nil {
+		log(LogLevelError, fmt.Sprintf("failed to write response: %s", err))
+		return
+	}
+	log(LogLevelTrace, fmt.Sprintf("responded with %v bytes", byteCount))
 }

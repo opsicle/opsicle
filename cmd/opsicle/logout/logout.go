@@ -2,7 +2,6 @@ package logout
 
 import (
 	"fmt"
-	"net/http"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
 
@@ -50,22 +49,15 @@ var Command = &cobra.Command{
 		}
 		deleteSessionOutput, err := client.DeleteSessionV1()
 		if err != nil {
-			if deleteSessionOutput.StatusCode == http.StatusUnauthorized {
-				fmt.Println("Existing session was invalid, please login again using `opsicle login")
-			} else {
-				logrus.Debugf("failed to delete session: %s", err)
-				if err := controller.DeleteSessionToken(); err != nil {
-					return fmt.Errorf("failed to remove file at path[%s], please do it yourself: %s", sessionFilePath, err)
-				}
-			}
+			logrus.Debugf("failed to delete session: %s", err)
+			fmt.Println("⚠️ Session is no longer valid and will be removed")
+		} else {
+			fmt.Printf("✅ Session ID '%s' is now closed\n", deleteSessionOutput.Data.SessionId)
 		}
-		if deleteSessionOutput.Data.IsSuccessful {
-			if err := controller.DeleteSessionToken(); err != nil {
-				return fmt.Errorf("failed to remove file at path[%s], please do it yourself: %s", sessionFilePath, err)
-			}
-			fmt.Printf("Session ID '%s' is now closed\n", deleteSessionOutput.Data.SessionId)
-			fmt.Println("See you again <3")
+		if err := controller.DeleteSessionToken(); err != nil {
+			return fmt.Errorf("failed to remove file at path[%s], please do it yourself: %s", sessionFilePath, err)
 		}
+		fmt.Println("👋 See you again <3")
 		return nil
 	},
 }

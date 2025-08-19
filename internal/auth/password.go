@@ -42,16 +42,16 @@ func IsPasswordValid(password string) (bool, error) {
 	}
 
 	if !hasUpper {
-		errs = append(errs, errors.New("password must contain at least one uppercase letter"))
+		errs = append(errs, ErrorPasswordNoUppercase)
 	}
 	if !hasLower {
-		errs = append(errs, errors.New("password must contain at least one lowercase letter"))
+		errs = append(errs, ErrorPasswordNoLowercase)
 	}
 	if !hasNumber {
-		errs = append(errs, errors.New("password must contain at least one number"))
+		errs = append(errs, ErrorPasswordNoNumber)
 	}
 	if !hasSymbol {
-		errs = append(errs, errors.New("password must contain at least one symbol or punctuation character"))
+		errs = append(errs, ErrorPasswordNoSymbol)
 	}
 	if len(errs) > 0 {
 		return false, errors.Join(errs...)

@@ -12,6 +12,7 @@ import (
 	"opsicle/internal/controller/models"
 	"opsicle/internal/controller/templates"
 	"opsicle/internal/email"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -25,6 +26,7 @@ func registerUserRoutes(opts RouteRegistrationOpts) {
 
 	v1 = opts.Router.PathPrefix("/v1/user").Subrouter()
 
+	v1.HandleFunc("/password", handleUpdateUserPasswordV1).Methods(http.MethodPatch)
 	v1.Handle("/mfa", requiresAuth(http.HandlerFunc(handleCreateUserMfaV1))).Methods(http.MethodPost)
 	v1.Handle("/mfa/{mfaId}", requiresAuth(http.HandlerFunc(handleVerifyUserMfaV1))).Methods(http.MethodPost)
 	v1.Handle("/mfas", requiresAuth(http.HandlerFunc(handleListUserMfasV1))).Methods(http.MethodGet)
@@ -69,7 +71,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("processing request to create user[%s]", requestData.Email))
 
-	if !auth.IsEmailValid(requestData.Email) {
+	if _, err := auth.IsEmailValid(requestData.Email); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid email address", err)
 		return
 	}
@@ -85,7 +87,11 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 		Password: requestData.Password,
 		Type:     models.TypeUser,
 	}); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user", err)
+		if errors.Is(err, models.ErrorDuplicateEntry) {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user, email already exists", ErrorEmailExists)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user for unexpected reasons", err)
 		return
 	}
 
@@ -338,4 +344,163 @@ func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userInstance)
+}
+
+type handleUpdateUserPasswordV1Output struct {
+	IsSuccessful bool `json:"isSuccessful"`
+}
+
+type handleUpdateUserPasswordV1Input struct {
+	CurrentPassword  *string `json:"currentPassword"`
+	Email            *string `json:"email"`
+	NewPassword      *string `json:"newPassword"`
+	VerificationCode *string `json:"verificationCode"`
+}
+
+func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	log(common.LogLevelDebug, "this endpoint updates a user's password")
+
+	isUserLoggedIn := false
+	authorizationHeader := r.Header.Get("Authorization")
+	if strings.Index(authorizationHeader, "Bearer ") == 0 {
+		authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
+		log(common.LogLevelDebug, "retrieved an authorization token successfully")
+		sessionInfo, err := models.GetSessionV1(models.GetSessionV1Opts{
+			BearerToken: authorizationToken,
+			CachePrefix: sessionCachePrefix,
+		})
+		if err == nil {
+			log(common.LogLevelDebug, fmt.Sprintf("resetting password for user[%s]", sessionInfo.UserId))
+			isUserLoggedIn = true
+		}
+	}
+
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		return
+	}
+	if len(bodyData) == 0 {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		return
+	}
+	var input handleUpdateUserPasswordV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		return
+	}
+
+	if !isUserLoggedIn {
+		if input.Email == nil || *input.Email == "" {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive user email", ErrorInvalidInput)
+			return
+		}
+
+		if input.VerificationCode != nil {
+			// check verification code
+			// set password to the new password
+		}
+
+		userEmail := *input.Email
+		log(common.LogLevelDebug, fmt.Sprintf("resetting password for user with email[%s]", email))
+		_, err := auth.IsEmailValid(userEmail)
+		if err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive user email", ErrorInvalidInput)
+			return
+		}
+
+		user, err := models.GetUserV1(models.GetUserV1Opts{
+			Db: db,
+
+			Email: &userEmail,
+		})
+		if err != nil {
+			if errors.Is(err, models.ErrorNotFound) {
+				// we send a success response because we don't want to alert the user if the email is
+				// incorrect
+				common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateUserPasswordV1Output{
+					IsSuccessful: true,
+				})
+				return
+			}
+			log(common.LogLevelError, fmt.Sprintf("failed to retrieve user: %w", err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user", ErrorDatabaseIssue)
+			return
+		}
+
+		verificationCode, err := common.GenerateRandomString(32)
+		if err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to create password reset verification code: %w", err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create password reset verification code", ErrorDatabaseIssue)
+			return
+		}
+		passwordResetId, err := models.CreateUserPasswordResetV1(models.CreateUserPasswordResetV1Input{
+			Db:               db,
+			UserId:           *user.Id,
+			IpAddress:        r.RemoteAddr,
+			UserAgent:        r.UserAgent(),
+			VerificationCode: verificationCode,
+			Status:           "pending",
+		})
+		if err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to create password reset database item: %w", err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create password reset item", ErrorDatabaseIssue)
+			return
+		}
+		log(common.LogLevelDebug, fmt.Sprintf("created password reset with id[%s]", passwordResetId))
+
+		if smtpConfig.IsSet() {
+			remoteAddr := r.RemoteAddr
+			userAgent := r.UserAgent()
+			opsicleCatMimeType, opsicleCatData := images.GetOpsicleCat()
+			if err := email.SendSmtp(email.SendSmtpOpts{
+				ServiceLogs: *serviceLogs,
+				To: []email.User{
+					{
+						Address: user.Email,
+					},
+				},
+				Sender: smtpConfig.Sender,
+				Message: email.Message{
+					Title: "Did you try to reset your password?",
+					Body: templates.GetPasswordResetMessage(
+						verificationCode,
+						remoteAddr,
+						userAgent,
+					),
+					Images: map[string]email.MessageAttachment{
+						"cat.png": {
+							Type: opsicleCatMimeType,
+							Data: opsicleCatData,
+						},
+					},
+				},
+				Smtp: email.SmtpConfig{
+					Hostname: smtpConfig.Hostname,
+					Port:     smtpConfig.Port,
+					Username: smtpConfig.Username,
+					Password: smtpConfig.Password,
+				},
+			}); err != nil {
+				log(common.LogLevelWarn, fmt.Sprintf("failed to send email, send user their verification code[%s] manually", verificationCode))
+			}
+		}
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateUserPasswordV1Output{
+			IsSuccessful: true,
+		})
+		return
+	}
+
+	if input.CurrentPassword == nil || input.NewPassword == nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get passwords", ErrorInvalidInput)
+		return
+	}
+
+	// compare current password
+	// if corerct => update password to the new one
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateUserPasswordV1Output{
+		IsSuccessful: true,
+	})
 }

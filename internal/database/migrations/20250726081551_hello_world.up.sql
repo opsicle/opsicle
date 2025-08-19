@@ -249,6 +249,19 @@ CREATE TABLE IF NOT EXISTS `user_login` (
     `user_agent` TEXT NULL,
     `is_pending_mfa` BOOLEAN NOT NULL DEFAULT 0,
     `expires_at` TIMESTAMP NOT NULL,
+    `status` TEXT NOT NULL,
     PRIMARY KEY (`id`),
     CONSTRAINT `fk_user_login_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE TABLE IF NOT EXISTS `user_password_reset` (
+    `id` VARCHAR(36) NOT NULL,
+    `user_id` VARCHAR(36) NULL,
+    `attempted_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `ip_address` VARCHAR(45) NULL,
+    `user_agent` TEXT NULL,
+    `verification_code` TEXT,
+    `expires_at` TIMESTAMP NOT NULL,
+    `status` TEXT NOT NULL,
+    PRIMARY KEY (`id`),
+    CONSTRAINT `fk_user_password_reset_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE
 );

@@ -54,3 +54,20 @@ func SetUserLoginMfaSucceededV1(opts SetUserLoginMfaSucceededV1Input) error {
 		},
 	})
 }
+
+type SetUserLoginStatusV1Input struct {
+	Db *sql.DB
+
+	Id     string
+	Status string
+}
+
+func SetUserLoginStatusV1(opts SetUserLoginStatusV1Input) error {
+	return updateUserLoginV1(updateUserLoginV1Input{
+		Db: opts.Db,
+		Id: opts.Id,
+		FieldsToSet: map[string]any{
+			"status": opts.Status,
+		},
+	})
+}

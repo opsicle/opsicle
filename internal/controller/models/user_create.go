@@ -7,6 +7,7 @@ import (
 	"opsicle/internal/auth"
 	"opsicle/internal/common"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 )
 
@@ -102,6 +103,12 @@ func CreateUserV1(opts CreateUserV1Opts) error {
 		}
 
 		if _, err := orgUserInsertStmt.Exec(userUuid, orgId); err != nil {
+			var mysqlErr *mysql.MySQLError
+			if errors.As(err, &mysqlErr) {
+				if mysqlErr.Number == mysqlErrorDuplicateEntryCode {
+					return fmt.Errorf("models.CreateUserV1: failed to insert a duplicate user: %w", ErrorDuplicateEntry)
+				}
+			}
 			return fmt.Errorf("models.CreateUserV1: failed to execute insert statement to add user to organisation: %s", err)
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"opsicle/internal/common"
@@ -13,13 +14,20 @@ import (
 	"os/user"
 	"path/filepath"
 	"reflect"
+	"syscall"
+	"time"
+)
+
+var (
+	DefaultClientTimeout = 10 * time.Second
 )
 
 type NewClientOpts struct {
-	ControllerUrl string
-	BasicAuth     *NewClientBasicAuthOpts
-	BearerAuth    *NewClientBearerAuthOpts
-	Id            string
+	ControllerUrl  string
+	BasicAuth      *NewClientBasicAuthOpts
+	BearerAuth     *NewClientBearerAuthOpts
+	Id             string
+	RequestTimeout time.Duration
 }
 
 type NewClientBasicAuthOpts struct {
@@ -43,11 +51,17 @@ func NewClient(opts NewClientOpts) (*Client, error) {
 	} else {
 		username = "unknown-user"
 	}
+	timeout := DefaultClientTimeout
+	if opts.RequestTimeout != 0 {
+		timeout = opts.RequestTimeout
+	}
 	client := &Client{
 		BasicAuth:  opts.BasicAuth,
 		BearerAuth: opts.BearerAuth,
-		HttpClient: &http.Client{},
-		Id:         filepath.Join(opts.Id, fmt.Sprintf("%s@%s", username, hostname)),
+		HttpClient: &http.Client{
+			Timeout: timeout,
+		},
+		Id: filepath.Join(opts.Id, fmt.Sprintf("%s@%s", username, hostname)),
 	}
 
 	controllerUrl, err := url.Parse(opts.ControllerUrl)
@@ -176,6 +190,11 @@ func (c Client) do(input request) (*clientOutput, error) {
 	c.addRequiredHeaders(httpRequest)
 	httpResponse, err := c.HttpClient.Do(httpRequest)
 	if err != nil {
+		if isConnectionRefused(err) {
+			return nil, fmt.Errorf("%w: %s", ErrorConnectionRefused, err)
+		} else if isTimeout(err) {
+			return nil, fmt.Errorf("%w: %s", ErrorConnectionTimedOut, err)
+		}
 		return nil, fmt.Errorf("%w: %s", ErrorClientRequestExecution, err)
 	}
 	output := &clientOutput{Response: *httpResponse}
@@ -208,4 +227,13 @@ func (c Client) do(input request) (*clientOutput, error) {
 		return output, fmt.Errorf("%w: received status code %v: %w", ErrorClientUnsuccessfulResponse, output.GetStatusCode(), output.GetErrorCode())
 	}
 	return output, nil
+}
+
+func isConnectionRefused(err error) bool {
+	return errors.Is(err, syscall.ECONNREFUSED)
+}
+
+func isTimeout(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }

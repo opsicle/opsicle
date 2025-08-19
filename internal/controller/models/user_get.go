@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -62,7 +63,10 @@ func GetUserV1(opts GetUserV1Opts) (*User, error) {
 		&userInstance.IsDeleted,
 		&userInstance.DeletedAt,
 	); err != nil {
-		return nil, fmt.Errorf("failed to get user row: %s", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("failed to get a user: %w", ErrorNotFound)
+		}
+		return nil, fmt.Errorf("failed to query database: %s", err)
 	}
 	return &userInstance, nil
 }

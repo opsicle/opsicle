@@ -15,6 +15,7 @@ type CreateUserLoginV1Input struct {
 	IpAddress   string
 	UserAgent   string
 	RequiresMfa bool
+	Status      string
 }
 
 func CreateUserLoginV1(opts CreateUserLoginV1Input) (string, error) {
@@ -26,7 +27,8 @@ func CreateUserLoginV1(opts CreateUserLoginV1Input) (string, error) {
 		ip_address,
 		user_agent,
 		is_pending_mfa,
-		expires_at
+		expires_at,
+		status
 	) VALUES (
 		?,
 		?,
@@ -42,6 +44,7 @@ func CreateUserLoginV1(opts CreateUserLoginV1Input) (string, error) {
 		opts.UserAgent,
 		opts.RequiresMfa,
 		time.Now().Add(5 * time.Minute),
+		"pending",
 	}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {

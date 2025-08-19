@@ -65,7 +65,7 @@ var Command = &cobra.Command{
 				return fmt.Errorf("failed to create controller client: %s", err)
 			}
 			if _, err := client.ValidateSessionV1(); err != nil {
-				if errors.Is(err, controller.ErrorAuthRequired) {
+				if errors.Is(err, controller.ErrorAuthRequired) || errors.Is(err, controller.ErrorSessionExpired) {
 					if err := controller.DeleteSessionToken(); err != nil {
 						return fmt.Errorf("failed to delete session token at `%s`: %s\ndo it yourself before re-running this command:\n```\nrm -rf %s\n```", sessionFilePath, err, sessionFilePath)
 					}
@@ -85,6 +85,14 @@ var Command = &cobra.Command{
 
 		inputEmail := viper.GetString("email")
 		inputPassword := viper.GetString("password")
+		if inputPassword != "" {
+			fmt.Println(
+				"⚠️ !!! WARNING !!! ⚠️\n" +
+					"Using a password directly on the command line isn't generally recommended\n" +
+					"since anyone can see it using the `history` command. Run `history -c` to\n" +
+					"remove this from this shell if this is a shared shell")
+			fmt.Println("")
+		}
 
 		fmt.Printf("Welcome to\n%s\n", cli.Logo)
 		if inputEmail == "" || inputPassword == "" {
@@ -131,14 +139,59 @@ var Command = &cobra.Command{
 		password := model.GetValue("password")
 
 		authErrors := []error{}
-		if !auth.IsEmailValid(email) {
-			authErrors = append(authErrors, fmt.Errorf("failed to get a valid email, received '%s'", email))
+		if _, err := auth.IsEmailValid(email); err != nil {
+			authErrors = append(authErrors, err)
 		}
 		if _, err := auth.IsPasswordValid(password); err != nil {
-			authErrors = append(authErrors, fmt.Errorf("failed to get a valid password: %s", err))
+			authErrors = append(authErrors, err)
 		}
 		if len(authErrors) > 0 {
-			return fmt.Errorf("failed to validate credentials:\n%s", errors.Join(authErrors...))
+			allAuthErrors := errors.Join(authErrors...)
+			fmt.Println("⛔️ Your credentials are invalid")
+			if errors.Is(allAuthErrors, auth.ErrorPasswordNoUppercase) {
+				fmt.Println("  > Password requires at least 1 uppercase character [A-Z]")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorPasswordNoLowercase) {
+				fmt.Println("  > Password requires at least 1 lower character [a-z]")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorPasswordNoNumber) {
+				fmt.Println("  > Password requires at least 1 numeric character [0-9]")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorPasswordNoSymbol) {
+				fmt.Println("  > Password requires at least 1 symbol character")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorEmailAliasesNotAllowed) {
+				fmt.Println("  > Email aliases are not allowed")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorEmailDomainInvalid) {
+				fmt.Println("  > Email domain is invalid")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorEmailDomainTldNotAllowlisted) {
+				fmt.Println("  > Email domain TLD is not allowlisted")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorEmailEmptyDomain) {
+				fmt.Println("  > Email address has no domain")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorEmailInvalidAt) {
+				fmt.Println("  > Email address has either no '@' or more than 1 '@' symbol")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorEmailUserPartConsecutiveSymbols) {
+				fmt.Println("  > Email address cannot contain more than 1 consecutive synbol")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorEmailUserPartInvalidLength) {
+				fmt.Println("  > Email user-part cannot be empty or longer than 64 characters")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorEmailUserPartIlledgalChar) {
+				fmt.Println("  > Email user-part contains an illegal chracter")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorEmailUserPartLeadingSymbols) {
+				fmt.Println("  > Email user-part cannot start with a symbol")
+			}
+			if errors.Is(allAuthErrors, auth.ErrorEmailUserPartTrailingSymbols) {
+				fmt.Println("  > Email user-part cannot end with a symbol")
+			}
+
+			return fmt.Errorf("invalid credentials")
 		}
 
 		logrus.Debugf("sending request to server...")
@@ -147,7 +200,8 @@ var Command = &cobra.Command{
 			Password: password,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create user: %w", err)
+			fmt.Println("⛔️ Seems like that email address is invalid/not available")
+			return fmt.Errorf("failed to create user")
 		}
 
 		logrus.Debugf("successfully created user[%s] with id[%s]", createUserV1Output.Data.Email, createUserV1Output.Data.Id)

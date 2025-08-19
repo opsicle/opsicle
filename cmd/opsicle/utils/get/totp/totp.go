@@ -1,4 +1,4 @@
-package totpgenerator
+package totp
 
 import (
 	"fmt"
@@ -25,10 +25,9 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:     "totpgenerator",
-	Aliases: []string{"tgbot", "tg"},
-	Short:   "Generates a TOTP seed and ten minutes worth of TOTP tokens",
-	Long:    "Generates a TOTP seed and ten minutes worth of TOTP tokens. If no seed is specified, generates a TOTP seed",
+	Use:   "totp",
+	Short: "Generates a TOTP seed and ten minutes worth of TOTP tokens",
+	Long:  "Generates a TOTP seed and ten minutes worth of TOTP tokens. If no seed is specified, generates a TOTP seed",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},

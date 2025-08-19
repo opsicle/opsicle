@@ -49,8 +49,12 @@ func initHandlerV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, "received request to create a superadmin")
 
-	if !auth.IsEmailValid(input.Email) {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid email address", err)
+	if _, err := auth.IsEmailValid(input.Email); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid email address", ErrorInvalidInput)
+		return
+	}
+	if _, err := auth.IsPasswordValid(input.Password); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid password", ErrorInvalidInput)
 		return
 	}
 

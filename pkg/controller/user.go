@@ -41,6 +41,12 @@ func (c Client) CreateUserV1(input CreateUserV1Input) (*CreateUserV1Output, erro
 		Data:   input,
 		Output: &outputData,
 	})
+	if err != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorEmailExists.Error():
+			err = ErrorEmailExists
+		}
+	}
 	return &CreateUserV1Output{
 		Data:     outputData,
 		Response: outputClient.Response,

@@ -1,4 +1,4 @@
-package emailsender
+package email
 
 import (
 	"fmt"
@@ -75,9 +75,8 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:     "emailsender",
-	Aliases: []string{"email"},
-	Short:   "Sends a test email given SMTP credentials",
+	Use:   "email",
+	Short: "Sends a test email given SMTP credentials",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},

@@ -105,11 +105,12 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to get user input: %s", err)
 		}
 		if model.GetExitCode() == cli.PromptCancelled {
-			return errors.New("See you soon maybe?")
+			fmt.Println("See you soon maybe?")
+			return errors.New("user cancelled action")
 		}
 
 		email := model.GetValue("email")
-		if !auth.IsEmailValid(email) {
+		if _, err := auth.IsEmailValid(email); err != nil {
 			fmt.Printf("⚠️  The provided email (%s) was not valid\n", email)
 			return fmt.Errorf("email invalid")
 		}
@@ -134,6 +135,14 @@ var Command = &cobra.Command{
 		createSessionOutput, err := client.CreateSessionV1(createSessionInput)
 		if err != nil {
 			switch true {
+			case errors.Is(err, controller.ErrorConnectionTimedOut):
+				fmt.Println("⚠️  Seems like the controller service is under heavy load, try again later?")
+				return fmt.Errorf("request timed out")
+
+			case errors.Is(err, controller.ErrorConnectionRefused):
+				fmt.Println("⚠️  Seems like the controller service is offline")
+				return fmt.Errorf("controller unreachable")
+
 			case errors.Is(err, controller.ErrorEmailUnverified):
 				fmt.Println("⚠️  Verify your email first using `opsicle verify email`")
 				return fmt.Errorf("email has not been verified")
@@ -203,13 +212,22 @@ var Command = &cobra.Command{
 
 		sessionFilePath, err := controller.GetSessionTokenPath()
 		if err != nil {
-			return fmt.Errorf("failed to get session token path: %s", err)
+			logrus.Debugf("failed to get session token path: %s", err)
+			fmt.Println("⚠️ We couldn't get a path to store your session token, your session was not created")
+			return fmt.Errorf("failed to get session token path")
 		}
-		if err := os.WriteFile(sessionFilePath, []byte(createSessionOutput.Data.SessionToken), 0600); err != nil {
-			return fmt.Errorf("failed to write session token to path[%s]: %s", sessionFilePath, err)
+		sessionTokenData := []byte(createSessionOutput.Data.SessionToken)
+		if len(sessionTokenData) == 0 {
+			fmt.Println("⚠️ Looks like something went very wrong, your session was not created")
+			return fmt.Errorf("unexpected server response")
+		}
+		if err := os.WriteFile(sessionFilePath, sessionTokenData, 0600); err != nil {
+			logrus.Debugf("failed to write session token to path[%s]: %s", sessionFilePath, err)
+			fmt.Printf("⚠️ We couldn't write your session token to path[%s]\n", sessionFilePath)
+			return fmt.Errorf("session token write failed")
 		}
 
-		fmt.Printf("👋🏼 Welcome back!\nSession ID: %s\n", createSessionOutput.Data.SessionId)
+		fmt.Printf("👋 Welcome back!\nCurrent session ID: %s\n", createSessionOutput.Data.SessionId)
 		return nil
 	},
 }

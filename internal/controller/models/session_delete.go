@@ -2,6 +2,7 @@ package models
 
 import (
 	"errors"
+	"fmt"
 	"opsicle/internal/auth"
 	"opsicle/internal/cache"
 	"strings"
@@ -17,24 +18,24 @@ func DeleteSessionV1(opts DeleteSessionV1Opts) (string, error) {
 	if err != nil {
 		switch true {
 		case errors.Is(err, auth.ErrorJwtTokenSignature):
-			return "", err
+			return "", auth.ErrorJwtTokenSignature
 		case errors.Is(err, auth.ErrorJwtTokenExpired):
 			if claims != nil && claims.ID != "" {
 				cache.Get().Del(strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":"))
 			}
-			return "", nil
-		case errors.Is(err, auth.ErrorJwtClaims):
+			return "", auth.ErrorJwtTokenExpired
+		case errors.Is(err, auth.ErrorJwtClaimsInvalid):
 			if claims != nil && claims.ID != "" {
 				cache.Get().Del(strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":"))
 			}
-			return "", err
+			return "", auth.ErrorJwtClaimsInvalid
 		default:
-			return "", err
+			return "", fmt.Errorf("%w: %w", ErrorUnknown, err)
 		}
 	}
-	if claims != nil && claims.ID != "" {
-		cache.Get().Del(strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":"))
-		return claims.ID, nil
+	if claims == nil || claims.ID == "" {
+		return "", nil
 	}
-	return "", nil
+	cache.Get().Del(strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":"))
+	return claims.ID, nil
 }

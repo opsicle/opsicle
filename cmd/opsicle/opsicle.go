@@ -9,8 +9,10 @@ import (
 	"opsicle/cmd/opsicle/login"
 	"opsicle/cmd/opsicle/logout"
 	"opsicle/cmd/opsicle/register"
+	"opsicle/cmd/opsicle/reset"
 	"opsicle/cmd/opsicle/run"
 	"opsicle/cmd/opsicle/start"
+	"opsicle/cmd/opsicle/utils"
 	"opsicle/cmd/opsicle/validate"
 	"opsicle/cmd/opsicle/verify"
 	"opsicle/internal/cli"
@@ -68,15 +70,19 @@ var flags cli.Flags = cli.Flags{
 }
 
 func init() {
+	Command.SetVersionTemplate(cli.Logo + "\n" + `{{with .DisplayName}}{{printf "%s " .}}{{end}}{{printf "version %s" .Version}}`)
+
+	Command.AddCommand(admin.Command)
 	Command.AddCommand(create.Command)
 	Command.AddCommand(get.Command)
-	Command.AddCommand(admin.Command)
 	Command.AddCommand(list.Command)
 	Command.AddCommand(login.Command)
 	Command.AddCommand(logout.Command)
 	Command.AddCommand(register.Command)
+	Command.AddCommand(reset.Command)
 	Command.AddCommand(run.Command)
 	Command.AddCommand(start.Command)
+	Command.AddCommand(utils.Command)
 	Command.AddCommand(validate.Command)
 	Command.AddCommand(verify.Command)
 	Command.SilenceErrors = true
@@ -99,9 +105,10 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:   "opsicle",
-	Short: "Runbook automations by Platform Engineers for Platform Engineers",
-	Long:  cli.Logo + "\nRunbook automations by Platform Engineers for Platform Engineers",
+	Use:     "opsicle",
+	Short:   "Runbook automations by Platform Engineers for Platform Engineers",
+	Version: config.GetVersion(),
+	Long:    cli.Logo + "\nRunbook automations by Platform Engineers for Platform Engineers",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		isGenerateDocs := viper.GetBool("docs")
 		if isGenerateDocs {

@@ -96,14 +96,30 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userInstance.Password = &input.Password
+	var authError error = nil
 	if !userInstance.ValidatePassword() {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to create session", ErrorInvalidCredentials)
-		return
+		authError = ErrorInvalidCredentials
 	} else if !userInstance.IsEmailVerified {
 		common.SendHttpFailResponse(w, r, http.StatusLocked, "failed to create session", ErrorEmailUnverified)
-		return
+		authError = ErrorEmailUnverified
 	} else if userInstance.IsDisabled || userInstance.IsDeleted {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create session", ErrorAccountSuspended)
+		authError = ErrorAccountSuspended
+	}
+	if authError != nil {
+		_, err := models.CreateUserLoginV1(models.CreateUserLoginV1Input{
+			Db:        db,
+			UserId:    *userInstance.Id,
+			IpAddress: r.RemoteAddr,
+			UserAgent: r.UserAgent(),
+			Status:    authError.Error(),
+		})
+		if err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to create a user login attempt: %s", err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user login", ErrorDatabaseIssue)
+			return
+		}
 		return
 	}
 
@@ -120,6 +136,9 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 			Db:          db,
 			UserId:      *userInstance.Id,
 			RequiresMfa: true,
+			IpAddress:   r.RemoteAddr,
+			UserAgent:   r.UserAgent(),
+			Status:      "pending_mfa",
 		})
 		if err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to create a user login attempt: %s", err))
@@ -136,8 +155,11 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userLoginId, err := models.CreateUserLoginV1(models.CreateUserLoginV1Input{
-		Db:     db,
-		UserId: *userInstance.Id,
+		Db:        db,
+		UserId:    *userInstance.Id,
+		IpAddress: r.RemoteAddr,
+		UserAgent: r.UserAgent(),
+		Status:    "successful",
 	})
 	if err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user login entry", err)
@@ -162,9 +184,16 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, "successfully issued session token")
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleCreateSessionV1Output{
-		SessionId:    sessionToken.SessionId,
+		SessionId:    sessionToken.Id,
 		SessionToken: sessionToken.Value,
 	})
+}
+
+type handleGetSessionV1Output struct {
+	ExpiresAt time.Time `json:"expiresAt"`
+	Id        string    `json:"id"`
+	IsExpired bool      `json:"isExpired"`
+	UserId    string    `json:"userId"`
 }
 
 // handleGetSessionV1 godoc
@@ -198,12 +227,22 @@ func handleGetSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("session[%s] is valid and has %s time left", sessionInfo.Id, sessionInfo.TimeLeft))
 
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", sessionInfo)
+	if sessionInfo.ExpiresAt.Before(time.Now()) {
+		log(common.LogLevelDebug, fmt.Sprintf("session[%s] of user[%s] is expired", sessionInfo.Id, sessionInfo.UserId))
+		common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to retrieve session details", ErrorSessionExpired)
+		return
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleGetSessionV1Output{
+		ExpiresAt: sessionInfo.ExpiresAt,
+		Id:        sessionInfo.Id,
+		IsExpired: sessionInfo.ExpiresAt.Before(time.Now()),
+		UserId:    sessionInfo.UserId,
+	})
 }
 
 type handleDeleteSessionV1Output struct {
-	SessionId    string `json:"sessionId"`
-	IsSuccessful bool   `json:"isSuccessful"`
+	SessionId string `json:"sessionId"`
 }
 
 // handleDeleteSessionV1 godoc
@@ -232,16 +271,21 @@ func handleDeleteSessionV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelWarn, fmt.Sprintf("failed to delete session: %s", err))
-		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleDeleteSessionV1Output{
-			SessionId:    "",
-			IsSuccessful: false,
-		})
+		switch true {
+		case errors.Is(err, auth.ErrorJwtTokenSignature):
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "token signature invalid", auth.ErrorJwtTokenExpired)
+		case errors.Is(err, auth.ErrorJwtTokenExpired):
+			common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "token expired", auth.ErrorJwtTokenExpired)
+		case errors.Is(err, auth.ErrorJwtClaimsInvalid):
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "token data invalid", auth.ErrorJwtClaimsInvalid)
+		default:
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "unknown error", ErrorUnknown)
+		}
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("session[%s] has been deleted", sessionId))
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleDeleteSessionV1Output{
-		SessionId:    sessionId,
-		IsSuccessful: true,
+		SessionId: sessionId,
 	})
 }
 
@@ -249,6 +293,11 @@ type handleStartSessionWithMfaV1Input struct {
 	Hostname *string `json:"hostname"`
 	MfaType  string  `json:"mfaType"`
 	MfaToken string  `json:"mfaToken"`
+}
+
+type handleStartSessionWithMfaV1Output struct {
+	SessionId    string `json:"sessionId"`
+	SessionToken string `json:"sessionToken"`
 }
 
 // handleStartSessionWithMfaV1 godoc
@@ -318,6 +367,13 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 			case models.MfaTypeTotp:
 				valid, err := auth.ValidateTotpToken(*userMfa.Secret, input.MfaToken)
 				if err != nil || !valid {
+					if err := models.SetUserLoginStatusV1(models.SetUserLoginStatusV1Input{
+						Db:     db,
+						Id:     loginId,
+						Status: "mfa_failed",
+					}); err != nil {
+						log(common.LogLevelError, fmt.Sprintf("failed to set mfa status for user[%s]'s login[%s] to mfa_failed", *user.Id, userLogin.Id))
+					}
 					log(common.LogLevelError, fmt.Sprintf("failed to validate mfa for user[%s] of type[%s]", *user.Id, userMfa.Type))
 					common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to authenticate user mfa", ErrorMfaTokenInvalid)
 					return
@@ -344,14 +400,17 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 				if input.Hostname != nil {
 					createSessionInput.Hostname = *input.Hostname
 				}
-				sessionToken, err := models.CreateSessionV1(createSessionInput)
+				sessionOutput, err := models.CreateSessionV1(createSessionInput)
 				if err != nil {
 					common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to create session", err)
 					return
 				}
 				log(common.LogLevelDebug, "successfully issued session token")
 
-				common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", sessionToken)
+				common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleStartSessionWithMfaV1Output{
+					SessionId:    sessionOutput.Id,
+					SessionToken: sessionOutput.Value,
+				})
 
 			default:
 				log(common.LogLevelError, fmt.Sprintf("failed to identify mfa for user[%s] of type[%s]", *user.Id, userMfa.Type))

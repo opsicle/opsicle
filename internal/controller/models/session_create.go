@@ -12,8 +12,8 @@ import (
 )
 
 type SessionToken struct {
-	SessionId string `json:"sessionId"`
-	Value     string `json:"value"`
+	Id    string `json:"id"`
+	Value string `json:"value"`
 }
 
 type CreateSessionV1Opts struct {
@@ -59,11 +59,13 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 		return nil, fmt.Errorf("models.CreateSessionV1: failed to issue jwt: %s", err)
 	}
 	cacheKey := strings.Join([]string{opts.CachePrefix, *userInstance.Id, sessionId}, ":")
-	if err := cache.Get().Set(cacheKey, sessionId, opts.ExpiresIn); err != nil {
+	// random arbitrary cache expiration
+	cacheExpiryDuration := time.Hour * 24 * 7
+	if err := cache.Get().Set(cacheKey, sessionId, cacheExpiryDuration); err != nil {
 		return nil, fmt.Errorf("models.CreateSessionV1: failed to update cache: %s", err)
 	}
 	return &SessionToken{
-		SessionId: sessionId,
-		Value:     jwtToken,
+		Id:    sessionId,
+		Value: jwtToken,
 	}, nil
 }
