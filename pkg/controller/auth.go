@@ -25,9 +25,18 @@ func (c Client) ResetPasswordV1(opts ResetPasswordV1Input) (*ResetPasswordV1Outp
 	var outputData ResetPasswordV1OutputData
 	outputClient, err := c.do(request{
 		Method: http.MethodPatch,
-		Path:   "/api/v1/user/passwprd",
+		Path:   "/api/v1/user/password",
+		Data:   opts,
 		Output: &outputData,
 	})
+	if err != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorInvalidInput.Error():
+			err = ErrorInvalidInput
+		case ErrorInvalidCredentials.Error():
+			err = ErrorInvalidCredentials
+		}
+	}
 	return &ResetPasswordV1Output{
 		Data:     outputData,
 		Response: outputClient.GetResponse(),

@@ -15,13 +15,9 @@ type CreateUserPasswordResetV1Input struct {
 	IpAddress        string
 	UserAgent        string
 	VerificationCode string
-	Status           string
 }
 
 func CreateUserPasswordResetV1(opts CreateUserPasswordResetV1Input) (string, error) {
-	if opts.Status == "" {
-		opts.Status = "pending"
-	}
 	passwordResetId := uuid.NewString()
 	sqlStmt := `
 	INSERT INTO user_password_reset(
@@ -48,7 +44,7 @@ func CreateUserPasswordResetV1(opts CreateUserPasswordResetV1Input) (string, err
 		opts.UserAgent,
 		opts.VerificationCode,
 		time.Now().Add(5 * time.Minute),
-		opts.Status,
+		"pending",
 	}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {

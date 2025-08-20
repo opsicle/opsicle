@@ -2,8 +2,13 @@ package common
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+)
+
+var (
+	ErrorEndpointHandlerNotFound = errors.New("endpoint_handler_not_found")
 )
 
 type HttpResponse struct {
@@ -15,7 +20,7 @@ type HttpResponse struct {
 
 func GetNotFoundHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		SendHttpFailResponse(w, r, http.StatusNotFound, "not found", fmt.Errorf("no handler for method[%s] at endpoint[%s]", r.Method, r.URL.Path))
+		SendHttpFailResponse(w, r, http.StatusNotFound, fmt.Sprintf("handler for request[%s %s] not found", r.Method, r.URL.Path), ErrorEndpointHandlerNotFound)
 	}
 }
 

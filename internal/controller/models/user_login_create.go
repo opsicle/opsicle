@@ -35,6 +35,7 @@ func CreateUserLoginV1(opts CreateUserLoginV1Input) (string, error) {
 		?,
 		?,
 		?,
+		?,
 		?
 	)`
 	sqlArgs := []any{

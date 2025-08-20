@@ -3,6 +3,7 @@ package password
 import (
 	"errors"
 	"fmt"
+	"opsicle/internal/auth"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
 
@@ -75,7 +76,7 @@ var Command = &cobra.Command{
 			passwordRequest := cli.CreatePrompt(cli.PromptOpts{
 				Buttons: []cli.PromptButton{
 					{
-						Label: "Login",
+						Label: "Update Password",
 						Type:  cli.PromptButtonSubmit,
 					},
 					{
@@ -111,21 +112,43 @@ var Command = &cobra.Command{
 
 			oldPassword := passwordRequest.GetValue("old-password")
 			newPassword := passwordRequest.GetValue("new-password")
+
+			arePasswordsValid := true
+			if _, err := auth.IsPasswordValid(oldPassword); err != nil {
+				arePasswordsValid = false
+				fmt.Printf("⚠️ Your current password doesn't seem valid:\n%s\n", err)
+			}
+			if _, err := auth.IsPasswordValid(oldPassword); err != nil {
+				arePasswordsValid = false
+				fmt.Printf("⚠️ Your new password doesn't seem valid:\n%s\n", err)
+			}
+			if !arePasswordsValid {
+				return fmt.Errorf("passwords are invalid")
+			}
+
 			_, err = client.ResetPasswordV1(controller.ResetPasswordV1Input{
 				CurrentPassword: &oldPassword,
 				NewPassword:     &newPassword,
 			})
 			if err != nil {
 				logrus.Debugf("failed to update password: %s", err)
+				if errors.Is(err, controller.ErrorInvalidCredentials) {
+					fmt.Println("⚠️ Your current password doesn't seem valid")
+					return fmt.Errorf("current password is invalid")
+				} else if errors.Is(err, controller.ErrorInvalidInput) {
+					fmt.Println("⚠️ One or both of your passwords aren't valid")
+					return fmt.Errorf("one or both passwords are invalid")
+				}
 				return fmt.Errorf("password update failed")
 			}
+			fmt.Println("✅ Your password change is successful")
 			return nil
 		}
 
 		emailRequest := cli.CreatePrompt(cli.PromptOpts{
 			Buttons: []cli.PromptButton{
 				{
-					Label: "Login",
+					Label: "Trigger Password Reset",
 					Type:  cli.PromptButtonSubmit,
 				},
 				{
@@ -165,7 +188,7 @@ var Command = &cobra.Command{
 		verificationCodeRequest := cli.CreatePrompt(cli.PromptOpts{
 			Buttons: []cli.PromptButton{
 				{
-					Label: "Login",
+					Label: "Verify & Change Password",
 					Type:  cli.PromptButtonSubmit,
 				},
 				{

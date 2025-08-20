@@ -13,6 +13,7 @@ import (
 	"opsicle/internal/controller/templates"
 	"opsicle/internal/email"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -363,10 +364,12 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 
 	isUserLoggedIn := false
 	authorizationHeader := r.Header.Get("Authorization")
+	var sessionInfo *models.Session
 	if strings.Index(authorizationHeader, "Bearer ") == 0 {
 		authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
 		log(common.LogLevelDebug, "retrieved an authorization token successfully")
-		sessionInfo, err := models.GetSessionV1(models.GetSessionV1Opts{
+		var err error
+		sessionInfo, err = models.GetSessionV1(models.GetSessionV1Opts{
 			BearerToken: authorizationToken,
 			CachePrefix: sessionCachePrefix,
 		})
@@ -391,19 +394,65 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isUserLoggedIn {
-		if input.Email == nil || *input.Email == "" {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive user email", ErrorInvalidInput)
+	isKnownUserChangePasswordFlow := isUserLoggedIn && sessionInfo != nil
+	isAnonUserTriggeringPasswodReset := !isUserLoggedIn && input.Email != nil
+	isAnonUserVerifyingIdentity := !isUserLoggedIn && input.VerificationCode != nil && input.NewPassword != nil
+
+	switch true {
+	case isKnownUserChangePasswordFlow:
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: changing password for user", sessionInfo.UserId))
+		// get user from session info
+		if sessionInfo.ExpiresAt.Before(time.Now()) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "password change failed", ErrorAuthRequired)
 			return
 		}
 
-		if input.VerificationCode != nil {
-			// check verification code
-			// set password to the new password
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: validating passwords for password update", sessionInfo.UserId))
+		if _, err := auth.IsPasswordValid(*input.CurrentPassword); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid current password", ErrorInvalidInput)
+			return
+		} else if _, err := auth.IsPasswordValid(*input.NewPassword); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid new password", ErrorInvalidInput)
+			return
+		}
+		currentPassword := *input.CurrentPassword
+		newPassword := *input.NewPassword
+
+		userId := sessionInfo.UserId
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: retrieving user details", userId))
+		user, err := models.GetUserV1(models.GetUserV1Opts{
+			Db: db,
+			Id: &userId,
+		})
+		if err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user", ErrorDatabaseIssue)
+			return
 		}
 
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: validating current password", userId))
+		if !auth.ValidatePassword(currentPassword, *user.PasswordHash) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed password verification", ErrorInvalidCredentials)
+			return
+		}
+
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: updating password", userId))
+		if err := models.UpdateUserPasswordV1(models.UpdateUserPasswordV1Input{
+			Db:          db,
+			UserId:      userId,
+			NewPassword: newPassword,
+		}); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed password update", ErrorDatabaseIssue)
+			return
+		}
+
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s] successfully changed their password", userId))
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateUserPasswordV1Output{
+			IsSuccessful: true,
+		})
+
+	case isAnonUserTriggeringPasswodReset:
 		userEmail := *input.Email
-		log(common.LogLevelDebug, fmt.Sprintf("resetting password for user with email[%s]", email))
+		log(common.LogLevelDebug, fmt.Sprintf("email[%s].forgotPassword: resetting password for user", userEmail))
 		_, err := auth.IsEmailValid(userEmail)
 		if err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive user email", ErrorInvalidInput)
@@ -424,11 +473,12 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			log(common.LogLevelError, fmt.Sprintf("failed to retrieve user: %w", err))
+			log(common.LogLevelError, fmt.Sprintf("email[%s].forgotPassword: failed to retrieve user: %w", userEmail, err))
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user", ErrorDatabaseIssue)
 			return
 		}
 
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s].forgotPassword: sending verification code to their email", *user.Id))
 		verificationCode, err := common.GenerateRandomString(32)
 		if err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to create password reset verification code: %w", err))
@@ -441,14 +491,13 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 			IpAddress:        r.RemoteAddr,
 			UserAgent:        r.UserAgent(),
 			VerificationCode: verificationCode,
-			Status:           "pending",
 		})
 		if err != nil {
-			log(common.LogLevelError, fmt.Sprintf("failed to create password reset database item: %w", err))
+			log(common.LogLevelError, fmt.Sprintf("user[%s].forgotPassword: failed to create password reset database item: %w", err))
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create password reset item", ErrorDatabaseIssue)
 			return
 		}
-		log(common.LogLevelDebug, fmt.Sprintf("created password reset with id[%s]", passwordResetId))
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s].forgotPassword: created password reset with id[%s]", passwordResetId))
 
 		if smtpConfig.IsSet() {
 			remoteAddr := r.RemoteAddr
@@ -489,18 +538,73 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateUserPasswordV1Output{
 			IsSuccessful: true,
 		})
+
+	case isAnonUserVerifyingIdentity:
+		verificationCode := *input.VerificationCode
+		newPassword := *input.NewPassword
+
+		log(common.LogLevelDebug, "validating incoming password")
+		if _, err := auth.IsPasswordValid(newPassword); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid new password", ErrorInvalidInput)
+			return
+		}
+
+		log(common.LogLevelDebug, "retrieving user password reset attempt")
+		passwordReset, err := models.GetUserPasswordResetV1(models.GetUserPasswordResetV1Input{
+			Db: db,
+
+			VerificationCode: verificationCode,
+		})
+		if err != nil {
+			if errors.Is(err, models.ErrorNotFound) {
+				common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid verification code", ErrorInvalidInput)
+				return
+			}
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to identify password reset attempt", ErrorDatabaseIssue)
+			return
+		}
+
+		log(common.LogLevelDebug, fmt.Sprintf("identified request as user[%s]'s passwordReset attempt[%s]", passwordReset.UserId, passwordReset.Id))
+		user, err := models.GetUserV1(models.GetUserV1Opts{
+			Db: db,
+			Id: &passwordReset.UserId,
+		})
+		if err != nil {
+			if errors.Is(err, models.ErrorNotFound) {
+				common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user referenced", ErrorInvalidInput)
+				return
+			}
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", ErrorDatabaseIssue)
+			return
+		}
+
+		userId := *user.Id
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: updating password", userId))
+		if err := models.UpdateUserPasswordV1(models.UpdateUserPasswordV1Input{
+			Db: db,
+
+			UserId:      *user.Id,
+			NewPassword: newPassword,
+		}); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed password update", ErrorDatabaseIssue)
+			return
+		}
+
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s] successfully changed their password", userId))
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateUserPasswordV1Output{
+			IsSuccessful: true,
+		})
+
+		if err := models.SetUserPasswordResetToSuccessV1(models.SetUserPasswordResetToSuccessV1Input{
+			Db: db,
+			Id: passwordReset.Id,
+		}); err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to update password reset attempt to successful: %s", err))
+		}
+
+	default:
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "bad request", ErrorInvalidInput)
 		return
 	}
 
-	if input.CurrentPassword == nil || input.NewPassword == nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get passwords", ErrorInvalidInput)
-		return
-	}
-
-	// compare current password
-	// if corerct => update password to the new one
-
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateUserPasswordV1Output{
-		IsSuccessful: true,
-	})
 }
