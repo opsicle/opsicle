@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"opsicle/internal/common"
+	"strings"
 
 	"opsicle/internal/controller/docs"
 	_ "opsicle/internal/controller/docs"
@@ -83,9 +84,8 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 		ServiceLogs: opts.ServiceLogs,
 	})
 	handler.Handle("/metrics", promhttp.Handler())
-	admin := handler.PathPrefix("/admin").Subrouter()
-
 	if opts.AdminToken != "" {
+		admin := handler.PathPrefix("/admin").Subrouter()
 		registerAdminRoutes(RouteRegistrationOpts{
 			Router:      admin,
 			ServiceLogs: opts.ServiceLogs,
@@ -105,6 +105,22 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 
 	swag.Register(docs.SwaggerInfo.InstanceName(), docs.SwaggerInfo)
 	handler.PathPrefix("/docs").Handler(httpSwagger.WrapHandler)
+
+	if err := handler.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+		// Get path template
+		pathTemplate, err := route.GetPathTemplate()
+		if err != nil {
+			return nil
+		}
+		methods, err := route.GetMethods()
+		if err != nil {
+			methods = []string{"*"}
+		}
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "registered route[%s] with methods[%s]", pathTemplate, strings.Join(methods, "|"))
+		return nil
+	}); err != nil {
+		return nil
+	}
 
 	return handler
 }

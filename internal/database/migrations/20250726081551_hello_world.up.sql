@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS `orgs` (
     `icon` TEXT,
     `logo` TEXT,
     `motd` TEXT,
-    `created_by` VARCHAR(36) NOT NULL,
+    `created_by` VARCHAR(36),
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `last_updated_at` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     `is_scheduled_for_deletion` BOOLEAN NOT NULL DEFAULT FALSE,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS `orgs` (
     `deleted_at` DATETIME,
     `is_disabled` BOOLEAN NOT NULL DEFAULT FALSE,
     `disabled_at` DATETIME,
-    FOREIGN KEY (created_by) REFERENCES `users`(id)
+    FOREIGN KEY (created_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `groups` (
     id VARCHAR(36) PRIMARY KEY,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS `groups` (
     description TEXT,
     org_id VARCHAR(36),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id)
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `approval_policies` (
     id VARCHAR(36) PRIMARY KEY,
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS `approval_policies` (
     last_updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at DATETIME,
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id)
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `automation_templates` (
     id VARCHAR(36) PRIMARY KEY,
@@ -61,28 +61,28 @@ CREATE TABLE IF NOT EXISTS `automation_templates` (
     content TEXT NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id)
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `automation_runs` (
     id VARCHAR(36) PRIMARY KEY,
-    template_id VARCHAR(36) NOT NULL,
+    template_id VARCHAR(36),
     org_id VARCHAR(36) NOT NULL,
-    triggered_by VARCHAR(36) NOT NULL,
+    triggered_by VARCHAR(36),
     input JSON,
     last_known_status VARCHAR(20),
     logs TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (template_id) REFERENCES `automation_templates`(id),
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id),
-    FOREIGN KEY (triggered_by) REFERENCES `users`(id)
+    FOREIGN KEY (template_id) REFERENCES `automation_templates`(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (triggered_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `groups_users` (
     group_id VARCHAR(36) NOT NULL,
     user_id VARCHAR(36) NOT NULL,
     added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (group_id, user_id),
-    FOREIGN KEY (group_id) REFERENCES `groups`(id),
-    FOREIGN KEY (user_id) REFERENCES `users`(id)
+    FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `org_users` (
     user_id VARCHAR(36) NOT NULL,
@@ -90,8 +90,8 @@ CREATE TABLE IF NOT EXISTS `org_users` (
     `type` VARCHAR(64) NOT NULL DEFAULT 'member',
     joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, org_id),
-    FOREIGN KEY (user_id) REFERENCES `users`(id),
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id)
+    FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `org_roles` (
     id VARCHAR(36) PRIMARY KEY,
@@ -99,15 +99,15 @@ CREATE TABLE IF NOT EXISTS `org_roles` (
     name VARCHAR(255) NOT NULL,
     permissions JSON,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id)
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `org_role_users` (
     user_id VARCHAR(36) NOT NULL,
     role_id VARCHAR(36) NOT NULL,
     assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, role_id),
-    FOREIGN KEY (user_id) REFERENCES `users`(id),
-    FOREIGN KEY (role_id) REFERENCES `org_roles`(id)
+    FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES `org_roles`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `org_config_db` (
     `id` VARCHAR(36) PRIMARY KEY,
@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS `org_config_sso` (
     `scopes` TEXT,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (`org_id`) REFERENCES `orgs` (`id`) ON DELETE CASCADE
+    FOREIGN KEY (`org_id`) REFERENCES `orgs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `org_config_sso_mapping` (
     `id` VARCHAR(36) PRIMARY KEY,
@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS `org_config_sso_mapping` (
     `source` VARCHAR(255) NOT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (`org_id`) REFERENCES `orgs` (`id`) ON DELETE CASCADE
+    FOREIGN KEY (`org_id`) REFERENCES `orgs` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `org_config_security` (
     id VARCHAR(36) PRIMARY KEY,
@@ -151,8 +151,8 @@ CREATE TABLE IF NOT EXISTS `org_config_security` (
     session_timeout INT NOT NULL,
     blanket_approval_policy_id VARCHAR(36),
     last_updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id),
-    FOREIGN KEY (blanket_approval_policy_id) REFERENCES `approval_policies`(id)
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (blanket_approval_policy_id) REFERENCES `approval_policies`(id)  ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `sessions` (
     `id` VARCHAR(36) PRIMARY KEY,
@@ -166,14 +166,14 @@ CREATE TABLE IF NOT EXISTS `sessions` (
     `issued_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `expires_at` DATETIME,
     `revoked_at` DATETIME,
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id)
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `user_slack` (
     `id` VARCHAR(36) PRIMARY KEY,
     `user_id` VARCHAR(36) NOT NULL,
     `slack_id` VARCHAR(255) NOT NULL,
     `linked_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES `users`(id)
+    FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `user_sso` (
     `id` VARCHAR(36) PRIMARY KEY,
@@ -183,7 +183,7 @@ CREATE TABLE IF NOT EXISTS `user_sso` (
     `subject` VARCHAR(255) NOT NULL,
     provisioned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login DATETIME,
-    FOREIGN KEY (user_id) REFERENCES `users`(id),
+    FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE,
     UNIQUE KEY `user_provider_subject` (`user_id`, `provider_id`, `subject`)
 );
 CREATE TABLE IF NOT EXISTS `user_sso_group` (
@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS `user_sso_group` (
     group_name VARCHAR(255) NOT NULL,
     source VARCHAR(255),
     assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_sso_id) REFERENCES `user_sso`(id)
+    FOREIGN KEY (user_sso_id) REFERENCES `user_sso`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `user_telegram` (
     id VARCHAR(36) PRIMARY KEY,
@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS `user_telegram` (
     telegram_id BIGINT NOT NULL,
     telegram_handle VARCHAR(255),
     linked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES `users`(id)
+    FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `user_permissions` (
     id VARCHAR(36) PRIMARY KEY,
@@ -209,9 +209,9 @@ CREATE TABLE IF NOT EXISTS `user_permissions` (
     permission TEXT NOT NULL,
     granted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     granted_by VARCHAR(36),
-    FOREIGN KEY (user_id) REFERENCES `users`(id),
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id),
-    FOREIGN KEY (granted_by) REFERENCES `users`(id)
+    FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (granted_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `user_profiles` (
     user_id VARCHAR(36) PRIMARY KEY,
@@ -227,7 +227,7 @@ CREATE TABLE IF NOT EXISTS `user_profiles` (
     team VARCHAR(255),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES `users`(id)
+    FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `user_mfa` (
     id VARCHAR(36) PRIMARY KEY,
@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS `user_mfa` (
     `config_json` JSON,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES `users`(id)
+    FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `user_login` (
     `id` VARCHAR(36) NOT NULL,
@@ -251,7 +251,7 @@ CREATE TABLE IF NOT EXISTS `user_login` (
     `expires_at` TIMESTAMP NOT NULL,
     `status` TEXT NOT NULL,
     PRIMARY KEY (`id`),
-    CONSTRAINT `fk_user_login_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE
+    CONSTRAINT `fk_user_login_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`)  ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `user_password_reset` (
     `id` VARCHAR(36) NOT NULL,
@@ -263,5 +263,5 @@ CREATE TABLE IF NOT EXISTS `user_password_reset` (
     `expires_at` TIMESTAMP NOT NULL,
     `status` TEXT NOT NULL,
     PRIMARY KEY (`id`),
-    CONSTRAINT `fk_user_password_reset_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE CASCADE
+    CONSTRAINT `fk_user_password_reset_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`)  ON DELETE CASCADE ON UPDATE CASCADE
 );

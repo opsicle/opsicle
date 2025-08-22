@@ -145,6 +145,9 @@ var Command = &cobra.Command{
 			return nil
 		}
 
+		fmt.Println(cli.Logo + "\n" + "😔 It happens, we understand; let us know your email and we'll get you sorted:")
+		fmt.Println("")
+
 		emailRequest := cli.CreatePrompt(cli.PromptOpts{
 			Buttons: []cli.PromptButton{
 				{
@@ -184,6 +187,9 @@ var Command = &cobra.Command{
 			logrus.Debugf("failed to trigger email verification for password reset: %s", err)
 			return fmt.Errorf("password update failed")
 		}
+
+		fmt.Println("💡 If your email was valid, you should receive an email from us containing a verification code, enter it below along with your intended password:")
+		fmt.Println("")
 
 		verificationCodeRequest := cli.CreatePrompt(cli.PromptOpts{
 			Buttons: []cli.PromptButton{
@@ -231,8 +237,8 @@ var Command = &cobra.Command{
 			return fmt.Errorf("password update failed")
 		}
 
-		fmt.Println("✅ Your new password has been set")
+		fmt.Println("✅ You're all set, use your ✨ shiny new password ✨ to login")
 
-		return cmd.Help()
+		return nil
 	},
 }
