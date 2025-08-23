@@ -13,6 +13,7 @@ var (
 	ErrorInvalidVerificationCode = errors.New("invalid_verification_code")
 	ErrorMfaRequired             = errors.New("mfa_required")
 	ErrorMfaTokenInvalid         = errors.New("mfa_token_invalid")
+	ErrorOrgExists               = errors.New("org_exists")
 	ErrorSessionExpired          = errors.New("session_expired")
 	ErrorTotpInvalid             = errors.New("totp_invalid")
 	ErrorUnrecognisedMfaType     = errors.New("unknown_mfa_type")

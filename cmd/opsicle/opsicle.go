@@ -29,6 +29,11 @@ import (
 	"github.com/spf13/viper"
 )
 
+var availableOutputs = []string{
+	"text",
+	"json",
+}
+
 var availableLogLevels = []string{
 	string(common.LogLevelTrace),
 	string(common.LogLevelDebug),
@@ -39,6 +44,13 @@ var availableLogLevels = []string{
 
 var persistentFlags cli.Flags = cli.Flags{
 	{
+		Name:         "config-path",
+		Short:        'c',
+		DefaultValue: "~/.opsicle/config",
+		Usage:        "Defines the location of the global configuration used",
+		Type:         cli.FlagTypeString,
+	},
+	{
 		Name:         "log-level",
 		Short:        'l',
 		DefaultValue: "info",
@@ -46,10 +58,10 @@ var persistentFlags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name:         "config-path",
-		Short:        'c',
-		DefaultValue: "~/.opsicle/config",
-		Usage:        "Defines the location of the global configuration used",
+		Name:         "output",
+		Short:        'o',
+		DefaultValue: "text",
+		Usage:        fmt.Sprintf("Sets the output format where applicable (one of [%s])", strings.Join(availableOutputs, ", ")),
 		Type:         cli.FlagTypeString,
 	},
 }
@@ -130,7 +142,7 @@ var Command = &cobra.Command{
 				return fmt.Errorf("failed to generate markdown tree")
 			}
 			commandList := []string{}
-			for k, _ := range commandMap {
+			for k := range commandMap {
 				commandList = append(commandList, k)
 			}
 			var sidebar strings.Builder

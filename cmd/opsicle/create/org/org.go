@@ -54,22 +54,48 @@ var Command = &cobra.Command{
 			return fmt.Errorf("login is required")
 		}
 
-		fmt.Println("✨ Awesome, let's create an organisation")
+		controllerUrl := viper.GetString("controller-url")
+		client, err := controller.NewClient(controller.NewClientOpts{
+			ControllerUrl: controllerUrl,
+			BearerAuth: &controller.NewClientBearerAuthOpts{
+				Token: sessionToken,
+			},
+			Id: "opsicle/create/org",
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create controller client: %s", err)
+		}
+
+		output, err := client.ValidateSessionV1()
+		if err != nil || output.Data.IsExpired {
+			if err := controller.DeleteSessionToken(); err != nil {
+				fmt.Printf("⚠️ We failed to remove the session token for you, please do it yourself\n")
+			}
+			fmt.Println("⚠️ Please login again using `opsicle login`")
+			return fmt.Errorf("session invalid")
+		}
+
+		fmt.Println("✨ Let's create an organisation\n" +
+			"\n" +
+			"🪧  Organisation display name\n" +
+			"  - Minimum 6 characters\n" +
+			"  - Maximum 255 characters\n" +
+			"  - Cannot start with a symbol\n" +
+			"  - Cannot end with a symbol\n" +
+			"🔑 Organisation codeword\n" +
+			"  - Minimum 6 characters\n" +
+			"  - Maximum 32 characters\n" +
+			"  - Only alphanumeric characters\n" +
+			"  - No special characters asides from '-' is allowed\n" +
+			"  - Cannot start or end with '-'\n" +
+			"  - Will be normalised to lowercase",
+		)
 		fmt.Println("")
-		fmt.Println("Let's get some details about your organisation:")
-		fmt.Println("🪧  Organisation display name")
-		fmt.Println("  - Minimum 6 characters")
-		fmt.Println("  - Maximum 255 characters")
-		fmt.Println("  - Cannot start with a symbol")
-		fmt.Println("  - Cannot end with a symbol")
-		fmt.Println("🔑 Organisation codeword")
-		fmt.Println("  - Minimum 6 characters")
-		fmt.Println("  - Maximum 32 characters")
-		fmt.Println("  - Only alphanumeric characters")
-		fmt.Println("  - No special characters asides from '-' is allowed")
-		fmt.Println("  - Cannot start o end with '-'")
-		fmt.Println("  - Will be normalised to lowercase")
-		fmt.Println("")
+
+		orgCode := viper.GetString("org-code")
+		orgName := viper.GetString("org-name")
+
+	askUser:
 		model := cli.CreatePrompt(cli.PromptOpts{
 			Buttons: []cli.PromptButton{
 				{
@@ -86,13 +112,13 @@ var Command = &cobra.Command{
 					Id:          "org-name",
 					Placeholder: "Organisation display name",
 					Type:        cli.PromptString,
-					Value:       viper.GetString("org-name"),
+					Value:       orgName,
 				},
 				{
 					Id:          "org-code",
 					Placeholder: "Organisation codeword",
 					Type:        cli.PromptString,
-					Value:       viper.GetString("org-code"),
+					Value:       orgCode,
 				},
 			},
 		})
@@ -103,61 +129,61 @@ var Command = &cobra.Command{
 		if model.GetExitCode() == cli.PromptCancelled {
 			return errors.New("user cancelled")
 		}
-		orgCode := model.GetValue("org-code")
-		orgName := model.GetValue("org-name")
+		orgCode = strings.ToLower(model.GetValue("org-code"))
+		orgName = model.GetValue("org-name")
 
 		validationErrors := []error{}
 		errorMessages := []string{}
 		if err := validate.OrgCode(orgCode); err != nil {
-			if errors.Is(err, validate.ErrorTooShort) {
+			if errors.Is(err, validate.ErrorStringTooShort) {
 				errorMessages = append(errorMessages, "Organisation code word is too short")
 			}
-			if errors.Is(err, validate.ErrorTooLong) {
+			if errors.Is(err, validate.ErrorStringTooLong) {
 				errorMessages = append(errorMessages, "Organisation code word is too long")
 			}
-			if errors.Is(err, validate.ErrorInvalidPrefixCharacter) {
-				errorMessages = append(errorMessages, "Organisation code word has an invalid prefix character")
+			if errors.Is(err, validate.ErrorNotLatinAlnum) {
+				errorMessages = append(errorMessages, "Organisation code word has a non latin alphanumeric character")
 			}
-			if errors.Is(err, validate.ErrorInvalidPostfixCharacter) {
-				errorMessages = append(errorMessages, "Organisation code word has an invalid postfix character")
+			if errors.Is(err, validate.ErrorPrefixedWithNonLatinAlnum) {
+				errorMessages = append(errorMessages, "Organisation code word cannot start with a non alphanumeric character")
 			}
-			if errors.Is(err, validate.ErrorInvalidCharacter) {
-				errorMessages = append(errorMessages, "Organisation code word has an invalid character")
+			if errors.Is(err, validate.ErrorPostfixedWithNonLatinAlnum) {
+				errorMessages = append(errorMessages, "Organisation code word cannot end with a non alphanumeric character")
 			}
 			validationErrors = append(validationErrors, fmt.Errorf("failed to validate org code: %w", err))
 		}
 		orgName = strings.Trim(orgName, " _-")
 		if err := validate.OrgName(orgName); err != nil {
-			if errors.Is(err, validate.ErrorTooShort) {
+			if errors.Is(err, validate.ErrorStringTooShort) {
 				errorMessages = append(errorMessages, "Organisation display name is too short")
 			}
-			if errors.Is(err, validate.ErrorTooLong) {
+			if errors.Is(err, validate.ErrorStringTooLong) {
 				errorMessages = append(errorMessages, "Organisation display name is too long")
 			}
-			if errors.Is(err, validate.ErrorInvalidCharacter) {
+			if errors.Is(err, validate.ErrorNotInAllowlistedCharacters) {
 				errorMessages = append(errorMessages, "Organisation display name has an invalid character")
 			}
 			validationErrors = append(validationErrors, fmt.Errorf("failed to validate org name: %w", err))
 		}
-		if validationErrors != nil {
+		if len(validationErrors) > 0 {
 			fmt.Printf("❌ We couldn't validate your input:\n- %s\n", strings.Join(errorMessages, "\n- "))
 			logrus.Debugf("failed to validate input: %s", validationErrors)
 			return fmt.Errorf("input validation failed")
 		}
 
-		fmt.Println(sessionToken)
+		createOrgOutput, err := client.CreateOrgV1(controller.CreateOrgV1Input{
+			Name: orgName,
+			Code: orgCode,
+		})
+		if err != nil {
+			if errors.Is(err, controller.ErrorOrgExists) {
+				fmt.Printf("🙇 The organisation codeword[%s] is already in use, please pick another:\n\n", orgCode)
+				orgCode = ""
+				goto askUser
+			}
+		}
 
-		// controllerUrl := viper.GetString("controller-url")
-		// client, err := controller.NewClient(controller.NewClientOpts{
-		// 	ControllerUrl: controllerUrl,
-		// 	BearerAuth: &controller.NewClientBearerAuthOpts{
-		// 		Token: sessionToken,
-		// 	},
-		// 	Id: "opsicle/create/org",
-		// })
-		// if err != nil {
-		// 	return fmt.Errorf("failed to create controller client: %s", err)
-		// }
+		fmt.Printf("✅ Successfully created organisation[%s]\n", createOrgOutput.Data.Code)
 
 		return nil
 	},

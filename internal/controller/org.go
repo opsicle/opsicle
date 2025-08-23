@@ -2,11 +2,14 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"opsicle/internal/common"
 	"opsicle/internal/controller/models"
+	"opsicle/internal/validate"
+	"time"
 )
 
 func registerOrgRoutes(opts RouteRegistrationOpts) {
@@ -14,8 +17,11 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 
 	v1 := opts.Router.PathPrefix("/v1/org").Subrouter()
 
-	v1.Handle("", requiresAuth(http.HandlerFunc(handleGetOrgsV1))).Methods(http.MethodGet)
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleCreateOrgV1))).Methods(http.MethodPost)
+
+	v1 = opts.Router.PathPrefix("/v1/orgs").Subrouter()
+
+	v1.Handle("", requiresAuth(http.HandlerFunc(handleListOrgsV1))).Methods(http.MethodGet)
 }
 
 type handleCreateOrgV1Output struct {
@@ -56,12 +62,14 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, "successfully parsed body into expected input class")
 
-	if len(input.Name) < 4 {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org name should be longer than 4 characters", ErrorInvalidInput)
+	if err := validate.OrgName(input.Name); err != nil {
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s] entered an invalid orgName[%s]: %s", input.Name, session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org name is invalid", ErrorInvalidInput, err.Error())
 		return
 	}
-	if len(input.Code) < 4 {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org code should be longer than 4 characters", ErrorInvalidInput)
+	if err := validate.OrgCode(input.Code); err != nil {
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s] entered an invalid orgCode[%s]: %s", input.Code, session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org code is invalid", ErrorInvalidInput, err.Error())
 		return
 	}
 
@@ -73,6 +81,10 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		UserId: session.UserId,
 	})
 	if err != nil {
+		if errors.Is(err, models.ErrorDuplicateEntry) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org already exists", ErrorOrgExists)
+			return
+		}
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create org", ErrorDatabaseIssue)
 		return
 	}
@@ -84,7 +96,21 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleGetOrgsV1 godoc
+type handleListOrgsV1Output handleListOrgsV1OutputOrgs
+
+type handleListOrgsV1OutputOrgs []handleListOrgsV1OutputOrg
+type handleListOrgsV1OutputOrg struct {
+	Code       string     `json:"code"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	Id         string     `json:"id"`
+	JoinedAt   time.Time  `json:"joinedAt"`
+	MemberType string     `json:"memberType"`
+	Name       string     `json:"name"`
+	Type       string     `json:"type"`
+	UpdatedAt  *time.Time `json:"updatedAt"`
+}
+
+// handleListOrgsV1 godoc
 // @Summary      Retrieves the current organisation
 // @Description  Retrieves the current organisation that the current user is signed in via
 // @Tags         controller-service
@@ -94,7 +120,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 // @Failure      403 {object} commonHttpResponse "forbidden"
 // @Failure      500 {object} commonHttpResponse "internal server error"
 // @Router       /api/v1/org [get]
-func handleGetOrgsV1(w http.ResponseWriter, r *http.Request) {
+func handleListOrgsV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	session := r.Context().Value(authRequestContext).(identity)
 
@@ -109,5 +135,22 @@ func handleGetOrgsV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", orgs)
+	output := handleListOrgsV1Output{}
+	for _, org := range orgs {
+		output = append(
+			output,
+			handleListOrgsV1OutputOrg{
+				Code:       org.Code,
+				CreatedAt:  org.CreatedAt,
+				Id:         *org.Id,
+				JoinedAt:   *org.JoinedAt,
+				MemberType: *org.MemberType,
+				Name:       org.Name,
+				Type:       org.Type,
+				UpdatedAt:  org.UpdatedAt,
+			},
+		)
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }

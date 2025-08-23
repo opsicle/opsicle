@@ -135,14 +135,10 @@ type ValidateSessionV1Output struct {
 }
 
 type ValidateSessionV1OutputData struct {
-	IsExpired time.Time `json:"isExpired"`
 	ExpiresAt time.Time `json:"expiresAt"`
-	StartedAt time.Time `json:"startedAt"`
+	Id        string    `json:"id"`
+	IsExpired bool      `json:"isExpired"`
 	UserId    string    `json:"userId"`
-	Username  string    `json:"username"`
-	UserType  string    `json:"userType"`
-	OrgCode   *string   `json:"orgCode"`
-	OrgId     *string   `json:"orgId"`
 }
 
 func (c Client) ValidateSessionV1() (*ValidateSessionV1Output, error) {

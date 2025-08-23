@@ -2,8 +2,10 @@ package models
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 )
 
@@ -49,6 +51,12 @@ func CreateOrgV1(opts CreateOrgV1Opts) (string, error) {
 		opts.UserId,
 	)
 	if err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) {
+			if mysqlErr.Number == mysqlErrorDuplicateEntryCode {
+				return "", fmt.Errorf("models.CreateOrgV1: failed to create an org with a duplicate codeword: %w", ErrorDuplicateEntry)
+			}
+		}
 		return "", fmt.Errorf("models.CreateOrgV1: failed to execute insert statement for orgs: %s", err)
 	}
 

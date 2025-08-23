@@ -13,6 +13,7 @@ var (
 	ErrorInvalidEndpoint    = fmt.Errorf("invalid_endpoint")
 	ErrorMfaRequired        = fmt.Errorf("mfa_required")
 	ErrorMfaTokenInvalid    = fmt.Errorf("mfa_token_invalid")
+	ErrorOrgExists          = errors.New("org_exists")
 	ErrorSessionExpired     = fmt.Errorf("session_expired")
 	ErrorUserLoginFailed    = fmt.Errorf("login_failed")
 	ErrorEmailUnverified    = fmt.Errorf("email_unverified")
