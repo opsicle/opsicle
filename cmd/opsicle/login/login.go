@@ -102,7 +102,7 @@ var Command = &cobra.Command{
 		})
 		prompt := tea.NewProgram(model)
 		if _, err := prompt.Run(); err != nil {
-			return fmt.Errorf("failed to get user input: %s", err)
+			return fmt.Errorf("failed to get user input: %w", err)
 		}
 		if model.GetExitCode() == cli.PromptCancelled {
 			fmt.Println("See you soon maybe?")
@@ -122,7 +122,7 @@ var Command = &cobra.Command{
 			Id:            "opsicle/login",
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create controller client: %s", err)
+			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 		hostname, _ := os.Hostname()
 
@@ -180,7 +180,7 @@ var Command = &cobra.Command{
 					})
 					mfaPrompt := tea.NewProgram(mfaModel)
 					if _, err := mfaPrompt.Run(); err != nil {
-						return fmt.Errorf("failed to get user input: %s", err)
+						return fmt.Errorf("failed to get user input: %w", err)
 					}
 					if mfaModel.GetExitCode() == cli.PromptCancelled {
 						fmt.Println("😥 We couldn't get an MFA code from you")
@@ -203,10 +203,10 @@ var Command = &cobra.Command{
 					}
 
 				default:
-					return fmt.Errorf("failed to create session for unexpected reasons: %s", err)
+					return fmt.Errorf("failed to create session for unexpected reasons: %w", err)
 				}
 			default:
-				return fmt.Errorf("failed to create session for unexpected reasons: %s", err)
+				return fmt.Errorf("failed to create session for unexpected reasons: %w", err)
 			}
 		}
 

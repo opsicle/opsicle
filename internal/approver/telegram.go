@@ -118,7 +118,7 @@ func InitTelegramNotifier(opts InitTelegramNotifierOpts) error {
 		ServiceLogs:    opts.ServiceLogs,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create telegram bot: %s", err)
+		return fmt.Errorf("failed to create telegram bot: %w", err)
 	}
 	Notifiers = append(
 		Notifiers,

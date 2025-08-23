@@ -37,7 +37,7 @@ var Command = &cobra.Command{
 			var err error
 			seed, err = auth.CreateTotpSeed("issuer", "account")
 			if err != nil {
-				return fmt.Errorf("failed to create totp seed: %s", err)
+				return fmt.Errorf("failed to create totp seed: %w", err)
 			}
 			logrus.Infof("generated the following totp seed")
 			fmt.Println(seed)
@@ -45,7 +45,7 @@ var Command = &cobra.Command{
 		validity := 10 * time.Minute
 		codes, err := auth.CreateTotpTokens(seed, validity)
 		if err != nil {
-			return fmt.Errorf("failed to create totp tokens: %s", err)
+			return fmt.Errorf("failed to create totp tokens: %w", err)
 		}
 		logrus.Infof("generated the following totp codes:")
 		for _, code := range codes {

@@ -67,7 +67,7 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		resourcePath, err := cli.GetFilePathFromArgs(args)
 		if err != nil {
-			return fmt.Errorf("failed to receive required <path-to-automation>: %s", err)
+			return fmt.Errorf("failed to receive required <path-to-automation>: %w", err)
 		}
 		automationTemplateInstance, err := automations.LoadAutomationTemplateFromFile(resourcePath)
 		if err != nil {
@@ -148,7 +148,7 @@ var Command = &cobra.Command{
 				Id:          "opsicle-run-approval",
 			})
 			if err != nil {
-				return fmt.Errorf("failed to create client for approver service: %s", err)
+				return fmt.Errorf("failed to create client for approver service: %w", err)
 			}
 			requestUuid, err := client.CreateApprovalRequest(approverApi.CreateApprovalRequestInput{
 				Callback:      approvalRequestInstance.Callback,
@@ -161,7 +161,7 @@ var Command = &cobra.Command{
 				Telegram:      approvalRequestInstance.Telegram,
 			})
 			if err != nil {
-				return fmt.Errorf("failed to create approval request: %s", err)
+				return fmt.Errorf("failed to create approval request: %w", err)
 			}
 			logrus.Infof("submitted request[%s]", requestUuid)
 			retryInterval := viper.GetDuration("approver-retry-interval")
@@ -257,7 +257,7 @@ var Command = &cobra.Command{
 			ServiceLogs:    serviceLogs,
 			AutomationLogs: automationLogs,
 		}); err != nil {
-			return fmt.Errorf("automation execution failed with message: %s", err)
+			return fmt.Errorf("automation execution failed with message: %w", err)
 		}
 
 		return nil

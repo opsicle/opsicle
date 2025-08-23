@@ -25,7 +25,7 @@ func InitRedis(opts InitRedisOpts) error {
 		ServiceLogs:    &opts.ServiceLogs,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create redis client: %s", err)
+		return fmt.Errorf("failed to create redis client: %w", err)
 	}
 	instance = client
 	return nil

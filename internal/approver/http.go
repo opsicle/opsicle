@@ -83,10 +83,10 @@ func StartHttpServer(opts StartHttpServerOpts) error {
 
 	server, err := common.NewHttpServer(serverOpts)
 	if err != nil {
-		return fmt.Errorf("failed to create a http server: %s", err)
+		return fmt.Errorf("failed to create a http server: %w", err)
 	}
 	if err := server.Start(); err != nil {
-		return fmt.Errorf("failed to start server: %s", err)
+		return fmt.Errorf("failed to start server: %w", err)
 	}
 	return nil
 }

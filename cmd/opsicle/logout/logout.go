@@ -45,8 +45,9 @@ var Command = &cobra.Command{
 			Id: "opsicle/logout",
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create controller client: %s", err)
+			return fmt.Errorf("failed to create controller client: %w", err)
 		}
+
 		deleteSessionOutput, err := client.DeleteSessionV1()
 		if err != nil {
 			logrus.Debugf("failed to delete session: %s", err)
@@ -55,7 +56,7 @@ var Command = &cobra.Command{
 			fmt.Printf("✅ Session ID '%s' is now closed\n", deleteSessionOutput.Data.SessionId)
 		}
 		if err := controller.DeleteSessionToken(); err != nil {
-			return fmt.Errorf("failed to remove file at path[%s], please do it yourself: %s", sessionFilePath, err)
+			return fmt.Errorf("failed to remove file at path[%s], please do it yourself: %w", sessionFilePath, err)
 		}
 		fmt.Println("👋 See you again <3")
 		return nil

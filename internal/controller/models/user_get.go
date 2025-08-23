@@ -43,12 +43,12 @@ func GetUserV1(opts GetUserV1Opts) (*User, error) {
 	sqlArgs := []any{selectionValue}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare insert statement: %s", err)
+		return nil, fmt.Errorf("failed to prepare insert statement: %w", err)
 	}
 
 	row := stmt.QueryRow(sqlArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query statement: %s", err)
+		return nil, fmt.Errorf("failed to query statement: %w", err)
 	}
 	userInstance := User{}
 	if err := row.Scan(
@@ -66,7 +66,7 @@ func GetUserV1(opts GetUserV1Opts) (*User, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("failed to get a user: %w", ErrorNotFound)
 		}
-		return nil, fmt.Errorf("failed to query database: %s", err)
+		return nil, fmt.Errorf("failed to query database: %w", err)
 	}
 	return &userInstance, nil
 }

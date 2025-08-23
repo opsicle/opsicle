@@ -29,12 +29,12 @@ func GetUserMfaV1(opts GetUserMfaV1Opts) (*UserMfa, error) {
 	sqlArgs := []any{opts.Id}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return nil, fmt.Errorf("models.GetUserMfaV1: failed to prepare insert statement: %s", err)
+		return nil, fmt.Errorf("models.GetUserMfaV1: failed to prepare insert statement: %w", err)
 	}
 
 	row := stmt.QueryRow(sqlArgs...)
 	if row.Err() != nil {
-		return nil, fmt.Errorf("models.GetUserMfaV1: failed to query: %s", err)
+		return nil, fmt.Errorf("models.GetUserMfaV1: failed to query: %w", err)
 	}
 
 	userMfa := UserMfa{}
@@ -51,7 +51,7 @@ func GetUserMfaV1(opts GetUserMfaV1Opts) (*UserMfa, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("models.GetUserMfaV1: failed to get a user_mfa row: %s", err)
+		return nil, fmt.Errorf("models.GetUserMfaV1: failed to get a user_mfa row: %w", err)
 	}
 
 	return &userMfa, nil

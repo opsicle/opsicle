@@ -73,7 +73,7 @@ var Command = &cobra.Command{
 		})
 		prompt := tea.NewProgram(model)
 		if _, err := prompt.Run(); err != nil {
-			return fmt.Errorf("failed to get user input: %s", err)
+			return fmt.Errorf("failed to get user input: %w", err)
 		}
 		if model.GetExitCode() == cli.PromptCancelled {
 			fmt.Println("Wrong command? It happens; well, see you again!")
@@ -89,7 +89,7 @@ var Command = &cobra.Command{
 			Id:            "opsicle/verify/email",
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create controller client: %s", err)
+			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
 		logrus.Debugf("sending request to server...")

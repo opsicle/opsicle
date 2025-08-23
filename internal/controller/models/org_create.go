@@ -40,7 +40,7 @@ func CreateOrgV1(opts CreateOrgV1Opts) (string, error) {
 		created_by
 	) VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
-		return "", fmt.Errorf("models.CreateOrgV1: failed to prepare insert statement for orgs: %s", err)
+		return "", fmt.Errorf("models.CreateOrgV1: failed to prepare insert statement for orgs: %w", err)
 	}
 
 	_, err = stmt.Exec(
@@ -57,7 +57,7 @@ func CreateOrgV1(opts CreateOrgV1Opts) (string, error) {
 				return "", fmt.Errorf("models.CreateOrgV1: failed to create an org with a duplicate codeword: %w", ErrorDuplicateEntry)
 			}
 		}
-		return "", fmt.Errorf("models.CreateOrgV1: failed to execute insert statement for orgs: %s", err)
+		return "", fmt.Errorf("models.CreateOrgV1: failed to execute insert statement for orgs: %w", err)
 	}
 
 	stmt, err = opts.Db.Prepare(`
@@ -68,7 +68,7 @@ func CreateOrgV1(opts CreateOrgV1Opts) (string, error) {
 	) VALUES (?, ?, ?)
 	`)
 	if err != nil {
-		return "", fmt.Errorf("models.CreateOrgV1: failed to prepare insert statement for org_users: %s", err)
+		return "", fmt.Errorf("models.CreateOrgV1: failed to prepare insert statement for org_users: %w", err)
 	}
 
 	_, err = stmt.Exec(
@@ -77,7 +77,7 @@ func CreateOrgV1(opts CreateOrgV1Opts) (string, error) {
 		TypeOrgAdmin,
 	)
 	if err != nil {
-		return "", fmt.Errorf("models.CreateOrgV1: failed to execute insert statement for org_users: %s", err)
+		return "", fmt.Errorf("models.CreateOrgV1: failed to execute insert statement for org_users: %w", err)
 	}
 
 	return orgUuid, nil

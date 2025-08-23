@@ -74,7 +74,7 @@ func getTelegramTargetMatchingSender(opts getTelegramTargetMatchingSenderOpts) (
 	matchedSender := approvals.AuthorizedResponder{}
 	for _, authorizedResponder := range opts.Target.AuthorizedResponders {
 		o, _ := json.Marshal(authorizedResponder)
-		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "comparing authorizedResponder[%s] with sender[%s:%s]\n", string(o), opts.SenderId, opts.SenderUsername)
+		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "comparing authorizedResponder[%s] with sender[%v:%s]\n", string(o), opts.SenderId, opts.SenderUsername)
 		isUserIdDefined := authorizedResponder.UserId != nil
 		isUserIdMatch := true
 		isUsernameDefined := authorizedResponder.Username != nil

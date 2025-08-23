@@ -35,7 +35,7 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 		Email: &opts.Email,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("models.CreateSessionV1: failed to get user instance: %s", err)
+		return nil, fmt.Errorf("models.CreateSessionV1: failed to get user instance: %w", err)
 	}
 
 	sessionId := uuid.NewString()
@@ -56,13 +56,13 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 		Username: userInstance.Email,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("models.CreateSessionV1: failed to issue jwt: %s", err)
+		return nil, fmt.Errorf("models.CreateSessionV1: failed to issue jwt: %w", err)
 	}
 	cacheKey := strings.Join([]string{opts.CachePrefix, *userInstance.Id, sessionId}, ":")
 	// random arbitrary cache expiration
 	cacheExpiryDuration := time.Hour * 24 * 7
 	if err := cache.Get().Set(cacheKey, sessionId, cacheExpiryDuration); err != nil {
-		return nil, fmt.Errorf("models.CreateSessionV1: failed to update cache: %s", err)
+		return nil, fmt.Errorf("models.CreateSessionV1: failed to update cache: %w", err)
 	}
 	return &SessionToken{
 		Id:    sessionId,

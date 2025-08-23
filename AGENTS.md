@@ -36,7 +36,7 @@ type ExampleStruct struct {
 - All resource manifests meant for ingestion by the system should be acceptable in both YAML and JSON formats
 - Users can submit YAML manifests or send an API call with JSON in its body, use the `Content-Type` in the request to decide which to parse
 
-## Adding CLI command
+## When told to add/create a CLI command
 - To add a CLI command `opsicle create something great`, create a folder at `./cmd/opsicle/create/something/great`. Each directory should have a `.go` file of the same name and have a placeholder function.
 - Example of filler subcommands before final command:
   ```go
@@ -120,7 +120,7 @@ type ExampleStruct struct {
   })
   prompt := tea.NewProgram(model)
   if _, err := prompt.Run(); err != nil {
-    return fmt.Errorf("failed to get user input: %s", err)
+    return fmt.Errorf("failed to get user input: %w", err)
   }
   if model.GetExitCode() == cli.PromptCancelled {
     return errors.New("user cancelled")
@@ -148,7 +148,7 @@ type ExampleStruct struct {
   })
   selector := tea.NewProgram(exampleSelector)
   if _, err := selector.Run(); err != nil {
-    return fmt.Errorf("failed to get user input: %s", err)
+    return fmt.Errorf("failed to get user input: %w", err)
   }
   if exampleSelector.GetExitCode() == cli.PromptCancelled {
     return errors.New("user cancelled")
@@ -156,10 +156,10 @@ type ExampleStruct struct {
   selectedValue := exampleSelector.GetValue()
   ```
 
-## Adding controller API endpoint
-- For the controller service, add the endpoint handler and routing in `./internal/controller`
-- For the controller service, ensure all state changes are handled in the `models` package which will be called from the endpoint handler in `./internal/controller`
-- For the controller service, ensure all endpoint handlers are also handled by the SDK in `./pkg/controller`
+## When told to add a controller endpoint
+- Add the endpoint handler and routing in the appropriate file at `./internal/controller`, create a new `.go` file if necessary
+- Add functions that handle state changes into the `models` package which will be called from the endpoint handler in `./internal/controller`
+- Add an SDK method in `./pkg/controller` to call the endpoint
 
 ## Security guidelines
 - Do not hardcode secrets

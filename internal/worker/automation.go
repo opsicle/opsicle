@@ -59,7 +59,7 @@ func RunAutomation(opts RunAutomationOpts) error {
 			DockerApiVersion: dockerApiVersion,
 		},
 	); err != nil {
-		return fmt.Errorf("failed to run automation: %s", err)
+		return fmt.Errorf("failed to run automation: %w", err)
 	}
 
 	return nil
@@ -85,7 +85,7 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 		if !path.IsAbs(hostVolumePath) {
 			workingDirectory, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to get working directory: %s", err)
+				return fmt.Errorf("failed to get working directory: %w", err)
 			}
 			hostVolumePath = filepath.Join(workingDirectory, hostVolumePath)
 		}

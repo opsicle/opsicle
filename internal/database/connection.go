@@ -37,7 +37,7 @@ func (o *ConnectOpts) Validate() error {
 func ConnectMysql(opts ConnectOpts) (*sql.DB, error) {
 	addr := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
 	if err := opts.Validate(); err != nil {
-		return nil, fmt.Errorf("failed to validate connection options: %s", err)
+		return nil, fmt.Errorf("failed to validate connection options: %w", err)
 	}
 
 	config := mysql.Config{
@@ -53,10 +53,10 @@ func ConnectMysql(opts ConnectOpts) (*sql.DB, error) {
 
 	connection, err := sql.Open("mysql", config.FormatDSN())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create connection: %s", err)
+		return nil, fmt.Errorf("failed to create connection: %w", err)
 	}
 	if err := connection.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %s", err)
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 	Connections[opts.ConnectionId] = connection
 	return connection, nil

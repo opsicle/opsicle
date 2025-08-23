@@ -49,7 +49,7 @@ var Command = &cobra.Command{
 			Id: "opsicle/list/orgs",
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create controller client: %s", err)
+			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
 		output, err := client.ValidateSessionV1()

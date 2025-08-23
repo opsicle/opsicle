@@ -103,7 +103,7 @@ var Command = &cobra.Command{
 			Database:     viper.GetString("mysql-database"),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to establish connection to database: %s", err)
+			return fmt.Errorf("failed to establish connection to database: %w", err)
 		}
 		defer databaseConnection.Close()
 		logrus.Debugf("established connection to database")
@@ -118,7 +118,7 @@ var Command = &cobra.Command{
 			Password: password,
 			Type:     models.TypeUser,
 		}); err != nil {
-			return fmt.Errorf("failed to create user: %s", err)
+			return fmt.Errorf("failed to create user: %w", err)
 		}
 
 		user, err := models.GetUserV1(models.GetUserV1Opts{
@@ -127,7 +127,7 @@ var Command = &cobra.Command{
 			Email: &email,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to retrieve user: %s", err)
+			return fmt.Errorf("failed to retrieve user: %w", err)
 		}
 
 		user, err = models.VerifyUserV1(models.VerifyUserV1Opts{
@@ -136,7 +136,7 @@ var Command = &cobra.Command{
 			VerificationCode: user.EmailVerificationCode,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to verify user: %s", err)
+			return fmt.Errorf("failed to verify user: %w", err)
 		}
 
 		logrus.Infof("created user[%s] with email[%s] and password[%s]", *user.Id, user.Email, password)
@@ -144,7 +144,7 @@ var Command = &cobra.Command{
 		if viper.GetBool("with-mfa") {
 			totpSeed, err := auth.CreateTotpSeed("opsicle", user.Email)
 			if err != nil {
-				return fmt.Errorf("failed to create totp seed: %s", err)
+				return fmt.Errorf("failed to create totp seed: %w", err)
 			}
 			userMfa, err := models.CreateUserMfaV1(models.CreateUserMfaV1Opts{
 				Db: databaseConnection,
@@ -154,14 +154,14 @@ var Command = &cobra.Command{
 				Type:   models.MfaTypeTotp,
 			})
 			if err != nil {
-				return fmt.Errorf("failed to create mfa for user: %s", err)
+				return fmt.Errorf("failed to create mfa for user: %w", err)
 			}
 			if err := models.VerifyUserMfaV1(models.VerifyUserMfaV1Opts{
 				Db: databaseConnection,
 
 				Id: userMfa.Id,
 			}); err != nil {
-				return fmt.Errorf("failed to verify mfa for user: %s", err)
+				return fmt.Errorf("failed to verify mfa for user: %w", err)
 			}
 			logrus.Infof("added mfa with seed[%s]", totpSeed)
 		}

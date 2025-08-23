@@ -85,7 +85,7 @@ func (c Client) ListUsersV1() (*ListUsersV1Output, error) {
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create http request to create a session: %s", err)
+		return nil, fmt.Errorf("failed to create http request to create a session: %w", err)
 	}
 	httpRequest.Header.Add("Content-Type", "application/json")
 	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle/controller-sdk/client-%s", c.Id))
@@ -97,27 +97,27 @@ func (c Client) ListUsersV1() (*ListUsersV1Output, error) {
 	}
 	httpResponse, err := c.HttpClient.Do(httpRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute http request to create session: %s", err)
+		return nil, fmt.Errorf("failed to execute http request to create session: %w", err)
 	}
 	output := ListUsersV1Output{Response: *httpResponse}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return &output, fmt.Errorf("failed to read response body: %s", err)
+		return &output, fmt.Errorf("failed to read response body: %w", err)
 	}
 	if httpResponse.StatusCode != http.StatusOK {
 		return &output, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return &output, fmt.Errorf("failed to parse response from controller service: %s", err)
+		return &output, fmt.Errorf("failed to parse response from controller service: %w", err)
 	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
-		return &output, fmt.Errorf("failed to parse response data from controller service: %s", err)
+		return &output, fmt.Errorf("failed to parse response data from controller service: %w", err)
 	}
 	var data ListUsersV1OutputData
 	if err := json.Unmarshal(responseData, &data); err != nil {
-		return &output, fmt.Errorf("failed to unmarshal response data into output: %s", err)
+		return &output, fmt.Errorf("failed to unmarshal response data into output: %w", err)
 	}
 	output.Data = data
 	return &output, nil

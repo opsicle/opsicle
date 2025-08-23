@@ -74,6 +74,11 @@ func NewClient(opts NewClientOpts) (*Client, error) {
 	}
 	client.ControllerUrl = controllerUrl
 
+	healthcheckOutput, err := client.HealthcheckPing()
+	if err != nil || healthcheckOutput.Status != "success" {
+		return nil, fmt.Errorf("failed to check health of controller: %w", err)
+	}
+
 	return client, nil
 }
 
@@ -165,7 +170,7 @@ func (c Client) do(input request) (*clientOutput, error) {
 	if input.Data != nil {
 		inputData, err := json.Marshal(input.Data)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %s", ErrorClientMarshalInput, err)
+			return nil, fmt.Errorf("%w: %w", ErrorClientMarshalInput, err)
 		}
 		requestBody = bytes.NewBuffer(inputData)
 	}
@@ -185,17 +190,17 @@ func (c Client) do(input request) (*clientOutput, error) {
 		)
 	}
 	if httpRequestError != nil {
-		return nil, fmt.Errorf("%w: %s", ErrorClientRequestCreation, httpRequestError)
+		return nil, fmt.Errorf("%w: %w: %w", ErrorClientRequestCreation, ErrorOutputNil, httpRequestError)
 	}
 	c.addRequiredHeaders(httpRequest)
 	httpResponse, err := c.HttpClient.Do(httpRequest)
 	if err != nil {
 		if isConnectionRefused(err) {
-			return nil, fmt.Errorf("%w: %s", ErrorConnectionRefused, err)
+			return nil, fmt.Errorf("%w: %w: %w", ErrorConnectionRefused, ErrorOutputNil, err)
 		} else if isTimeout(err) {
-			return nil, fmt.Errorf("%w: %s", ErrorConnectionTimedOut, err)
+			return nil, fmt.Errorf("%w: %w: %w", ErrorConnectionTimedOut, ErrorOutputNil, err)
 		}
-		return nil, fmt.Errorf("%w: %s", ErrorClientRequestExecution, err)
+		return nil, fmt.Errorf("%w: %w: %w", ErrorClientRequestExecution, ErrorOutputNil, err)
 	}
 	output := &clientOutput{Response: *httpResponse}
 	if !isControllerResponse(httpResponse) {
@@ -206,21 +211,21 @@ func (c Client) do(input request) (*clientOutput, error) {
 	}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return output, fmt.Errorf("%w: %s", ErrorClientResponseReading, err)
+		return output, fmt.Errorf("%w: %w", ErrorClientResponseReading, err)
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return output, fmt.Errorf("%w: %s", ErrorClientUnmarshalResponse, err)
+		return output, fmt.Errorf("%w: %w", ErrorClientUnmarshalResponse, err)
 	}
 	output.message = response.Message
 	output.code = errors.New(response.Code)
 	if response.Data != nil {
 		responseData, err := json.Marshal(response.Data)
 		if err != nil {
-			return output, fmt.Errorf("%w: %s", ErrorClientMarshalResponseData, err)
+			return output, fmt.Errorf("%w: %w", ErrorClientMarshalResponseData, err)
 		}
 		if err := json.Unmarshal(responseData, &input.Output); err != nil {
-			return output, fmt.Errorf("%w: %s", ErrorClientUnmarshalOutput, err)
+			return output, fmt.Errorf("%w: %w", ErrorClientUnmarshalOutput, err)
 		}
 	}
 	if !response.Success {

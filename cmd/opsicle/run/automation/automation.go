@@ -20,7 +20,7 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		resourcePath, err := cli.GetFilePathFromArgs(args)
 		if err != nil {
-			return fmt.Errorf("failed to receive required <path-to-automation>: %s", err)
+			return fmt.Errorf("failed to receive required <path-to-automation>: %w", err)
 		}
 		automationInstance, err := automations.LoadAutomationFromFile(resourcePath)
 		if err != nil {
@@ -84,7 +84,7 @@ var Command = &cobra.Command{
 			ServiceLogs:    serviceLogs,
 			AutomationLogs: automationLogs,
 		}); err != nil {
-			return fmt.Errorf("automation execution failed with message: %s", err)
+			return fmt.Errorf("automation execution failed with message: %w", err)
 		}
 		logsWaiter.Done()
 		logsWaiter.Wait()

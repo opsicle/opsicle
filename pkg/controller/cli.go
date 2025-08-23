@@ -14,7 +14,7 @@ const (
 func GetSessionTokenPath() (string, error) {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to determine user's home directory: %s", err)
+		return "", fmt.Errorf("failed to determine user's home directory: %w", err)
 	}
 	sessionPath := filepath.Join(userHomeDir, CurrentSessionPath)
 	fileInfo, err := os.Lstat(sessionPath)
@@ -38,7 +38,7 @@ func GetSessionTokenPath() (string, error) {
 func GetSessionToken() (sessionToken string, sessionFilePath string, err error) {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to determine user's home directory: %s", err)
+		return "", "", fmt.Errorf("failed to determine user's home directory: %w", err)
 	}
 	sessionPath := filepath.Join(userHomeDir, CurrentSessionPath)
 	fileInfo, err := os.Lstat(sessionPath)
@@ -79,7 +79,7 @@ func GetSessionToken() (sessionToken string, sessionFilePath string, err error) 
 func DeleteSessionToken() (err error) {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("failed to determine user's home directory: %s", err)
+		return fmt.Errorf("failed to determine user's home directory: %w", err)
 	}
 	sessionFilePath := filepath.Join(userHomeDir, CurrentSessionPath, CurrentSessionFilename)
 	fileInfo, err := os.Lstat(sessionFilePath)

@@ -19,7 +19,7 @@ func (n notifiers) SendApprovalRequest(req *ApprovalRequest) (requestUuid string
 		var notifierInstanceNotifications []notificationMessage
 		requestUuid, notifierInstanceNotifications, err = notifierInstance.SendApprovalRequest(req)
 		if err != nil {
-			return "", nil, fmt.Errorf("failed to send all approval requests: %s", err)
+			return "", nil, fmt.Errorf("failed to send all approval requests: %w", err)
 		}
 		notifications = append(notifications, notifierInstanceNotifications...)
 	}

@@ -37,12 +37,12 @@ func ListUserOrgsV1(opts ListUserOrgsV1Opts) ([]Org, error) {
 
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return nil, fmt.Errorf("models.ListUserOrgsV1: failed to prepare insert statement: %s", err)
+		return nil, fmt.Errorf("models.ListUserOrgsV1: failed to prepare insert statement: %w", err)
 	}
 
 	rows, err := stmt.Query(sqlArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("models.ListUserOrgsV1: failed to query org using : %s", err)
+		return nil, fmt.Errorf("models.ListUserOrgsV1: failed to query org using : %w", err)
 	}
 	output := []Org{}
 	for rows.Next() {
@@ -64,7 +64,7 @@ func ListUserOrgsV1(opts ListUserOrgsV1Opts) ([]Org, error) {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, nil
 			}
-			return nil, fmt.Errorf("models.ListUserOrgsV1: failed to scan row into Org struct: %s", err)
+			return nil, fmt.Errorf("models.ListUserOrgsV1: failed to scan row into Org struct: %w", err)
 		}
 		output = append(output, org)
 	}

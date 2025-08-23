@@ -88,7 +88,7 @@ func (b *Bot) ReplyMessage(chatId int64, replyMessageId int, message string, mar
 	}
 	ctx := context.Background()
 	if _, err := b.Client.SendMessage(ctx, messageParameters); err != nil {
-		return fmt.Errorf("failed to send message: %s", err)
+		return fmt.Errorf("failed to send message: %w", err)
 	}
 	return nil
 }
@@ -105,7 +105,7 @@ func (b *Bot) SendMessage(chatId int64, message string, markup ...models.ReplyMa
 	}
 	ctx := context.Background()
 	if _, err := b.Client.SendMessage(ctx, messageParameters); err != nil {
-		return fmt.Errorf("failed to send message: %s", err)
+		return fmt.Errorf("failed to send message: %w", err)
 	}
 	return nil
 }

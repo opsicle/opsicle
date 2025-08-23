@@ -131,7 +131,7 @@ var Command = &cobra.Command{
 				},
 			},
 		}); err != nil {
-			return fmt.Errorf("failed to trigger email: %s", err)
+			return fmt.Errorf("failed to trigger email: %w", err)
 		}
 
 		<-time.After(500 * time.Millisecond)

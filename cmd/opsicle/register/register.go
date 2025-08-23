@@ -62,7 +62,7 @@ var Command = &cobra.Command{
 				Id:            "opsicle/register",
 			})
 			if err != nil {
-				return fmt.Errorf("failed to create controller client: %s", err)
+				return fmt.Errorf("failed to create controller client: %w", err)
 			}
 			if _, err := client.ValidateSessionV1(); err != nil {
 				if errors.Is(err, controller.ErrorAuthRequired) || errors.Is(err, controller.ErrorSessionExpired) {
@@ -80,7 +80,7 @@ var Command = &cobra.Command{
 			Id:            "opsicle/register",
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create controller client: %s", err)
+			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
 		inputEmail := viper.GetString("email")
@@ -129,7 +129,7 @@ var Command = &cobra.Command{
 		})
 		prompt := tea.NewProgram(model)
 		if _, err := prompt.Run(); err != nil {
-			return fmt.Errorf("failed to get user input: %s", err)
+			return fmt.Errorf("failed to get user input: %w", err)
 		}
 		if model.GetExitCode() == cli.PromptCancelled {
 			return errors.New("thank you for your interest in Opsicle, we hope to see you on our platform")

@@ -103,7 +103,7 @@ func SendSmtp(opts SendSmtpOpts) error {
 	}
 
 	if err := opts.Validate(); err != nil {
-		return fmt.Errorf("failed to validate input to Send: %s", err)
+		return fmt.Errorf("failed to validate input to Send: %w", err)
 	}
 
 	var buf bytes.Buffer
@@ -206,7 +206,7 @@ func SendSmtp(opts SendSmtpOpts) error {
 		allReceipients,
 		buf.Bytes(),
 	); err != nil {
-		return fmt.Errorf("failed to send email: %s", err)
+		return fmt.Errorf("failed to send email: %w", err)
 	}
 
 	serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "email sent successfully to people['%s'] from address[%s]", strings.Join(allReceipients, "', '"), opts.Sender.Address)

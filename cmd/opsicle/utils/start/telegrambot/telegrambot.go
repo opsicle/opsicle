@@ -65,7 +65,7 @@ var Command = &cobra.Command{
 			ServiceLogs: serviceLogs,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create a telegram bot instance: %s", err)
+			return fmt.Errorf("failed to create a telegram bot instance: %w", err)
 		}
 		telegramBot.Start()
 

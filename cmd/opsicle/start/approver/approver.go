@@ -144,7 +144,7 @@ var Command = &cobra.Command{
 				Password:    viper.GetString("redis-password"),
 				ServiceLogs: serviceLogs,
 			}); err != nil {
-				return fmt.Errorf("failed to initialise redis cache: %s", err)
+				return fmt.Errorf("failed to initialise redis cache: %w", err)
 			}
 			logrus.Infof("redis client initialised")
 		}
@@ -179,7 +179,7 @@ var Command = &cobra.Command{
 				BotToken:    telegramBotToken,
 				ServiceLogs: serviceLogs,
 			}); err != nil {
-				return fmt.Errorf("failed to initialise telegram client: %s", err)
+				return fmt.Errorf("failed to initialise telegram client: %w", err)
 			}
 			logrus.Infof("telegram notifier initialised")
 		}

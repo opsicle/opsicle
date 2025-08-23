@@ -76,7 +76,7 @@ func (c *Client) CreateApprovalRequest(input CreateApprovalRequestInput) (reques
 	}
 	approvalRequestData, err := json.Marshal(approvalRequest)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal approval request: %s", err)
+		return "", fmt.Errorf("failed to marshal approval request: %w", err)
 	}
 	approverUrl := *c.ApproverUrl
 	approverUrl.Path = "/api/v1/approval-request"
@@ -102,21 +102,21 @@ func (c *Client) CreateApprovalRequest(input CreateApprovalRequestInput) (reques
 	}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %s", err)
+		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 	if httpResponse.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return "", fmt.Errorf("failed to parse response from approver service: %s", err)
+		return "", fmt.Errorf("failed to parse response from approver service: %w", err)
 	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse response data from approver service: %s", err)
+		return "", fmt.Errorf("failed to parse response data from approver service: %w", err)
 	}
 	if err := json.Unmarshal(responseData, &approvalRequest); err != nil {
-		return "", fmt.Errorf("failed to parse response from approver service: %s", err)
+		return "", fmt.Errorf("failed to parse response from approver service: %w", err)
 	}
 	return approvalRequest.GetUuid(), nil
 }
@@ -146,22 +146,22 @@ func (c *Client) GetApproval(approvalUuid string) (*approvals.ApprovalSpec, erro
 	}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %s", err)
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 	if httpResponse.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response from approver service: %s", err)
+		return nil, fmt.Errorf("failed to parse response from approver service: %w", err)
 	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse response data from approver service: %s", err)
+		return nil, fmt.Errorf("failed to parse response data from approver service: %w", err)
 	}
 	var approval approvals.ApprovalSpec
 	if err := json.Unmarshal(responseData, &approval); err != nil {
-		return nil, fmt.Errorf("failed to parse response from approver service into an approval: %s", err)
+		return nil, fmt.Errorf("failed to parse response from approver service into an approval: %w", err)
 	}
 	return &approval, nil
 }
@@ -191,22 +191,22 @@ func (c *Client) GetApprovalRequest(requestUuid string) (*approvals.RequestSpec,
 	}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %s", err)
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 	if httpResponse.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response from approver service: %s", err)
+		return nil, fmt.Errorf("failed to parse response from approver service: %w", err)
 	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse response data from approver service: %s", err)
+		return nil, fmt.Errorf("failed to parse response data from approver service: %w", err)
 	}
 	var approvalRequest approvals.Request
 	if err := json.Unmarshal(responseData, &approvalRequest); err != nil {
-		return nil, fmt.Errorf("failed to parse response from approver service into an approval: %s", err)
+		return nil, fmt.Errorf("failed to parse response from approver service into an approval: %w", err)
 	}
 	return &approvalRequest.Spec, nil
 
@@ -221,7 +221,7 @@ func (c *Client) ListApprovalRequests() ([]string, error) {
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create http request to get approval requests: %s", err)
+		return nil, fmt.Errorf("failed to create http request to get approval requests: %w", err)
 	}
 	httpRequest.Header.Add("Content-Type", "application/json")
 	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle-sdk/client-%s", c.Id))
@@ -233,26 +233,26 @@ func (c *Client) ListApprovalRequests() ([]string, error) {
 	}
 	httpResponse, err := c.HttpClient.Do(httpRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute http request to get approval requests: %s", err)
+		return nil, fmt.Errorf("failed to execute http request to get approval requests: %w", err)
 	}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %s", err)
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 	if httpResponse.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response from approver service: %s", err)
+		return nil, fmt.Errorf("failed to parse response from approver service: %w", err)
 	}
 	responseData, err := json.Marshal(response.Data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse response data from approver service: %s", err)
+		return nil, fmt.Errorf("failed to parse response data from approver service: %w", err)
 	}
 	var approvalRequestKeys []string
 	if err := json.Unmarshal(responseData, &approvalRequestKeys); err != nil {
-		return nil, fmt.Errorf("failed to parse response from approver service into an approval: %s", err)
+		return nil, fmt.Errorf("failed to parse response from approver service into an approval: %w", err)
 	}
 	return approvalRequestKeys, nil
 }

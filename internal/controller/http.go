@@ -53,7 +53,7 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 	} else {
 		smtpConfig = *opts.EmailConfig
 		if err := smtpConfig.VerifyConnection(); err != nil {
-			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to authenticate with the provided smtp configuration", err)
+			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to authenticate with the provided smtp configuration: %s", err)
 			smtpConfig = SmtpServerConfig{}
 		}
 	}

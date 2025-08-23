@@ -56,7 +56,7 @@ var Command = &cobra.Command{
 			Id: "opsicle/create/mfa",
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create controller client: %s", err)
+			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
 		// get current user mfas
@@ -67,7 +67,7 @@ var Command = &cobra.Command{
 			if errors.Is(err, controller.ErrorAuthRequired) {
 				controller.DeleteSessionToken()
 			}
-			return fmt.Errorf("failed to list user mfas: %s", err)
+			return fmt.Errorf("failed to list user mfas: %w", err)
 		}
 		if len(listUserMfasOutput.Data) == 0 {
 			fmt.Println("💡 No MFA methods have been registered")
@@ -78,7 +78,7 @@ var Command = &cobra.Command{
 		logrus.Debug("retrieving available mfa types...")
 		availableMfasOutput, err := client.ListAvailableMfaTypes()
 		if err != nil {
-			return fmt.Errorf("failed to get available mfa methods: %s", err)
+			return fmt.Errorf("failed to get available mfa methods: %w", err)
 		}
 		if len(availableMfasOutput.Data) == 0 {
 			fmt.Println("❌ No MFA methods were enabled on the server, contact your server administrator")
@@ -116,7 +116,7 @@ var Command = &cobra.Command{
 		})
 		selector := tea.NewProgram(mfaTypeSelector)
 		if _, err := selector.Run(); err != nil {
-			return fmt.Errorf("failed to get user input: %s", err)
+			return fmt.Errorf("failed to get user input: %w", err)
 		}
 		if mfaTypeSelector.GetExitCode() == cli.PromptCancelled {
 			return errors.New("user cancelled")
@@ -156,7 +156,7 @@ var Command = &cobra.Command{
 		})
 		prompt := tea.NewProgram(model)
 		if _, err := prompt.Run(); err != nil {
-			return fmt.Errorf("failed to get user input: %s", err)
+			return fmt.Errorf("failed to get user input: %w", err)
 		}
 		if model.GetExitCode() == cli.PromptCancelled {
 			return errors.New("user cancelled")
@@ -179,7 +179,7 @@ var Command = &cobra.Command{
 				fmt.Println("❌ Your password didn't seem to match, try again maybe?")
 				return fmt.Errorf("primary authentication failed")
 			}
-			return fmt.Errorf("failed to create user mfa: %s", err)
+			return fmt.Errorf("failed to create user mfa: %w", err)
 		}
 
 		qrCode, err := auth.GetTotpQrCode(auth.GetTotpQrCodeOpts{
@@ -188,7 +188,7 @@ var Command = &cobra.Command{
 			Secret:    createUserMfaOutput.Data.Secret,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to get a qr code: %s", err)
+			return fmt.Errorf("failed to get a qr code: %w", err)
 		}
 
 		fmt.Printf(
@@ -219,7 +219,7 @@ var Command = &cobra.Command{
 		})
 		prompt = tea.NewProgram(model)
 		if _, err := prompt.Run(); err != nil {
-			return fmt.Errorf("failed to get user input: %s", err)
+			return fmt.Errorf("failed to get user input: %w", err)
 		}
 		if model.GetExitCode() == cli.PromptCancelled {
 			return errors.New("user cancelled")
@@ -231,7 +231,7 @@ var Command = &cobra.Command{
 			Value: totp,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to verify user mfa: %s", err)
+			return fmt.Errorf("failed to verify user mfa: %w", err)
 		}
 
 		fmt.Printf("✅ MFA successfully registered (MFA ID: %s)", createUserMfaOutput.Data.Id)

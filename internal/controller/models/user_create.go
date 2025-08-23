@@ -45,17 +45,17 @@ func (o CreateUserV1Opts) Validate() error {
 
 func CreateUserV1(opts CreateUserV1Opts) error {
 	if err := opts.Validate(); err != nil {
-		return fmt.Errorf("models.CreateUserV1: failed to validate input arguments: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to validate input arguments: %w", err)
 	}
 	userUuid := uuid.New().String()
 	passwordHash, err := auth.HashPassword(opts.Password)
 	if err != nil {
-		return fmt.Errorf("models.CreateUserV1: failed to hash password: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to hash password: %w", err)
 	}
 	userType := opts.Type
 	emailVerificationCode, err := common.GenerateRandomString(32)
 	if err != nil {
-		return fmt.Errorf("models.CreateUserV1: failed to generate a random string: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to generate a random string: %w", err)
 	}
 
 	userInsertStmt, err := opts.Db.Prepare(`
@@ -68,7 +68,7 @@ func CreateUserV1(opts CreateUserV1Opts) error {
 		) VALUES (?, ?, ?, ?, ?)`,
 	)
 	if err != nil {
-		return fmt.Errorf("models.CreateUserV1: failed to prepare insert statement to create user: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to prepare insert statement to create user: %w", err)
 	}
 	if _, err := userInsertStmt.Exec(
 		userUuid,
@@ -77,7 +77,7 @@ func CreateUserV1(opts CreateUserV1Opts) error {
 		passwordHash,
 		userType,
 	); err != nil {
-		return fmt.Errorf("models.CreateUserV1: failed to execute insert statement to create user: %s", err)
+		return fmt.Errorf("models.CreateUserV1: failed to execute insert statement to create user: %w", err)
 	}
 
 	if opts.OrgCode != nil {
@@ -94,12 +94,12 @@ func CreateUserV1(opts CreateUserV1Opts) error {
 			if errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("models.CreateUserV1: org[%s] does not exist", *opts.OrgCode)
 			}
-			return fmt.Errorf("models.CreateUserV1: failed to scan org results: %s", err)
+			return fmt.Errorf("models.CreateUserV1: failed to scan org results: %w", err)
 		}
 		orgUserInsertStmt, err := opts.Db.Prepare(`
 		INSERT INTO org_users(user_id, org_id) VALUES (?, ?)`)
 		if err != nil {
-			return fmt.Errorf("models.CreateUserV1: failed to prepare insert statement: %s", err)
+			return fmt.Errorf("models.CreateUserV1: failed to prepare insert statement: %w", err)
 		}
 
 		if _, err := orgUserInsertStmt.Exec(userUuid, orgId); err != nil {
@@ -109,7 +109,7 @@ func CreateUserV1(opts CreateUserV1Opts) error {
 					return fmt.Errorf("models.CreateUserV1: failed to insert a duplicate user: %w", ErrorDuplicateEntry)
 				}
 			}
-			return fmt.Errorf("models.CreateUserV1: failed to execute insert statement to add user to organisation: %s", err)
+			return fmt.Errorf("models.CreateUserV1: failed to execute insert statement to add user to organisation: %w", err)
 		}
 	}
 

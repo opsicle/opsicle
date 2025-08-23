@@ -43,7 +43,7 @@ func MigrateMysql(opts MigrateOpts) error {
 	version, isDirty, err := migrator.Version()
 	if err != nil {
 		if !strings.Contains(err.Error(), "no migration") {
-			return fmt.Errorf("failed to get version of current migration: %s", err)
+			return fmt.Errorf("failed to get version of current migration: %w", err)
 		}
 	}
 	if isDirty {
@@ -66,7 +66,7 @@ func MigrateMysql(opts MigrateOpts) error {
 				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "no change detected")
 				return nil
 			}
-			return fmt.Errorf("failed to migrate: %s", err)
+			return fmt.Errorf("failed to migrate: %w", err)
 		}
 	}
 

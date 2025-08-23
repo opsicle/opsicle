@@ -38,11 +38,11 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		resourcePath, err := cli.GetFilePathFromArgs(args)
 		if err != nil {
-			return fmt.Errorf("failed to receive <path-to-approval-request>: %s", err)
+			return fmt.Errorf("failed to receive <path-to-approval-request>: %w", err)
 		}
 		approvalRequestInstance, err := approvals.LoadRequestFromFile(resourcePath)
 		if err != nil {
-			return fmt.Errorf("failed to load approval request: %s", err)
+			return fmt.Errorf("failed to load approval request: %w", err)
 		}
 		o, _ := json.MarshalIndent(approvalRequestInstance, "", "  ")
 		logrus.Debugf("loaded approval request as follows:\n%s", string(o))
@@ -62,7 +62,7 @@ var Command = &cobra.Command{
 			Id:          fmt.Sprintf("%s/opsicle-create-approval-request", hostname),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create client for approver service: %s", err)
+			return fmt.Errorf("failed to create client for approver service: %w", err)
 		}
 		requestUuid, err := client.CreateApprovalRequest(approverApi.CreateApprovalRequestInput{
 			Callback:      approvalRequestInstance.Spec.Callback,
@@ -75,7 +75,7 @@ var Command = &cobra.Command{
 			Telegram:      approvalRequestInstance.Spec.Telegram,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create approval request: %s", err)
+			return fmt.Errorf("failed to create approval request: %w", err)
 		}
 		logrus.Infof("submitted request[%s]", requestUuid)
 		return nil

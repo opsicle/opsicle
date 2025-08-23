@@ -37,7 +37,7 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionToken, sessionFilePath, err := controller.GetSessionToken()
 		if err != nil {
-			return fmt.Errorf("failed to get a session token: %s", err)
+			return fmt.Errorf("failed to get a session token: %w", err)
 		}
 		logrus.Debugf("loaded credentials from path[%s]", sessionFilePath)
 
@@ -54,7 +54,7 @@ var Command = &cobra.Command{
 			Id: fmt.Sprintf("%s/opsicle-get-org", hostname),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create client for approver service: %s", err)
+			return fmt.Errorf("failed to create client for approver service: %w", err)
 		}
 
 		org, err := client.GetOrgV1()
@@ -64,7 +64,7 @@ var Command = &cobra.Command{
 					logrus.Warnf("failed to remove session token: %s", err)
 				}
 			}
-			return fmt.Errorf("failed to retrieve current organisation: %s", err)
+			return fmt.Errorf("failed to retrieve current organisation: %w", err)
 		}
 
 		o, _ := json.MarshalIndent(org, "", "  ")

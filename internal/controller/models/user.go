@@ -40,17 +40,17 @@ func (u User) AddToOrgV1(opts AddUserToOrgV1Opts) error {
 	) VALUES (?, ?)
 	`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare insert statement: %s", err)
+		return fmt.Errorf("failed to prepare insert statement: %w", err)
 	}
 
 	res, err := stmt.Exec(u.Id, opts.OrgId)
 	if err != nil {
-		return fmt.Errorf("failed to execute insert statement: %s", err)
+		return fmt.Errorf("failed to execute insert statement: %w", err)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to retrieve the number of rows affected: %s", err)
+		return fmt.Errorf("failed to retrieve the number of rows affected: %w", err)
 	}
 	if rowsAffected != 1 {
 		return fmt.Errorf("failed to insert only 1 user")

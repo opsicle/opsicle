@@ -16,6 +16,12 @@ func registerHealthcheckRoutes(opts RouteRegistrationOpts) {
 	opts.Router.HandleFunc("/readyz", handleReadinessProbe).Methods(http.MethodGet)
 }
 
+type handleHealthcheckProbeOutput struct {
+	Errors   []string `json:"errors"`
+	Warnings []string `json:"warnings"`
+	Status   string   `json:"status"`
+}
+
 func handleLivenessProbe(w http.ResponseWriter, r *http.Request) {
 	isConsideredLive := true
 	livenessIssues := []error{}
@@ -29,7 +35,11 @@ func handleLivenessProbe(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "大丈夫じゃない", errors.Join(livenessIssues...))
 		return
 	}
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "大丈夫", nil)
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "大丈夫", handleHealthcheckProbeOutput{
+		Errors:   nil,
+		Warnings: nil,
+		Status:   "ok",
+	})
 }
 
 func handleReadinessProbe(w http.ResponseWriter, r *http.Request) {
@@ -45,5 +55,9 @@ func handleReadinessProbe(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "大丈夫じゃない", errors.Join(readinessIssues...))
 		return
 	}
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "大丈夫", nil)
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "大丈夫", handleHealthcheckProbeOutput{
+		Errors:   nil,
+		Warnings: nil,
+		Status:   "ok",
+	})
 }

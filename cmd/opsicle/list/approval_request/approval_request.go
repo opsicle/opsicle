@@ -50,12 +50,12 @@ var Command = &cobra.Command{
 			Id:          fmt.Sprintf("%s/opsicle-list-approval-request", hostname),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create client for approver service: %s", err)
+			return fmt.Errorf("failed to create client for approver service: %w", err)
 		}
 
 		approvalRequestUuids, err := client.ListApprovalRequests()
 		if err != nil {
-			return fmt.Errorf("failed to retrieve approval requests: %s", err)
+			return fmt.Errorf("failed to retrieve approval requests: %w", err)
 		}
 
 		o, _ := json.MarshalIndent(approvalRequestUuids, "", "  ")

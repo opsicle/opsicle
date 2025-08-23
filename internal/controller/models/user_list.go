@@ -26,12 +26,12 @@ func ListUsersV1(opts ListUsersV1Opts) ([]User, error) {
 	sqlArgs := []any{opts.OrgCode}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare insert statement: %s", err)
+		return nil, fmt.Errorf("failed to prepare insert statement: %w", err)
 	}
 
 	rows, err := stmt.Query(sqlArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query statement: %s", err)
+		return nil, fmt.Errorf("failed to query statement: %w", err)
 	}
 	userInstances := []User{}
 	for rows.Next() {
@@ -43,7 +43,7 @@ func ListUsersV1(opts ListUsersV1Opts) ([]User, error) {
 			&userInstance.Id,
 			&userInstance.Email,
 		); err != nil {
-			return nil, fmt.Errorf("failed to get user row: %s", err)
+			return nil, fmt.Errorf("failed to get user row: %w", err)
 		}
 		userInstances = append(userInstances, userInstance)
 	}

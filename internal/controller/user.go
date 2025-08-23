@@ -473,7 +473,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			log(common.LogLevelError, fmt.Sprintf("email[%s].forgotPassword: failed to retrieve user: %w", userEmail, err))
+			log(common.LogLevelError, fmt.Sprintf("email[%s].forgotPassword: failed to retrieve user: %s", userEmail, err))
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user", ErrorDatabaseIssue)
 			return
 		}
@@ -481,7 +481,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].forgotPassword: sending verification code to their email", *user.Id))
 		verificationCode, err := common.GenerateRandomString(32)
 		if err != nil {
-			log(common.LogLevelError, fmt.Sprintf("failed to create password reset verification code: %w", err))
+			log(common.LogLevelError, fmt.Sprintf("failed to create password reset verification code: %s", err))
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create password reset verification code", ErrorDatabaseIssue)
 			return
 		}
@@ -493,11 +493,11 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 			VerificationCode: verificationCode,
 		})
 		if err != nil {
-			log(common.LogLevelError, fmt.Sprintf("user[%s].forgotPassword: failed to create password reset database item: %w", err))
+			log(common.LogLevelError, fmt.Sprintf("user[%s].forgotPassword: failed to create password reset database item: %s", *user.Id, err))
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create password reset item", ErrorDatabaseIssue)
 			return
 		}
-		log(common.LogLevelDebug, fmt.Sprintf("user[%s].forgotPassword: created password reset with id[%s]", passwordResetId))
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s].forgotPassword: created password reset with id[%s]", *user.Id, passwordResetId))
 
 		if smtpConfig.IsSet() {
 			remoteAddr := r.RemoteAddr

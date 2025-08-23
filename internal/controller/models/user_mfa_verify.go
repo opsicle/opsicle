@@ -21,17 +21,17 @@ func VerifyUserMfaV1(opts VerifyUserMfaV1Opts) error {
 	`
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return fmt.Errorf("models.VerifyUserMfaV1: failed to prepare insert statement: %s", err)
+		return fmt.Errorf("models.VerifyUserMfaV1: failed to prepare insert statement: %w", err)
 	}
 
 	results, err := stmt.Exec(sqlArgs...)
 	if err != nil {
-		return fmt.Errorf("models.VerifyUserMfaV1: failed to execute query: %s", err)
+		return fmt.Errorf("models.VerifyUserMfaV1: failed to execute query: %w", err)
 	}
 	if rowsAffected, err := results.RowsAffected(); err != nil {
-		return fmt.Errorf("models.VerifyUserMfaV1: failed to get created row: %s", err)
+		return fmt.Errorf("models.VerifyUserMfaV1: failed to get created row: %w", err)
 	} else if rowsAffected == 0 {
-		return fmt.Errorf("models.VerifyUserMfaV1: failed to create a row: %s", err)
+		return fmt.Errorf("models.VerifyUserMfaV1: failed to create a row: %w", err)
 	}
 
 	return nil

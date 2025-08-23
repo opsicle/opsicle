@@ -30,13 +30,13 @@ func LoadGlobal(from string) error {
 		if strings.Index(globalConfigPath, "~") == 0 {
 			homeDir, err := os.UserHomeDir()
 			if err != nil {
-				return fmt.Errorf("failed to derive user home directory: %s", err)
+				return fmt.Errorf("failed to derive user home directory: %w", err)
 			}
 			globalConfigPath = filepath.Join(homeDir, globalConfigPath[1:])
 		} else {
 			workingDir, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to derive working directory: %s", err)
+				return fmt.Errorf("failed to derive working directory: %w", err)
 			}
 			globalConfigPath = filepath.Join(workingDir, globalConfigPath)
 		}
@@ -57,10 +57,10 @@ func LoadGlobal(from string) error {
 	viper.SetConfigType("yaml")
 
 	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("failed to read configuration file: %s", err)
+		return fmt.Errorf("failed to read configuration file: %w", err)
 	}
 	if err := viper.Unmarshal(&Global); err != nil {
-		return fmt.Errorf("failed to parse configuration file: %s", err)
+		return fmt.Errorf("failed to parse configuration file: %w", err)
 	}
 	if isGlobalConfigLoaded {
 		Global.SourcePath = &globalConfigPath

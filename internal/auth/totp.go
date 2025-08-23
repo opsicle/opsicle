@@ -36,7 +36,7 @@ func GetTotpQrCode(opts GetTotpQrCodeOpts) (string, error) {
 
 	qr, err := qrcode.New(fmt.Sprintf("otpauth://totp/%s?%s", label, q.Encode()), qrcode.Low)
 	if err != nil {
-		return "", fmt.Errorf("failed to create qr code: %s", err)
+		return "", fmt.Errorf("failed to create qr code: %w", err)
 	}
 	var b strings.Builder
 	// Get the QR code bitmap
@@ -89,7 +89,7 @@ func CreateTotpTokens(secret string, validity time.Duration) ([]string, error) {
 		logrus.Infof("generating code for time: %s", forTime.Format("15:04:05"))
 		code, err := totp.GenerateCodeCustom(secret, forTime, totpOpts)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate totp token: %s", err)
+			return nil, fmt.Errorf("failed to generate totp token: %w", err)
 		}
 		results = append(results, code)
 	}

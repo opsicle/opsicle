@@ -19,7 +19,7 @@ flowchart TD;
   ui -->|via HTTP| controller
   cmd -->|uses as SDK| pcontroller
   pcontroller -->|provides SDK for| controller
-  controller -->|routes to| icontroller
+  controller -->|handles routing to handlers in| icontroller
   icontroller -->|uses| models
   models -->|queries| db
   db -.->|responds with data| models

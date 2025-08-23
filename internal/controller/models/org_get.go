@@ -43,12 +43,12 @@ func GetOrgV1(opts GetOrgV1Opts) (*Org, error) {
 		FROM orgs
 		WHERE %s = ?`, selectorField))
 	if err != nil {
-		return nil, fmt.Errorf("models.GetOrgV1: failed to prepare insert statement: %s", err)
+		return nil, fmt.Errorf("models.GetOrgV1: failed to prepare insert statement: %w", err)
 	}
 
 	res := stmt.QueryRow(selectorValue)
 	if res.Err() != nil {
-		return nil, fmt.Errorf("models.GetOrgV1: failed to query org using : %s", err)
+		return nil, fmt.Errorf("models.GetOrgV1: failed to query org using : %w", err)
 	}
 	var org Org
 	if err := res.Scan(
@@ -67,7 +67,7 @@ func GetOrgV1(opts GetOrgV1Opts) (*Org, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("models.GetOrgV1: failed to execute insert statement: %s", err)
+		return nil, fmt.Errorf("models.GetOrgV1: failed to execute insert statement: %w", err)
 	}
 	return &org, nil
 }

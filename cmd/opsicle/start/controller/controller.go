@@ -158,7 +158,7 @@ var Command = &cobra.Command{
 			Database:     viper.GetString("mysql-database"),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to establish connection to database: %s", err)
+			return fmt.Errorf("failed to establish connection to database: %w", err)
 		}
 		logrus.Debugf("established connection to database")
 
@@ -169,7 +169,7 @@ var Command = &cobra.Command{
 			Password:    viper.GetString("redis-password"),
 			ServiceLogs: serviceLogs,
 		}); err != nil {
-			return fmt.Errorf("failed to initialise redis cache: %s", err)
+			return fmt.Errorf("failed to initialise redis cache: %w", err)
 		}
 		logrus.Debugf("established connection to cache")
 
@@ -218,7 +218,7 @@ var Command = &cobra.Command{
 			publicUrl = fmt.Sprintf("http://%s", listenAddress)
 		}
 		if err := controller.SetPublicServerUrl(publicUrl); err != nil {
-			return fmt.Errorf("failed to set the public url: %s", err)
+			return fmt.Errorf("failed to set the public url: %w", err)
 		}
 		controllerHandler := controller.GetHttpApplication(controllerOpts)
 		logrus.Debugf("initialised application")
@@ -230,12 +230,12 @@ var Command = &cobra.Command{
 			ServiceLogs: serviceLogs,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create new http server: %s", err)
+			return fmt.Errorf("failed to create new http server: %w", err)
 		}
 		logrus.Debugf("initialised server")
 		logrus.Infof("starting server...")
 		if err := server.Start(); err != nil {
-			return fmt.Errorf("failed to start http server: %s", err)
+			return fmt.Errorf("failed to start http server: %w", err)
 		}
 		return nil
 	},

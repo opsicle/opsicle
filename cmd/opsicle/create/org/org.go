@@ -3,6 +3,7 @@ package org
 import (
 	"errors"
 	"fmt"
+	"opsicle/cmd/opsicle/create/org/user"
 	"opsicle/internal/cli"
 	"opsicle/internal/validate"
 	"opsicle/pkg/controller"
@@ -37,6 +38,7 @@ var flags cli.Flags = cli.Flags{
 }
 
 func init() {
+	Command.AddCommand(user.Command)
 	flags.AddToCommand(Command)
 }
 
@@ -63,7 +65,7 @@ var Command = &cobra.Command{
 			Id: "opsicle/create/org",
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create controller client: %s", err)
+			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
 		output, err := client.ValidateSessionV1()
@@ -124,7 +126,7 @@ var Command = &cobra.Command{
 		})
 		prompt := tea.NewProgram(model)
 		if _, err := prompt.Run(); err != nil {
-			return fmt.Errorf("failed to get user input: %s", err)
+			return fmt.Errorf("failed to get user input: %w", err)
 		}
 		if model.GetExitCode() == cli.PromptCancelled {
 			return errors.New("user cancelled")

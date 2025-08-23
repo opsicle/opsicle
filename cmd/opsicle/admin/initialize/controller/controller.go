@@ -46,7 +46,7 @@ var Command = &cobra.Command{
 		model := getModel()
 		program := tea.NewProgram(model)
 		if _, err := program.Run(); err != nil {
-			return fmt.Errorf("failed to get user input: %s", err)
+			return fmt.Errorf("failed to get user input: %w", err)
 		}
 		adminApiToken := model.GetAdminApiToken()
 		adminEmail := model.GetEmail()
@@ -62,7 +62,7 @@ var Command = &cobra.Command{
 			Id:            "opsicle/login",
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create controller client: %s", err)
+			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 		initOutput, err := client.InitV1(controller.InitV1Input{
 			AdminApiToken: adminApiToken,
@@ -70,7 +70,7 @@ var Command = &cobra.Command{
 			Password:      adminPassword,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create `root` organisation and user: %s", err)
+			return fmt.Errorf("failed to create `root` organisation and user: %w", err)
 		}
 
 		logrus.Debugf("created user[%s] in org[%s]", initOutput.Data.UserId, initOutput.Data.OrgId)

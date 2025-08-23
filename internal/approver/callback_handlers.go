@@ -79,7 +79,7 @@ func handleCallback(opts handleCallbackOpts) error {
 	switch callbackType {
 	case approvals.CallbackWebhook:
 		if err := handleWebhookCallback(opts); err != nil {
-			return fmt.Errorf("failed to process webhook callback: %s", err)
+			return fmt.Errorf("failed to process webhook callback: %w", err)
 		}
 	default:
 		return fmt.Errorf("failed to handle callback of type[%s]", callback.Type)
@@ -102,7 +102,7 @@ func handleWebhookCallback(opts handleCallbackOpts) error {
 	webhookClient := getWebhookCallbackClient()
 	webhookRequest, err := getWebhookCallbackRequest(*webhook)
 	if err != nil {
-		return fmt.Errorf("failed to create webhook callback request: %s", err)
+		return fmt.Errorf("failed to create webhook callback request: %w", err)
 	}
 	approvalData, _ := json.Marshal(opts.Req.Spec.Approval)
 	webhookRequest.Body = io.NopCloser(bytes.NewBuffer(approvalData))

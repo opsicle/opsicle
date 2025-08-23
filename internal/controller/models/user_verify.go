@@ -32,12 +32,12 @@ func VerifyUserV1(opts VerifyUserV1Opts) (*User, error) {
 	sqlArgs := []any{opts.VerificationCode}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return nil, fmt.Errorf("models.VerifyUserV1: failed to prepare insert statement: %s", err)
+		return nil, fmt.Errorf("models.VerifyUserV1: failed to prepare insert statement: %w", err)
 	}
 
 	row := stmt.QueryRow(sqlArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("models.VerifyUserV1: failed to query statement: %s", err)
+		return nil, fmt.Errorf("models.VerifyUserV1: failed to query statement: %w", err)
 	}
 	userInstance := User{}
 	if err := row.Scan(
@@ -54,7 +54,7 @@ func VerifyUserV1(opts VerifyUserV1Opts) (*User, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("no rows found: %w", ErrorNotFound)
 		}
-		return nil, fmt.Errorf("failed to get user row: %s", err)
+		return nil, fmt.Errorf("failed to get user row: %w", err)
 	}
 
 	sqlStmt = `
@@ -73,12 +73,12 @@ func VerifyUserV1(opts VerifyUserV1Opts) (*User, error) {
 	}
 	stmt, err = opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return nil, fmt.Errorf("models.VerifyUserV1: failed to prepare insert statement: %s", err)
+		return nil, fmt.Errorf("models.VerifyUserV1: failed to prepare insert statement: %w", err)
 	}
 
 	_, err = stmt.Exec(sqlArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("models.VerifyUserV1: failed to query statement: %s", err)
+		return nil, fmt.Errorf("models.VerifyUserV1: failed to query statement: %w", err)
 	}
 
 	return &userInstance, nil

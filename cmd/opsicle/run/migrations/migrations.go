@@ -80,7 +80,7 @@ var Command = &cobra.Command{
 			Database:     viper.GetString("db-name"),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to connect to mysql: %s", err)
+			return fmt.Errorf("failed to connect to mysql: %w", err)
 		}
 		steps := viper.GetInt("steps")
 		if err := database.MigrateMysql(database.MigrateOpts{
@@ -88,7 +88,7 @@ var Command = &cobra.Command{
 			Steps:       steps,
 			ServiceLogs: serviceLogs,
 		}); err != nil {
-			return fmt.Errorf("failed to migrate mysql: %s", err)
+			return fmt.Errorf("failed to migrate mysql: %w", err)
 		}
 
 		<-time.After(500 * time.Millisecond)

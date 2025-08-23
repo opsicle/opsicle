@@ -55,7 +55,7 @@ var Command = &cobra.Command{
 			Id:          fmt.Sprintf("%s/opsicle-get-approval-request", hostname),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create client for approver service: %s", err)
+			return fmt.Errorf("failed to create client for approver service: %w", err)
 		}
 
 		approvalRequest, err := client.GetApprovalRequest(requestUuid)

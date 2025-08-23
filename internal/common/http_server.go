@@ -22,7 +22,7 @@ func (s *HttpServer) Start() error {
 	}()
 
 	if err := s.Server.ListenAndServe(); err != nil {
-		return fmt.Errorf("failed to start server: %s", err)
+		return fmt.Errorf("failed to start server: %w", err)
 	}
 	return nil
 }

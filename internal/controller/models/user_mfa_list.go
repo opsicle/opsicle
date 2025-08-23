@@ -64,12 +64,12 @@ func ListUserMfasV1(opts ListUserMfasV1Opts) (UserMfas, error) {
 	sqlArgs := []any{selectorValue}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return nil, fmt.Errorf("models.ListUserMfasV1: failed to prepare insert statement: %s", err)
+		return nil, fmt.Errorf("models.ListUserMfasV1: failed to prepare insert statement: %w", err)
 	}
 
 	rows, err := stmt.Query(sqlArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("models.ListUserMfasV1: failed to query: %s", err)
+		return nil, fmt.Errorf("models.ListUserMfasV1: failed to query: %w", err)
 	}
 
 	output := UserMfas{}
@@ -87,7 +87,7 @@ func ListUserMfasV1(opts ListUserMfasV1Opts) (UserMfas, error) {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, nil
 			}
-			return nil, fmt.Errorf("models.ListUserMfasV1: failed to get a user_mfa row: %s", err)
+			return nil, fmt.Errorf("models.ListUserMfasV1: failed to get a user_mfa row: %w", err)
 		}
 		output = append(output, userMfa)
 	}

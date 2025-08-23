@@ -93,17 +93,17 @@ func (o *Org) AddUserV1(opts AddUserToOrgV1) error {
 	sqlArgs := []any{*o.Id, opts.UserId}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return fmt.Errorf("org.Org.AddUserV1: failed to prepare insert statement: %s", err)
+		return fmt.Errorf("org.Org.AddUserV1: failed to prepare insert statement: %w", err)
 	}
 
 	res, err := stmt.Exec(sqlArgs...)
 	if err != nil {
-		return fmt.Errorf("org.Org.AddUserV1: failed to execute insert statement: %s", err)
+		return fmt.Errorf("org.Org.AddUserV1: failed to execute insert statement: %w", err)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("org.Org.AddUserV1: failed to retrieve the number of rows affected: %s", err)
+		return fmt.Errorf("org.Org.AddUserV1: failed to retrieve the number of rows affected: %w", err)
 	}
 	if rowsAffected != 1 {
 		return fmt.Errorf("org.Org.AddUserV1: failed to insert only 1 user")
@@ -134,12 +134,12 @@ func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*User, error) {
 	sqlArgs := []any{*o.Id, opts.UserId}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return nil, fmt.Errorf("models.Org.GetUserV1: failed to prepare select statement: %s", err)
+		return nil, fmt.Errorf("models.Org.GetUserV1: failed to prepare select statement: %w", err)
 	}
 
 	res := stmt.QueryRow(sqlArgs...)
 	if res.Err() != nil {
-		return nil, fmt.Errorf("models.Org.GetUserV1: failed to execute select statement: %s", err)
+		return nil, fmt.Errorf("models.Org.GetUserV1: failed to execute select statement: %w", err)
 	}
 	var userInstance User
 	userInstance.Org = &Org{}
@@ -153,7 +153,7 @@ func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*User, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("models.Org.GetUserV1: failed to load selected data into memory: %s", err)
+		return nil, fmt.Errorf("models.Org.GetUserV1: failed to load selected data into memory: %w", err)
 	}
 
 	return &userInstance, nil
@@ -173,18 +173,18 @@ func (o *Org) LoadUserCountV1(opts LoadOrgUserCountV1Opts) (int, error) {
 	sqlArgs := []any{*o.Id}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return -1, fmt.Errorf("models.Org.GetUserCountV1: failed to prepare select statement: %s", err)
+		return -1, fmt.Errorf("models.Org.GetUserCountV1: failed to prepare select statement: %w", err)
 	}
 
 	res := stmt.QueryRow(sqlArgs...)
 	if res.Err() != nil {
-		return -1, fmt.Errorf("models.Org.GetUserCountV1: failed to execute select statement: %s", err)
+		return -1, fmt.Errorf("models.Org.GetUserCountV1: failed to execute select statement: %w", err)
 	}
 	if err := res.Scan(&o.UserCount); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return -1, nil
 		}
-		return -1, fmt.Errorf("models.Org.GetUserCountV1: failed to load selected data into memory: %s", err)
+		return -1, fmt.Errorf("models.Org.GetUserCountV1: failed to load selected data into memory: %w", err)
 	}
 
 	return *o.UserCount, nil
