@@ -4,7 +4,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/google/uuid"
+)
+
+const (
+	OrgMemberAdmin    = "admin"
+	OrgMemberOperator = "operator"
+	OrgMemberManager  = "manager"
+	OrgMemberMember   = "member"
 )
 
 type Org struct {
@@ -88,7 +98,8 @@ func (o *Org) AddUserV1(opts AddUserToOrgV1) error {
 	sqlStmt := `
 	INSERT INTO org_users(
 		org_id,
-		user_id
+		user_id,
+		type
 	) VALUES (?, ?)`
 	sqlArgs := []any{*o.Id, opts.UserId}
 	stmt, err := opts.Db.Prepare(sqlStmt)
@@ -111,10 +122,15 @@ func (o *Org) AddUserV1(opts AddUserToOrgV1) error {
 	return nil
 }
 
+func (o Org) GetId() string {
+	return *o.Id
+}
+
 type GetOrgUserV1Opts struct {
 	Db *sql.DB
 
 	UserId string
+	OrgId  *string
 }
 
 func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*User, error) {
@@ -124,6 +140,7 @@ func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*User, error) {
 			users.id,
 			orgs.id,
 			orgs.code,
+			org_users.type,
 			org_users.joined_at
 			FROM org_users
 				JOIN orgs ON orgs.id = org_users.org_id
@@ -148,15 +165,91 @@ func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*User, error) {
 		&userInstance.Id,
 		&userInstance.Org.Id,
 		&userInstance.Org.Code,
+		&userInstance.Org.MemberType,
 		&userInstance.JoinedOrgAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+			return nil, ErrorNotFound
 		}
 		return nil, fmt.Errorf("models.Org.GetUserV1: failed to load selected data into memory: %w", err)
 	}
 
 	return &userInstance, nil
+}
+
+type InviteOrgUserV1Opts struct {
+	Db *sql.DB
+
+	AcceptorId    *string
+	AcceptorEmail *string
+	InviterId     string
+	JoinCode      string
+}
+
+type InviteUserV1Output struct {
+	InvitationId   string `json:"invitationId"`
+	IsExistingUser bool   `json:"isExistingUser"`
+}
+
+func (o *Org) InviteUserV1(opts InviteOrgUserV1Opts) (*InviteUserV1Output, error) {
+	invitationId := uuid.NewString()
+	sqlInserts := []string{
+		"id",
+		"org_id",
+		"inviter_id",
+		"join_code",
+		"type",
+	}
+	sqlArgs := []any{
+		invitationId,
+		o.GetId(),
+		opts.InviterId,
+		opts.JoinCode,
+		OrgMemberMember,
+	}
+	isExistingUser := false
+	if opts.AcceptorId != nil {
+		sqlInserts = append(sqlInserts, "acceptor_id")
+		sqlArgs = append(sqlArgs, *opts.AcceptorId)
+		isExistingUser = true
+	} else if opts.AcceptorEmail != nil {
+		sqlInserts = append(sqlInserts, "acceptor_email")
+		sqlArgs = append(sqlArgs, *opts.AcceptorEmail)
+	} else {
+		return nil, fmt.Errorf("failed to receive either acceptor email or id: %w", ErrorInvalidInput)
+	}
+	sqlPlaceholders := []string{}
+	for range len(sqlInserts) {
+		sqlPlaceholders = append(sqlPlaceholders, "?")
+	}
+	sqlStmt := fmt.Sprintf(
+		"INSERT INTO org_user_invitations(%s) VALUES (%s)",
+		strings.Join(sqlInserts, ", "),
+		strings.Join(sqlPlaceholders, ", "),
+	)
+	stmt, err := opts.Db.Prepare(sqlStmt)
+	if err != nil {
+		return nil, fmt.Errorf("org.Org.InviteUserV1: failed to prepare insert statement: %w", err)
+	}
+	res, err := stmt.Exec(sqlArgs...)
+	if err != nil {
+		if isMysqlDuplicateError(err) {
+			return nil, fmt.Errorf("org.Org.InviteUserV1: invite already exists (%w): %w", ErrorDuplicateEntry, err)
+		}
+		return nil, fmt.Errorf("org.Org.InviteUserV1: failed to execute insert statement: %w", err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("org.Org.InviteUserV1: failed to retrieve the number of rows affected: %w", err)
+	}
+	if rowsAffected != 1 {
+		return nil, fmt.Errorf("org.Org.InviteUserV1: failed to insert only 1 user")
+	}
+	return &InviteUserV1Output{
+		InvitationId:   invitationId,
+		IsExistingUser: isExistingUser,
+	}, nil
 }
 
 type LoadOrgUserCountV1Opts struct {

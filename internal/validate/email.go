@@ -42,6 +42,10 @@ func Email(email string) error {
 		errs = append(errs, ErrorEmailInvalidAt)
 	}
 
+	if at < 0 {
+		return errors.Join(errs...)
+	}
+
 	user := email[:at]
 	domain := email[at+1:]
 	if len(domain) == 0 {

@@ -18,7 +18,10 @@
 - Commands go into `/cmd/*`; the root command package is contained in a directory in `./cmd`, with each subfolder being a sub-command
 - SDKs for other Go apps to use is in `./pkg`
 - Internal controllers are in `./internal`
-- 
+
+## Error messages
+- All errors should be in americaniZed english, meaning use 'z' over 's' in examples like 'authorized', 'unauthorized'
+
 ## Struct tags
 - Always include both `json` and `yaml` tags in **camelCase** on exported fields.
 - Example:

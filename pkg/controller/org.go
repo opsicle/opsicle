@@ -1,11 +1,9 @@
 package controller
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"opsicle/internal/common"
 	"time"
 )
 
@@ -33,16 +31,64 @@ func (c Client) CreateOrgV1(input CreateOrgV1Input) (*CreateOrgV1Output, error) 
 		Data:   input,
 		Output: &outputData,
 	})
+	var output *CreateOrgV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &CreateOrgV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
 	if err != nil {
 		switch outputClient.GetErrorCode().Error() {
 		case ErrorOrgExists.Error():
 			err = ErrorOrgExists
 		}
 	}
-	return &CreateOrgV1Output{
-		Data:     outputData,
-		Response: outputClient.Response,
-	}, err
+	return output, err
+}
+
+type CreateOrgUserV1Input struct {
+	Email                 string `json:"email"`
+	OrgId                 string `json:"-"`
+	IsTriggerEmailEnabled bool   `json:"isTriggerEmailEnabled"`
+}
+
+type CreateOrgUserV1Output struct {
+	Data CreateOrgUserV1OutputData
+
+	http.Response
+}
+
+type CreateOrgUserV1OutputData struct {
+	Id             string `json:"id"`
+	JoinCode       string `json:"joinCode"`
+	IsExistingUser bool   `json:"isExistingUser"`
+}
+
+func (c Client) CreateOrgUserV1(input CreateOrgUserV1Input) (*CreateOrgUserV1Output, error) {
+	var outputData CreateOrgUserV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodPost,
+		Path:   fmt.Sprintf("/api/v1/org/%s/member", input.OrgId),
+		Data:   input,
+		Output: &outputData,
+	})
+	var output *CreateOrgUserV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &CreateOrgUserV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorInvitationExists.Error():
+			err = ErrorInvitationExists
+		case ErrorUserExistsInOrg.Error():
+			err = ErrorUserExistsInOrg
+		}
+	}
+	return output, err
 }
 
 type ListOrgsV1Output struct {
@@ -71,77 +117,84 @@ func (c Client) ListOrgsV1() (*ListOrgsV1Output, error) {
 		Path:   "/api/v1/orgs",
 		Output: &outputData,
 	})
-	return &ListOrgsV1Output{
-		Data:     outputData,
-		Response: outputClient.Response,
-	}, err
+	var output *ListOrgsV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &ListOrgsV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
 }
 
+type ListOrgInvitationsV1Output struct {
+	Data ListOrgInvitationsV1OutputData
+
+	http.Response
+}
+
+type ListOrgInvitationsV1OutputData struct {
+	Invitations []ListOrgInvitationsV1OutputDataOrg `json:"invitations"`
+}
+
+type ListOrgInvitationsV1OutputDataOrg struct {
+	Id           string    `json:"id"`
+	InvitedAt    time.Time `json:"invitedAt"`
+	InviterId    string    `json:"inviterId"`
+	InviterEmail string    `json:"inviterEmail"`
+	JoinCode     string    `json:"joinCode"`
+	OrgCode      string    `json:"orgCode"`
+	OrgName      string    `json:"orgName"`
+}
+
+func (c Client) ListOrgInvitationsV1() (*ListOrgInvitationsV1Output, error) {
+	var outputData ListOrgInvitationsV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   "/api/v1/user/org-invitations",
+		Output: &outputData,
+	})
+	var output *ListOrgInvitationsV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &ListOrgInvitationsV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
+}
+
+type GetOrgV1Input struct {
+	Code string `json:"code"`
+}
 type GetOrgV1Output struct {
 	Data GetOrgV1OutputData
 	http.Response
 }
 
 type GetOrgV1OutputData struct {
-	Id         string     `json:"id"`
-	Code       string     `json:"code"`
-	Type       string     `json:"type"`
-	Logo       *string    `json:"logo"`
-	Icon       *string    `json:"icon"`
-	Motd       *string    `json:"motd"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	UpdatedAt  *time.Time `json:"updatedAt"`
-	IsDeleted  bool       `json:"isDeleted"`
-	DeletedAt  *time.Time `json:"deletedAt"`
-	IsDisabled bool       `json:"isDisabled"`
-	DisabledAt *time.Time `json:"disabledAt"`
-	UserCount  int        `json:"userCount"`
+	Code      string     `json:"code"`
+	CreatedAt time.Time  `json:"createdAt"`
+	Id        string     `json:"id"`
+	Name      string     `json:"name"`
+	Type      string     `json:"type"`
+	UpdatedAt *time.Time `json:"updatedAt"`
 }
 
-// GetOrgV1 retrieves the current organisation
-func (c Client) GetOrgV1() (*GetOrgV1Output, error) {
-	controllerUrl := *c.ControllerUrl
-	controllerUrl.Path = "/api/v1/org"
-	httpRequest, err := http.NewRequest(
-		http.MethodGet,
-		controllerUrl.String(),
-		nil,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create http request to create a session: %w", err)
+// GetOrgV1 retrieves the specified organisation using the org's codeword
+func (c Client) GetOrgV1(input GetOrgV1Input) (*GetOrgV1Output, error) {
+	var outputData GetOrgV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/org/%s", input.Code),
+		Output: &outputData,
+	})
+	var output *GetOrgV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &GetOrgV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
 	}
-	httpRequest.Header.Add("Content-Type", "application/json")
-	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle/controller-sdk/client-%s", c.Id))
-	if c.BasicAuth != nil {
-		httpRequest.SetBasicAuth(c.BasicAuth.Username, c.BasicAuth.Password)
-	}
-	if c.BearerAuth != nil {
-		httpRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.BearerAuth.Token))
-	}
-	httpResponse, err := c.HttpClient.Do(httpRequest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute http request to create session: %w", err)
-	}
-	output := GetOrgV1Output{Response: *httpResponse}
-	responseBody, err := io.ReadAll(httpResponse.Body)
-	if err != nil {
-		return &output, fmt.Errorf("failed to read response body: %w", err)
-	}
-	if httpResponse.StatusCode != http.StatusOK {
-		return &output, fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
-	}
-	var response common.HttpResponse
-	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return &output, fmt.Errorf("failed to parse response from controller service: %w", err)
-	}
-	responseData, err := json.Marshal(response.Data)
-	if err != nil {
-		return &output, fmt.Errorf("failed to parse response data from controller service: %w", err)
-	}
-	var data GetOrgV1OutputData
-	if err := json.Unmarshal(responseData, &data); err != nil {
-		return &output, fmt.Errorf("failed to unmarshal response data into output: %w", err)
-	}
-	output.Data = data
-	return &output, nil
+	return output, err
 }

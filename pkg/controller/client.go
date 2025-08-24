@@ -75,8 +75,11 @@ func NewClient(opts NewClientOpts) (*Client, error) {
 	client.ControllerUrl = controllerUrl
 
 	healthcheckOutput, err := client.HealthcheckPing()
-	if err != nil || healthcheckOutput.Status != "success" {
-		return nil, fmt.Errorf("failed to check health of controller: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("%w[failed to check health of controller]: %w", ErrorHealthcheckFailed, err)
+	}
+	if healthcheckOutput.Data.Status != "ok" {
+		return nil, fmt.Errorf("%w[controller repsonded with unhealthy]: %w", ErrorHealthcheckFailed, err)
 	}
 
 	return client, nil

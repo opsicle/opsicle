@@ -21,6 +21,12 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "defines the url where the controller service is accessible at",
 		Type:         cli.FlagTypeString,
 	},
+	{
+		Name:         "org",
+		DefaultValue: "",
+		Usage:        "code of the orgnaisation to be created",
+		Type:         cli.FlagTypeString,
+	},
 }
 
 func init() {
@@ -57,7 +63,9 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create client for approver service: %w", err)
 		}
 
-		org, err := client.GetOrgV1()
+		org, err := client.GetOrgV1(controller.GetOrgV1Input{
+			Code: viper.GetString("org"),
+		})
 		if err != nil {
 			if org.StatusCode == http.StatusUnauthorized {
 				if err := controller.DeleteSessionToken(); err != nil {
@@ -67,8 +75,19 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to retrieve current organisation: %w", err)
 		}
 
-		o, _ := json.MarshalIndent(org, "", "  ")
-		fmt.Println(string(o))
+		switch viper.GetString("output") {
+		case "json":
+			o, _ := json.MarshalIndent(org.Data, "", "  ")
+			fmt.Println(string(o))
+		case "text":
+			fallthrough
+		default:
+			fmt.Printf("Id: %s\n", org.Data.Id)
+			fmt.Printf("Name: %s\n", org.Data.Name)
+			fmt.Printf("Code: %s\n", org.Data.Code)
+			fmt.Printf("CreatedAt: %s\n", org.Data.CreatedAt.Local().Format("Jan 2 2006 03:04:05 PM"))
+		}
+
 		return nil
 	},
 }

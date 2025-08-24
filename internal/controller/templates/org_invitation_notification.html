@@ -1,0 +1,101 @@
+<!DOCTYPE html PUBLIC “-//W3C//DTD XHTML 1.0 Transitional//EN” “https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd”>
+<html xmlns=“https://www.w3.org/1999/xhtml”>
+<head>
+  <title>Verify your Opsicle account email to get started</title>
+  <meta http–equiv=“Content-Type” content=“text/html; charset=UTF-8” />
+  <meta http–equiv=“X-UA-Compatible” content=“IE=edge” />
+  <meta name=“viewport” content=“width=device-width, initial-scale=1.0 “ />
+  <style>
+    /* add styles here */
+    a {
+      color: #1e70b8;
+    }
+    code {
+      font-family: Menlo, Consolas, Monaco, "Courier New", monospace !important;
+      color: #1e70b8;
+      background-color: #f1f1f1; 
+      padding: 2px 4px;
+      border-radius: 8px;
+      margin: 0px;
+    }
+    pre {
+      background-color: #111111;
+      color: #eeeeee;
+      display: block;
+      padding: 8px;
+      text-align: center;
+    }
+    img {
+      border-radius: 8px;
+      max-width: 100%;
+    }
+    a.cta-button {
+      background-color: #1e70b8;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      display: block;
+      width: fit-content !important;
+      margin: 2rem auto;
+      text-align: center;
+      transition: background-color 0.2s ease;
+    }
+    a.cta-button:hover {
+      background-color: #155a91; /* slightly darker blue on hover */
+    }
+    div.message {
+      border-radius: 8px;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="message">
+    <center>
+      <img src="cid:cat.png" alt="Opsicat says 'Join your team, ${ORG_NAME}, on Opsicle, meow!'" />
+      <h1>Hi there!</h1>
+    </center>
+
+    <p>
+      <code>${INVITER_EMAIL}</code> has invited you to join the organisation ${ORG_NAME} (<code>${ORG_CODE}</code>) on
+      Opsicle!
+    </p>
+
+    <p>
+      This request came from the IP address <code>${REMOTE_ADDR}</code> with the
+      user agent <code>${USER_AGENT}</code>.
+    </p>
+    <p>
+      If this looks valid, the join code you can use is:
+    </p>
+    <pre>${JOIN_CODE}</pre>
+    <!--<p>
+      You can also click the button below to verify your email address:
+    </p>
+
+    <a class="cta-button" href="${CONTROLLER_URL}/api/v1/verification/${EMAIL_VERIFICATION_CODE}" target="_blank">
+      Verify my Email
+    </a>-->
+
+    <p>
+      If this wasn't you and you have no idea why you're receiving this email,
+      please email us at <a href="mailto:abuse@opsicle.io">abuse@opsicle.io</a>.
+    </p>
+
+    <p>
+      With cats and love, <br />
+      Opsicle
+    </p>
+
+    <center>
+      <img src="cid:cat.png" alt="Opsicat says 'Join your team, ${ORG_NAME}, on Opsicle, meow!'" />
+    </center>
+  </div>
+</body>

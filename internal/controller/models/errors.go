@@ -1,18 +1,34 @@
 package models
 
-import "fmt"
+import (
+	"errors"
+
+	"github.com/go-sql-driver/mysql"
+)
 
 var (
-	ErrorCredentialsAuthenticationFailed = fmt.Errorf("credentials_authentication_failed")
-	ErrorDuplicateEntry                  = fmt.Errorf("duplicate_entry")
-	ErrorNotFound                        = fmt.Errorf("not_found")
-	ErrorUnknown                         = fmt.Errorf("unknown_error")
-	ErrorUserEmailNotVerified            = fmt.Errorf("email_not_verified")
-	ErrorUserDisabled                    = fmt.Errorf("user_disabled")
-	ErrorUserDeleted                     = fmt.Errorf("user_deleted")
+	ErrorCredentialsAuthenticationFailed = errors.New("credentials_authentication_failed")
+	ErrorDuplicateEntry                  = errors.New("duplicate_entry")
+	ErrorNotFound                        = errors.New("not_found")
+	ErrorUnknown                         = errors.New("unknown_error")
+	ErrorUserEmailNotVerified            = errors.New("email_not_verified")
+	ErrorUserDisabled                    = errors.New("user_disabled")
+	ErrorUserDeleted                     = errors.New("user_deleted")
 
-	errorNoDatabaseConnection  = fmt.Errorf("no_database_connection")
-	errorInputValidationFailed = fmt.Errorf("input_validation_failed")
+	ErrorInvalidInput = errors.New("invalid_input")
+
+	errorNoDatabaseConnection  = errors.New("no_database_connection")
+	errorInputValidationFailed = errors.New("input_validation_failed")
 
 	mysqlErrorDuplicateEntryCode uint16 = 1062
 )
+
+func isMysqlDuplicateError(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	if errors.As(err, &mysqlErr) {
+		if mysqlErr.Number == mysqlErrorDuplicateEntryCode {
+			return true
+		}
+	}
+	return false
+}

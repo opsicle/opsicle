@@ -22,7 +22,9 @@ func main() {
 }
 
 func handleError(err error) {
-	logrus.Debugf("Exiting due to error: %s\n", err)
+	if err != nil {
+		logrus.Errorf("Exiting due to error: %s\n", err)
+	}
 	switch true {
 	case errors.Is(err, controller.ErrorConnectionRefused):
 		fmt.Println("⚠️  The controller instance you are trying to connect to does not seem accessible")

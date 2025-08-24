@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,16 +42,20 @@ func (c Client) CreateUserV1(input CreateUserV1Input) (*CreateUserV1Output, erro
 		Data:   input,
 		Output: &outputData,
 	})
+	var output *CreateUserV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &CreateUserV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
 	if err != nil {
 		switch outputClient.GetErrorCode().Error() {
 		case ErrorEmailExists.Error():
 			err = ErrorEmailExists
 		}
 	}
-	return &CreateUserV1Output{
-		Data:     outputData,
-		Response: outputClient.Response,
-	}, err
+	return output, err
 }
 
 type ListUsersV1Output struct {
@@ -144,8 +149,12 @@ func (c Client) VerifyUserV1(opts VerifyUserV1Input) (*VerifyUserV1Output, error
 		Path:   fmt.Sprintf("/api/v1/verification/%s", opts.Code),
 		Output: &outputData,
 	})
-	return &VerifyUserV1Output{
-		Data:     outputData,
-		Response: outputClient.GetResponse(),
-	}, err
+	var output *VerifyUserV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &VerifyUserV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
 }

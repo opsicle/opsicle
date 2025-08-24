@@ -32,6 +32,7 @@ func registerUserRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/mfa/{mfaId}", requiresAuth(http.HandlerFunc(handleVerifyUserMfaV1))).Methods(http.MethodPost)
 	v1.Handle("/mfas", requiresAuth(http.HandlerFunc(handleListUserMfasV1))).Methods(http.MethodGet)
 	v1.HandleFunc("/mfas", handleListUserMfaTypesV1).Methods(http.MethodOptions)
+	v1.Handle("/org-invitations", requiresAuth(http.HandlerFunc(handleListUserOrgInvitationsV1))).Methods(http.MethodGet)
 
 	v1 = opts.Router.PathPrefix("/v1/verification").Subrouter()
 
@@ -64,19 +65,19 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", err)
 		return
 	}
-	var requestData handleCreateUserV1Input
-	if err := json.Unmarshal(requestBody, &requestData); err != nil {
+	var input handleCreateUserV1Input
+	if err := json.Unmarshal(requestBody, &input); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", err)
 		return
 	}
 
-	log(common.LogLevelDebug, fmt.Sprintf("processing request to create user[%s]", requestData.Email))
+	log(common.LogLevelDebug, fmt.Sprintf("processing request to create user[%s]", input.Email))
 
-	if _, err := auth.IsEmailValid(requestData.Email); err != nil {
+	if _, err := auth.IsEmailValid(input.Email); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid email address", err)
 		return
 	}
-	if _, err := auth.IsPasswordValid(requestData.Password); err != nil {
+	if _, err := auth.IsPasswordValid(input.Password); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid password", err)
 		return
 	}
@@ -84,8 +85,8 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	if err := models.CreateUserV1(models.CreateUserV1Opts{
 		Db: db,
 
-		Email:    requestData.Email,
-		Password: requestData.Password,
+		Email:    input.Email,
+		Password: input.Password,
 		Type:     models.TypeUser,
 	}); err != nil {
 		if errors.Is(err, models.ErrorDuplicateEntry) {
@@ -99,11 +100,36 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	user, err := models.GetUserV1(models.GetUserV1Opts{
 		Db: db,
 
-		Email: &requestData.Email,
+		Email: &input.Email,
 	})
 	if err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", err)
 		return
+	}
+
+	listOrgInvitations, err := models.ListOrgInvitationsV1(models.ListOrgInvitationsV1Opts{
+		Db:        db,
+		UserEmail: &input.Email,
+	})
+	if err != nil {
+		if !errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", err)
+			return
+		}
+	}
+	for _, orgInvitation := range listOrgInvitations {
+		var orgInvitationReplacementErrs []error
+		orgInvitation.AcceptorId = user.Id
+		if err := orgInvitation.ReplaceAcceptorEmailWithId(models.ReplaceAcceptorEmailWithIdOpts{
+			Db: db,
+		}); err != nil {
+			orgInvitationReplacementErrs = append(orgInvitationReplacementErrs, err)
+		}
+		if len(orgInvitationReplacementErrs) > 0 {
+			log(common.LogLevelError, fmt.Sprintf("failed to process org invitations for user[%s]: %s", *user.Id, errors.Join(orgInvitationReplacementErrs...)))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to convert user's invitations", err)
+			return
+		}
 	}
 
 	if !user.IsVerified() {
@@ -301,7 +327,54 @@ func handleListUserMfasV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userMfas.GetRedacted())
+}
 
+type handleListUserOrgInvitationsV1Output struct {
+	Invitations []userOrgInvitation `json:"invitations"`
+}
+
+type userOrgInvitation struct {
+	Id           string    `json:"id"`
+	InvitedAt    time.Time `json:"invitedAt"`
+	InviterId    string    `json:"inviterId"`
+	InviterEmail string    `json:"inviterEmail"`
+	JoinCode     string    `json:"joinCode"`
+	OrgCode      string    `json:"orgCode"`
+	OrgName      string    `json:"orgName"`
+}
+
+func handleListUserOrgInvitationsV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	log(common.LogLevelDebug, fmt.Sprintf("retrieving org invitations for user[%s]", session.UserId))
+
+	listOrgInvitations, err := models.ListOrgInvitationsV1(models.ListOrgInvitationsV1Opts{
+		Db:     db,
+		UserId: &session.UserId,
+	})
+	if err != nil {
+		if !errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", err)
+			return
+		}
+	}
+	output := handleListUserOrgInvitationsV1Output{Invitations: []userOrgInvitation{}}
+	for _, orgInvitation := range listOrgInvitations {
+		output.Invitations = append(
+			output.Invitations,
+			userOrgInvitation{
+				Id:           orgInvitation.Id,
+				InvitedAt:    orgInvitation.CreatedAt,
+				InviterId:    orgInvitation.InviterId,
+				InviterEmail: *orgInvitation.InviterEmail,
+				JoinCode:     orgInvitation.JoinCode,
+				OrgCode:      *orgInvitation.OrgCode,
+				OrgName:      *orgInvitation.OrgName,
+			},
+		)
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
 type handleListUserMfaTypesV1Response []handleListUserMfaTypesV1ResponseType

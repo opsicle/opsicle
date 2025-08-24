@@ -34,6 +34,25 @@ CREATE TABLE IF NOT EXISTS `orgs` (
     `disabled_at` DATETIME,
     FOREIGN KEY (created_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE
 );
+CREATE TABLE `org_user_invitations` (
+    `id`              VARCHAR(36) NOT NULL,
+    `inviter_id`      VARCHAR(36) NOT NULL,
+    `acceptor_id`     VARCHAR(36) NULL,
+    `acceptor_email`  VARCHAR(255) NULL,
+    `org_id`          VARCHAR(36) NOT NULL,
+    `join_code`       VARCHAR(32) NOT NULL,
+    `type`            VARCHAR(64) NOT NULL DEFAULT 'member',
+    `created_at`      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `last_updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (`id`),
+    CONSTRAINT `fk_org_user_invitations_inviter` FOREIGN KEY (`inviter_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+    CONSTRAINT `fk_org_user_invitations_acceptor` FOREIGN KEY (`acceptor_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+    CONSTRAINT `fk_org_user_invitations_org` FOREIGN KEY (`org_id`) REFERENCES `orgs` (`id`) ON DELETE CASCADE,
+    UNIQUE KEY `uk_org_user_invitations_join_code` (`join_code`),
+    UNIQUE KEY `uk_org_user_invitations_email_org` (`acceptor_email`, `org_id`),
+    UNIQUE KEY `uk_org_user_invitations_user_org` (`acceptor_id`, `org_id`)
+);
 CREATE TABLE IF NOT EXISTS `groups` (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
