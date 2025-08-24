@@ -12,6 +12,7 @@ import (
 	"opsicle/internal/controller/templates"
 	"opsicle/internal/email"
 	"opsicle/internal/validate"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -25,6 +26,7 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleCreateOrgV1))).Methods(http.MethodPost)
 	v1.Handle("/{orgCode}", requiresAuth(http.HandlerFunc(handleGetOrgV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleCreateOrgUserV1))).Methods(http.MethodPost)
+	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateOrgInvitationV1))).Methods(http.MethodPatch)
 
 	v1 = opts.Router.PathPrefix("/v1/orgs").Subrouter()
 
@@ -407,4 +409,108 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		IsExistingUser: invitationOutput.IsExistingUser,
 	}
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleUpdateOrgInvitationV1Output struct {
+	JoinedAt       time.Time `json:"joinedAt"`
+	MembershipType string    `json:"membershipType"`
+	OrgId          string    `json:"orgId"`
+	OrgCode        string    `json:"orgCode"`
+	OrgName        string    `json:"orgName"`
+	UserId         string    `json:"userId"`
+}
+
+type handleUpdateOrgInvitationV1Input struct {
+	IsAcceptance bool   `json:"isAcceptance"`
+	JoinCode     string `json:"joinCode"`
+}
+
+func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+
+	vars := mux.Vars(r)
+	invitationId := vars["invitationId"]
+
+	log(common.LogLevelDebug, fmt.Sprintf("updating user[%s]'s organisation invite[%s]", session.UserId, invitationId))
+
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		return
+	}
+
+	var input handleUpdateOrgInvitationV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		return
+	}
+
+	orgInvite := models.OrgUserInvitation{Id: invitationId}
+	if err := orgInvite.LoadFromId(models.DatabaseConnection{Db: db}); err != nil {
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed find invitation", ErrorInvitationInvalid)
+			return
+		}
+		log(common.LogLevelError, fmt.Sprintf("failed to load invitation: %s", err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to load", ErrorInvalidInput)
+		return
+	}
+
+	if !strings.EqualFold(*orgInvite.AcceptorId, session.UserId) {
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "user not allowed", ErrorInvitationInvalid)
+		return
+	}
+	if strings.Compare(orgInvite.JoinCode, input.JoinCode) != 0 {
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "invalid join code", ErrorInvitationInvalid)
+		return
+	}
+
+	if input.IsAcceptance {
+		org := models.Org{Id: &orgInvite.OrgId}
+		if err := org.AddUserV1(models.AddUserToOrgV1{
+			Db:         db,
+			UserId:     session.UserId,
+			MemberType: orgInvite.Type,
+		}); err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to add user to org: %s", err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add user", ErrorDatabaseIssue)
+			return
+		}
+
+		if err := orgInvite.DeleteById(models.DatabaseConnection{Db: db}); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
+			return
+		}
+
+		orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{
+			Db:     db,
+			UserId: session.UserId,
+			OrgId:  org.Id,
+		})
+		if err != nil {
+			if errors.Is(err, models.ErrorNotFound) {
+				common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org user", ErrorDatabaseIssue)
+				return
+			}
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user", ErrorDatabaseIssue)
+			return
+		}
+
+		output := handleUpdateOrgInvitationV1Output{
+			JoinedAt:       *orgUser.JoinedOrgAt,
+			MembershipType: *orgUser.Org.MemberType,
+			OrgId:          *orgUser.Org.Id,
+			OrgCode:        orgUser.Org.Code,
+			OrgName:        orgUser.Org.Name,
+			UserId:         *orgUser.Id,
+		}
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+	} else {
+		if err := orgInvite.DeleteById(models.DatabaseConnection{Db: db}); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
+			return
+		}
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", nil)
+	}
 }

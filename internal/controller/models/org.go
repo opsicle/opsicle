@@ -91,17 +91,30 @@ type Org struct {
 type AddUserToOrgV1 struct {
 	Db *sql.DB
 
-	UserId string
+	UserId     string
+	MemberType string
 }
 
 func (o *Org) AddUserV1(opts AddUserToOrgV1) error {
+	memberType := OrgMemberMember
+	if opts.MemberType != "" {
+		memberType = opts.MemberType
+	}
 	sqlStmt := `
 	INSERT INTO org_users(
 		org_id,
 		user_id,
 		type
-	) VALUES (?, ?)`
-	sqlArgs := []any{*o.Id, opts.UserId}
+	) VALUES (
+	 ?,
+	 ?,
+	 ?
+	)`
+	sqlArgs := []any{
+		*o.Id,
+		opts.UserId,
+		memberType,
+	}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
 		return fmt.Errorf("org.Org.AddUserV1: failed to prepare insert statement: %w", err)
@@ -140,6 +153,7 @@ func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*User, error) {
 			users.id,
 			orgs.id,
 			orgs.code,
+			orgs.name,
 			org_users.type,
 			org_users.joined_at
 			FROM org_users
@@ -165,6 +179,7 @@ func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*User, error) {
 		&userInstance.Id,
 		&userInstance.Org.Id,
 		&userInstance.Org.Code,
+		&userInstance.Org.Name,
 		&userInstance.Org.MemberType,
 		&userInstance.JoinedOrgAt,
 	); err != nil {

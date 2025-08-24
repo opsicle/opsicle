@@ -5,6 +5,7 @@ import (
 	"opsicle/cmd/opsicle/admin"
 	"opsicle/cmd/opsicle/create"
 	"opsicle/cmd/opsicle/get"
+	"opsicle/cmd/opsicle/join"
 	"opsicle/cmd/opsicle/list"
 	"opsicle/cmd/opsicle/login"
 	"opsicle/cmd/opsicle/logout"
@@ -87,6 +88,7 @@ func init() {
 	Command.AddCommand(admin.Command)
 	Command.AddCommand(create.Command)
 	Command.AddCommand(get.Command)
+	Command.AddCommand(join.Command)
 	Command.AddCommand(list.Command)
 	Command.AddCommand(login.Command)
 	Command.AddCommand(logout.Command)

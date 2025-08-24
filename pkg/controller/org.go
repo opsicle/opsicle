@@ -143,6 +143,7 @@ type ListOrgInvitationsV1OutputDataOrg struct {
 	InviterId    string    `json:"inviterId"`
 	InviterEmail string    `json:"inviterEmail"`
 	JoinCode     string    `json:"joinCode"`
+	OrgId        string    `json:"orgId"`
 	OrgCode      string    `json:"orgCode"`
 	OrgName      string    `json:"orgName"`
 }
@@ -192,6 +193,45 @@ func (c Client) GetOrgV1(input GetOrgV1Input) (*GetOrgV1Output, error) {
 	var output *GetOrgV1Output = nil
 	if !errors.Is(err, ErrorOutputNil) {
 		output = &GetOrgV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
+}
+
+type UpdateOrgInvitationV1Output struct {
+	Data UpdateOrgInvitationV1OutputData
+
+	http.Response
+}
+
+type UpdateOrgInvitationV1OutputData struct {
+	JoinedAt       time.Time `json:"joinedAt"`
+	MembershipType string    `json:"membershipType"`
+	OrgId          string    `json:"orgId"`
+	OrgCode        string    `json:"orgCode"`
+	OrgName        string    `json:"orgName"`
+	UserId         string    `json:"userId"`
+}
+
+type UpdateOrgInvitationV1Input struct {
+	Id           string `json:"-"`
+	IsAcceptance bool   `json:"isAcceptance"`
+	JoinCode     string `json:"joinCode"`
+}
+
+func (c Client) UpdateOrgInvitationV1(input UpdateOrgInvitationV1Input) (*UpdateOrgInvitationV1Output, error) {
+	var outputData UpdateOrgInvitationV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodPatch,
+		Path:   fmt.Sprintf("/api/v1/org/invitation/%s", input.Id),
+		Data:   input,
+		Output: &outputData,
+	})
+	var output *UpdateOrgInvitationV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &UpdateOrgInvitationV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
 		}

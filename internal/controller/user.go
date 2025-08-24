@@ -120,9 +120,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	for _, orgInvitation := range listOrgInvitations {
 		var orgInvitationReplacementErrs []error
 		orgInvitation.AcceptorId = user.Id
-		if err := orgInvitation.ReplaceAcceptorEmailWithId(models.ReplaceAcceptorEmailWithIdOpts{
-			Db: db,
-		}); err != nil {
+		if err := orgInvitation.ReplaceAcceptorEmailWithId(models.DatabaseConnection{Db: db}); err != nil {
 			orgInvitationReplacementErrs = append(orgInvitationReplacementErrs, err)
 		}
 		if len(orgInvitationReplacementErrs) > 0 {
@@ -330,16 +328,17 @@ func handleListUserMfasV1(w http.ResponseWriter, r *http.Request) {
 }
 
 type handleListUserOrgInvitationsV1Output struct {
-	Invitations []userOrgInvitation `json:"invitations"`
+	Invitations []handleListUserOrgInvitationsV1OutputOrgInvite `json:"invitations"`
 }
 
-type userOrgInvitation struct {
+type handleListUserOrgInvitationsV1OutputOrgInvite struct {
 	Id           string    `json:"id"`
 	InvitedAt    time.Time `json:"invitedAt"`
 	InviterId    string    `json:"inviterId"`
 	InviterEmail string    `json:"inviterEmail"`
 	JoinCode     string    `json:"joinCode"`
 	OrgCode      string    `json:"orgCode"`
+	OrgId        string    `json:"orgId"`
 	OrgName      string    `json:"orgName"`
 }
 
@@ -358,16 +357,17 @@ func handleListUserOrgInvitationsV1(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	output := handleListUserOrgInvitationsV1Output{Invitations: []userOrgInvitation{}}
+	output := handleListUserOrgInvitationsV1Output{Invitations: []handleListUserOrgInvitationsV1OutputOrgInvite{}}
 	for _, orgInvitation := range listOrgInvitations {
 		output.Invitations = append(
 			output.Invitations,
-			userOrgInvitation{
+			handleListUserOrgInvitationsV1OutputOrgInvite{
 				Id:           orgInvitation.Id,
 				InvitedAt:    orgInvitation.CreatedAt,
 				InviterId:    orgInvitation.InviterId,
 				InviterEmail: *orgInvitation.InviterEmail,
 				JoinCode:     orgInvitation.JoinCode,
+				OrgId:        orgInvitation.OrgId,
 				OrgCode:      *orgInvitation.OrgCode,
 				OrgName:      *orgInvitation.OrgName,
 			},

@@ -12,6 +12,7 @@ var (
 	ErrorInvalidInput            = errors.New("invalid_input")
 	ErrorInvalidVerificationCode = errors.New("invalid_verification_code")
 	ErrorInvitationExists        = errors.New("invitation_exists")
+	ErrorInvitationInvalid       = errors.New("invitation_invalid")
 	ErrorInsufficientPermissions = errors.New("insufficient_permissions")
 	ErrorMfaRequired             = errors.New("mfa_required")
 	ErrorMfaTokenInvalid         = errors.New("mfa_token_invalid")
