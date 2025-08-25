@@ -10,13 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	OrgMemberAdmin    = "admin"
-	OrgMemberOperator = "operator"
-	OrgMemberManager  = "manager"
-	OrgMemberMember   = "member"
-)
-
 type Org struct {
 	// Id is a UUID that identifies the orgainsation uniquely
 	Id *string `json:"id"`
@@ -96,9 +89,11 @@ type AddUserToOrgV1 struct {
 }
 
 func (o *Org) AddUserV1(opts AddUserToOrgV1) error {
-	memberType := OrgMemberMember
+	memberType := TypeOrgMember
 	if opts.MemberType != "" {
-		memberType = opts.MemberType
+		if _, ok := OrgMemberTypeMap[opts.MemberType]; ok {
+			memberType = OrgMemberType(opts.MemberType)
+		}
 	}
 	sqlStmt := `
 	INSERT INTO org_users(
@@ -220,7 +215,7 @@ func (o *Org) InviteUserV1(opts InviteOrgUserV1Opts) (*InviteUserV1Output, error
 		o.GetId(),
 		opts.InviterId,
 		opts.JoinCode,
-		OrgMemberMember,
+		TypeOrgMember,
 	}
 	isExistingUser := false
 	if opts.AcceptorId != nil {
@@ -265,6 +260,60 @@ func (o *Org) InviteUserV1(opts InviteOrgUserV1Opts) (*InviteUserV1Output, error
 		InvitationId:   invitationId,
 		IsExistingUser: isExistingUser,
 	}, nil
+}
+
+func (o *Org) ListUsersV1(opts DatabaseConnection) ([]OrgUser, error) {
+	if o.Id == nil {
+		return nil, fmt.Errorf("no org id specified: %w", ErrorInvalidInput)
+	}
+	sqlStmt := `
+		SELECT
+			ou.joined_at,
+			ou.type,
+			o.code,
+			o.id,
+			o.name,
+			u.email,
+			u.id,
+			u.type
+			FROM org_users ou
+				JOIN users u ON ou.user_id = u.id
+				JOIN orgs o ON ou.org_id = o.id
+			WHERE
+				org_id = ?
+	`
+	sqlArgs := []any{*o.Id}
+	stmt, err := opts.Db.Prepare(sqlStmt)
+	if err != nil {
+		return nil, fmt.Errorf("models.Org.ListUsersV1: failed to prepare select statement: %w", err)
+	}
+
+	results, err := stmt.Query(sqlArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("models.Org.ListUsersV1: failed to execute select statement: %w", err)
+	}
+	output := []OrgUser{}
+	for results.Next() {
+		orgUser := OrgUser{}
+		if err := results.Scan(
+			&orgUser.JoinedAt,
+			&orgUser.MemberType,
+			&orgUser.OrgCode,
+			&orgUser.OrgId,
+			&orgUser.OrgName,
+			&orgUser.UserEmail,
+			&orgUser.UserId,
+			&orgUser.UserType,
+		); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrorNotFound
+			}
+			return nil, fmt.Errorf("models.Org.ListUsersV1: failed to load selected data into memory: %w", err)
+		}
+		output = append(output, orgUser)
+	}
+
+	return output, nil
 }
 
 type LoadOrgUserCountV1Opts struct {

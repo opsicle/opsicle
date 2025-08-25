@@ -18,22 +18,37 @@ const (
 	TypeTenantOrg OrgType = "tenant"
 )
 
-// OrgUserType defines the type of organisation user
-type OrgUserType string
+// OrgMemberType defines the type of organisation user
+type OrgMemberType string
 
 const (
 	// TypeOrgAdmin should be able to do everything in the orgniastion
-	TypeOrgAdmin OrgUserType = "admin"
+	TypeOrgAdmin OrgMemberType = "admin"
 
 	// TypeOrgBilling should be able to only view and edit billing information
-	TypeOrgBilling OrgUserType = "billing"
+	TypeOrgBilling OrgMemberType = "billing"
+
+	// TypeOrgOperator should be able to update system parameters
+	TypeOrgOperator OrgMemberType = "operator"
+
+	// TypeOrgManager should be able to add and remove users
+	TypeOrgManager OrgMemberType = "manager"
 
 	// TypeOrgMember is a deferred role, get the permissions from the
 	// `org_roles` table. This role assumes all permisisons of a `TypeOrgReporter`
 	// role and adds onto the permissions via the deferred permissions
-	TypeOrgMember OrgUserType = "member"
+	TypeOrgMember OrgMemberType = "member"
 
 	// TypeOrgReporter is a view-only role for everything in the organisation
 	// except secrets and credentials of any kind
-	TypeOrgReporter OrgUserType = "reporter"
+	TypeOrgReporter OrgMemberType = "reporter"
 )
+
+var OrgMemberTypeMap = map[string]struct{}{
+	string(TypeOrgAdmin):    struct{}{},
+	string(TypeOrgBilling):  struct{}{},
+	string(TypeOrgOperator): struct{}{},
+	string(TypeOrgManager):  struct{}{},
+	string(TypeOrgMember):   struct{}{},
+	string(TypeOrgReporter): struct{}{},
+}

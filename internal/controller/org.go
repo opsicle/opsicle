@@ -26,6 +26,7 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleCreateOrgV1))).Methods(http.MethodPost)
 	v1.Handle("/{orgCode}", requiresAuth(http.HandlerFunc(handleGetOrgV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleCreateOrgUserV1))).Methods(http.MethodPost)
+	v1.Handle("/{orgId}/members", requiresAuth(http.HandlerFunc(handleListOrgUsersV1))).Methods(http.MethodGet)
 	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateOrgInvitationV1))).Methods(http.MethodPatch)
 
 	v1 = opts.Router.PathPrefix("/v1/orgs").Subrouter()
@@ -227,6 +228,66 @@ func handleListOrgsV1(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleListOrgUsersV1Output []handleListOrgUsersV1OutputUser
+
+type handleListOrgUsersV1OutputUser struct {
+	JoinedAt   time.Time `json:"joinedAt"`
+	MemberType string    `json:"memberType"`
+	OrgId      string    `json:"orgId"`
+	OrgCode    string    `json:"orgCode"`
+	OrgName    string    `json:"orgName"`
+	UserId     string    `json:"userId"`
+	UserEmail  string    `json:"userEmail"`
+	UserType   string    `json:"userType"`
+}
+
+func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+
+	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested list of users from org[%s]", session.UserId, orgId))
+	org := models.Org{Id: &orgId}
+	_, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: session.UserId})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to get user[%s] from org[%s]: %s", session.UserId, orgId, err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, fmt.Sprintf("refused to list users in org[%s] at user[%s]'s request", orgId, session.UserId), ErrorInvalidInput)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org users", ErrorDatabaseIssue)
+		return
+	}
+	orgUsers, err := org.ListUsersV1(models.DatabaseConnection{Db: db})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to list users from org[%s]: %s", orgId, err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org users", ErrorDatabaseIssue)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org users", ErrorDatabaseIssue)
+		return
+	}
+	output := handleListOrgUsersV1Output{}
+	for _, orgUser := range orgUsers {
+		output = append(
+			output,
+			handleListOrgUsersV1OutputUser{
+				JoinedAt:   orgUser.JoinedAt,
+				MemberType: orgUser.MemberType,
+				OrgId:      orgUser.OrgId,
+				OrgCode:    orgUser.OrgCode,
+				OrgName:    orgUser.OrgName,
+				UserId:     orgUser.UserId,
+				UserEmail:  orgUser.UserEmail,
+				UserType:   orgUser.UserType,
+			},
+		)
+	}
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 

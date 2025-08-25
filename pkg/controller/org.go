@@ -165,6 +165,45 @@ func (c Client) ListOrgInvitationsV1() (*ListOrgInvitationsV1Output, error) {
 	return output, err
 }
 
+type ListOrgUsersV1Output struct {
+	Data ListOrgUsersV1OutputData
+	http.Response
+}
+
+type ListOrgUsersV1OutputData []ListOrgUsersV1OutputDataUser
+
+type ListOrgUsersV1OutputDataUser struct {
+	JoinedAt   time.Time `json:"joinedAt"`
+	MemberType string    `json:"memberType"`
+	OrgId      string    `json:"orgId"`
+	OrgCode    string    `json:"orgCode"`
+	OrgName    string    `json:"orgName"`
+	UserId     string    `json:"userId"`
+	UserEmail  string    `json:"userEmail"`
+	UserType   string    `json:"userType"`
+}
+
+type ListOrgUsersV1Input struct {
+	OrgId string `json:"-"`
+}
+
+func (c Client) ListOrgUsersV1(input ListOrgUsersV1Input) (*ListOrgUsersV1Output, error) {
+	var outputData ListOrgUsersV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/org/%s/members", input.OrgId),
+		Output: &outputData,
+	})
+	var output *ListOrgUsersV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &ListOrgUsersV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
+}
+
 type GetOrgV1Input struct {
 	Code string `json:"code"`
 }
