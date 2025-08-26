@@ -45,10 +45,10 @@ const (
 )
 
 var OrgMemberTypeMap = map[string]struct{}{
-	string(TypeOrgAdmin):    struct{}{},
-	string(TypeOrgBilling):  struct{}{},
-	string(TypeOrgOperator): struct{}{},
-	string(TypeOrgManager):  struct{}{},
-	string(TypeOrgMember):   struct{}{},
-	string(TypeOrgReporter): struct{}{},
+	string(TypeOrgAdmin):    {},
+	string(TypeOrgBilling):  {},
+	string(TypeOrgOperator): {},
+	string(TypeOrgManager):  {},
+	string(TypeOrgMember):   {},
+	string(TypeOrgReporter): {},
 }

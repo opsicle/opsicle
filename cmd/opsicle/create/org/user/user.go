@@ -1,7 +1,6 @@
 package user
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"opsicle/internal/cli"
@@ -160,8 +159,12 @@ var Command = &cobra.Command{
 			}
 			return fmt.Errorf("failed to add user: %w", err)
 		}
-		o, _ := json.MarshalIndent(createOrgUserOutput.Data, "", "  ")
-		fmt.Println(string(o))
+
+		if createOrgUserOutput.Data.IsExistingUser {
+			fmt.Println("✅ User has been invited and an email code has been sent to their email address")
+		} else {
+			fmt.Println("ℹ️  The specified user is not on Opsicle, but we've sent them the join code which they can use to join your organisation once they've signed up")
+		}
 
 		return nil
 	},

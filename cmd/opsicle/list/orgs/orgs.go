@@ -61,7 +61,7 @@ var Command = &cobra.Command{
 			if err := controller.DeleteSessionToken(); err != nil {
 				fmt.Printf("⚠️ We failed to remove the session token for you, please do it yourself\n")
 			}
-			fmt.Println("⚠️ Please login again using `opsicle login`")
+			fmt.Println("⚠️  Please login again using `opsicle login`")
 			return fmt.Errorf("session invalid")
 		}
 

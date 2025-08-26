@@ -19,10 +19,11 @@ type SelectorChoice struct {
 
 func (sc *SelectorChoice) Render(isSelected bool) string {
 	if isSelected {
-		return fmt.Sprintf("%s %s",
-			focusedStyle.Render(fmt.Sprintf("> %s", sc.Label)),
-			blurredStyle.Render(fmt.Sprintf("(%s)", sc.Description)),
-		)
+		rendered := focusedStyle.Render(fmt.Sprintf("> %s", sc.Label))
+		if sc.Description != "" {
+			rendered += " " + blurredStyle.Render(fmt.Sprintf("(%s)", sc.Description))
+		}
+		return rendered
 	}
 	return fmt.Sprintf("  %s", blurredStyle.Render(sc.Label))
 }

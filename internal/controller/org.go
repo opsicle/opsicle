@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
@@ -23,9 +24,11 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 
 	v1 := opts.Router.PathPrefix("/v1/org").Subrouter()
 
+	v1.Handle("/member/types", requiresAuth(http.HandlerFunc(handleListOrgMemberTypesV1))).Methods(http.MethodGet)
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleCreateOrgV1))).Methods(http.MethodPost)
 	v1.Handle("/{orgCode}", requiresAuth(http.HandlerFunc(handleGetOrgV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleCreateOrgUserV1))).Methods(http.MethodPost)
+	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleUpdateOrgUserV1))).Methods(http.MethodPatch)
 	v1.Handle("/{orgId}/members", requiresAuth(http.HandlerFunc(handleListOrgUsersV1))).Methods(http.MethodGet)
 	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateOrgInvitationV1))).Methods(http.MethodPatch)
 
@@ -574,4 +577,128 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 		}
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", nil)
 	}
+}
+
+type handleUpdateOrgUserV1Output struct {
+	IsSuccessful bool `json:"isSuccessful"`
+}
+
+type handleUpdateOrgUserV1Input struct {
+	Update map[string]any `json:"update"`
+	User   string         `json:"user"`
+}
+
+func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+	if _, err := uuid.Parse(orgId); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid org id: %s", session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		return
+	}
+
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		return
+	}
+
+	var input handleUpdateOrgUserV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		return
+	}
+
+	isUserEmail := false
+	if _, err := uuid.Parse(input.User); err != nil {
+		if err := validate.Email(input.User); err != nil {
+			log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid user id: %s", session.UserId, err))
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user id", ErrorInvalidInput)
+			return
+		} else {
+			isUserEmail = true
+		}
+	}
+
+	userId := ""
+
+	if isUserEmail {
+		user, err := models.GetUserV1(models.GetUserV1Opts{
+			Db:    db,
+			Email: &input.User,
+		})
+		if err != nil {
+			log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid user email: %s", session.UserId, err))
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user identifier", ErrorInvalidInput)
+			return
+		}
+		userId = *user.Id
+	} else {
+		userId = input.User
+	}
+
+	// validate input
+
+	// verify requester can update an org user
+
+	org := models.Org{Id: &orgId}
+	requester, err := org.GetUserV1(models.GetOrgUserV1Opts{
+		Db:     db,
+		UserId: session.UserId,
+	})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] was not valid: %s", *requester.Id, err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", ErrorInsufficientPermissions)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+		return
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is updating user[%s] in org[%s]", *requester.Id, userId, orgId))
+
+	isAllowedToUpdateOrgUser := false
+	switch models.OrgMemberType(*requester.Org.MemberType) {
+	case models.TypeOrgAdmin:
+		fallthrough
+	case models.TypeOrgManager:
+		isAllowedToUpdateOrgUser = true
+	}
+	if !isAllowedToUpdateOrgUser {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] attempted unauthorized update on user[%s] in org[%s]: %s", *requester.Id, userId, orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not an admin or manager", ErrorInsufficientPermissions)
+		return
+	}
+
+	// make org user changes
+
+	orgUser := models.OrgUser{OrgId: orgId, UserId: userId}
+	if err := orgUser.UpdateFieldsV1(models.UpdateOrgUserFieldsV1{
+		Db:          db,
+		FieldsToSet: input.Update,
+	}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("request by user[%s] to update user[%s] in org[%s] failed: %s", *requester.Id, userId, orgId, err))
+		if errors.Is(err, models.ErrorInvalidInput) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update org user", ErrorInvalidInput)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to update org user", ErrorDatabaseIssue)
+		return
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateOrgUserV1Output{IsSuccessful: true})
+}
+
+func handleListOrgMemberTypesV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested member types for orgs", session.UserId))
+	memberTypes := []string{}
+	for memberType := range models.OrgMemberTypeMap {
+		memberTypes = append(memberTypes, memberType)
+	}
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", memberTypes)
 }

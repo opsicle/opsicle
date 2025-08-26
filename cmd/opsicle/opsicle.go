@@ -13,6 +13,7 @@ import (
 	"opsicle/cmd/opsicle/reset"
 	"opsicle/cmd/opsicle/run"
 	"opsicle/cmd/opsicle/start"
+	"opsicle/cmd/opsicle/update"
 	"opsicle/cmd/opsicle/utils"
 	"opsicle/cmd/opsicle/validate"
 	"opsicle/cmd/opsicle/verify"
@@ -96,6 +97,7 @@ func init() {
 	Command.AddCommand(reset.Command)
 	Command.AddCommand(run.Command)
 	Command.AddCommand(start.Command)
+	Command.AddCommand(update.Command)
 	Command.AddCommand(utils.Command)
 	Command.AddCommand(validate.Command)
 	Command.AddCommand(verify.Command)

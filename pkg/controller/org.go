@@ -239,6 +239,31 @@ func (c Client) GetOrgV1(input GetOrgV1Input) (*GetOrgV1Output, error) {
 	return output, err
 }
 
+type ListOrgMemberTypesV1Output struct {
+	Data ListOrgMemberTypesV1OutputData
+
+	http.Response
+}
+
+type ListOrgMemberTypesV1OutputData []string
+
+func (c Client) ListOrgMemberTypesV1() (*ListOrgMemberTypesV1Output, error) {
+	var outputData ListOrgMemberTypesV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   "/api/v1/org/member/types",
+		Output: &outputData,
+	})
+	var output *ListOrgMemberTypesV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &ListOrgMemberTypesV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
+}
+
 type UpdateOrgInvitationV1Output struct {
 	Data UpdateOrgInvitationV1OutputData
 
@@ -271,6 +296,40 @@ func (c Client) UpdateOrgInvitationV1(input UpdateOrgInvitationV1Input) (*Update
 	var output *UpdateOrgInvitationV1Output = nil
 	if !errors.Is(err, ErrorOutputNil) {
 		output = &UpdateOrgInvitationV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
+}
+
+type UpdateOrgUserV1Output struct {
+	Data UpdateOrgUserV1OutputData
+
+	http.Response
+}
+
+type UpdateOrgUserV1OutputData struct {
+	IsSuccessful bool `json:"isSuccessful"`
+}
+
+type UpdateOrgUserV1Input struct {
+	OrgId  string         `json:"-"`
+	User   string         `json:"user"`
+	Update map[string]any `json:"update"`
+}
+
+func (c Client) UpdateOrgUserV1(input UpdateOrgUserV1Input) (*UpdateOrgUserV1Output, error) {
+	var outputData UpdateOrgUserV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodPatch,
+		Path:   fmt.Sprintf("/api/v1/org/%s/member", input.OrgId),
+		Data:   input,
+		Output: &outputData,
+	})
+	var output *UpdateOrgUserV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &UpdateOrgUserV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
 		}
