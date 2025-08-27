@@ -123,6 +123,10 @@ func (c clientOutput) GetErrorCode() error {
 	return c.code
 }
 
+func (c clientOutput) GetMessage() string {
+	return c.message
+}
+
 func (c clientOutput) GetStatusCode() int {
 	return c.Response.StatusCode
 }

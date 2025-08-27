@@ -29,6 +29,7 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/{orgCode}", requiresAuth(http.HandlerFunc(handleGetOrgV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleCreateOrgUserV1))).Methods(http.MethodPost)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleUpdateOrgUserV1))).Methods(http.MethodPatch)
+	v1.Handle("/{orgId}/member/{userId}", requiresAuth(http.HandlerFunc(handleDeleteOrgUserV1))).Methods(http.MethodDelete)
 	v1.Handle("/{orgId}/members", requiresAuth(http.HandlerFunc(handleListOrgUsersV1))).Methods(http.MethodGet)
 	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateOrgInvitationV1))).Methods(http.MethodPatch)
 
@@ -579,6 +580,67 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type handleDeleteOrgUserV1Output struct {
+	IsSuccessful bool `json:"isSuccessful"`
+}
+
+func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+	if _, err := uuid.Parse(orgId); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid org id: %s", session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		return
+	}
+
+	userId := vars["userId"]
+	if _, err := uuid.Parse(userId); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid user id: %s", session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user id", ErrorInvalidInput)
+		return
+	}
+	if userId == session.UserId {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "a user cannot delete itself", ErrorInvalidInput)
+		return
+	}
+
+	log(common.LogLevelDebug, fmt.Sprintf("received request by user[%s] to delete user[%s] from org[%s]", session.UserId, userId, orgId))
+
+	// verify requester can update an org user
+
+	if err := validateRequesterCanManageOrgUsers(validateRequesterCanManageOrgUsersOpts{
+		OrgId:           orgId,
+		RequesterUserId: session.UserId,
+	}); err != nil {
+		switch true {
+		case errors.Is(err, ErrorInsufficientPermissions):
+			log(common.LogLevelError, fmt.Sprintf("user[%s] doesn't have permissions to delete user[%s] from org[%s]: %s", session.UserId, userId, orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", ErrorInsufficientPermissions)
+			return
+		case errors.Is(err, ErrorDatabaseIssue):
+			log(common.LogLevelError, fmt.Sprintf("encountered database issue while processing request by user[%s] to delete user[%s] from org[%s]: %w", session.UserId, userId, orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+			return
+		}
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("validated user[%s] is able to manage org[%s] members", session.UserId, orgId))
+
+	orgUser := models.OrgUser{
+		OrgId:  orgId,
+		UserId: userId,
+	}
+	if err := orgUser.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to remove user[%s] from org[%s]: %s", userId, orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove member", ErrorDatabaseIssue)
+		return
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleDeleteOrgUserV1Output{IsSuccessful: true})
+}
+
 type handleUpdateOrgUserV1Output struct {
 	IsSuccessful bool `json:"isSuccessful"`
 }
@@ -644,33 +706,18 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 
 	// verify requester can update an org user
 
-	org := models.Org{Id: &orgId}
-	requester, err := org.GetUserV1(models.GetOrgUserV1Opts{
-		Db:     db,
-		UserId: session.UserId,
-	})
-	if err != nil {
-		log(common.LogLevelError, fmt.Sprintf("user[%s] was not valid: %s", *requester.Id, err))
-		if errors.Is(err, models.ErrorNotFound) {
+	if err := validateRequesterCanManageOrgUsers(validateRequesterCanManageOrgUsersOpts{
+		OrgId:           orgId,
+		RequesterUserId: session.UserId,
+	}); err != nil {
+		switch true {
+		case errors.Is(err, ErrorInsufficientPermissions):
 			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", ErrorInsufficientPermissions)
 			return
+		case errors.Is(err, ErrorDatabaseIssue):
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
-		return
-	}
-	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is updating user[%s] in org[%s]", *requester.Id, userId, orgId))
-
-	isAllowedToUpdateOrgUser := false
-	switch models.OrgMemberType(*requester.Org.MemberType) {
-	case models.TypeOrgAdmin:
-		fallthrough
-	case models.TypeOrgManager:
-		isAllowedToUpdateOrgUser = true
-	}
-	if !isAllowedToUpdateOrgUser {
-		log(common.LogLevelError, fmt.Sprintf("user[%s] attempted unauthorized update on user[%s] in org[%s]: %s", *requester.Id, userId, orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not an admin or manager", ErrorInsufficientPermissions)
-		return
 	}
 
 	// make org user changes
@@ -680,7 +727,7 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		Db:          db,
 		FieldsToSet: input.Update,
 	}); err != nil {
-		log(common.LogLevelError, fmt.Sprintf("request by user[%s] to update user[%s] in org[%s] failed: %s", *requester.Id, userId, orgId, err))
+		log(common.LogLevelError, fmt.Sprintf("request by user[%s] to update user[%s] in org[%s] failed: %s", session.UserId, userId, orgId, err))
 		if errors.Is(err, models.ErrorInvalidInput) {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update org user", ErrorInvalidInput)
 			return

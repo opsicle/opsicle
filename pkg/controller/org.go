@@ -91,6 +91,83 @@ func (c Client) CreateOrgUserV1(input CreateOrgUserV1Input) (*CreateOrgUserV1Out
 	return output, err
 }
 
+type DeleteOrgUserV1Input struct {
+	OrgId  string `json:"-"`
+	UserId string `json:"-"`
+}
+
+type DeleteOrgUserV1Output struct {
+	Data DeleteOrgUserV1OutputData
+
+	http.Response
+}
+
+type DeleteOrgUserV1OutputData struct {
+	IsSuccessful bool `json:"isSuccessful"`
+}
+
+func (c Client) DeleteOrgUserV1(input DeleteOrgUserV1Input) (*DeleteOrgUserV1Output, error) {
+	var outputData DeleteOrgUserV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodDelete,
+		Path:   fmt.Sprintf("/api/v1/org/%s/member/%s", input.OrgId, input.UserId),
+		Output: &outputData,
+	})
+	var output *DeleteOrgUserV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &DeleteOrgUserV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorInvalidInput.Error():
+			err = fmt.Errorf("%s: %w", outputClient.GetMessage(), ErrorInvalidInput)
+		case ErrorInsufficientPermissions.Error():
+			err = ErrorInsufficientPermissions
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		}
+	}
+	return output, err
+}
+
+type GetOrgV1Input struct {
+	Code string `json:"code"`
+}
+type GetOrgV1Output struct {
+	Data GetOrgV1OutputData
+	http.Response
+}
+
+type GetOrgV1OutputData struct {
+	Code      string     `json:"code"`
+	CreatedAt time.Time  `json:"createdAt"`
+	Id        string     `json:"id"`
+	Name      string     `json:"name"`
+	Type      string     `json:"type"`
+	UpdatedAt *time.Time `json:"updatedAt"`
+}
+
+// GetOrgV1 retrieves the specified organisation using the org's codeword
+func (c Client) GetOrgV1(input GetOrgV1Input) (*GetOrgV1Output, error) {
+	var outputData GetOrgV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/org/%s", input.Code),
+		Output: &outputData,
+	})
+	var output *GetOrgV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &GetOrgV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
+}
+
 type ListOrgsV1Output struct {
 	Data ListOrgsV1OutputData
 
@@ -197,41 +274,6 @@ func (c Client) ListOrgUsersV1(input ListOrgUsersV1Input) (*ListOrgUsersV1Output
 	var output *ListOrgUsersV1Output = nil
 	if !errors.Is(err, ErrorOutputNil) {
 		output = &ListOrgUsersV1Output{
-			Data:     outputData,
-			Response: outputClient.Response,
-		}
-	}
-	return output, err
-}
-
-type GetOrgV1Input struct {
-	Code string `json:"code"`
-}
-type GetOrgV1Output struct {
-	Data GetOrgV1OutputData
-	http.Response
-}
-
-type GetOrgV1OutputData struct {
-	Code      string     `json:"code"`
-	CreatedAt time.Time  `json:"createdAt"`
-	Id        string     `json:"id"`
-	Name      string     `json:"name"`
-	Type      string     `json:"type"`
-	UpdatedAt *time.Time `json:"updatedAt"`
-}
-
-// GetOrgV1 retrieves the specified organisation using the org's codeword
-func (c Client) GetOrgV1(input GetOrgV1Input) (*GetOrgV1Output, error) {
-	var outputData GetOrgV1OutputData
-	outputClient, err := c.do(request{
-		Method: http.MethodGet,
-		Path:   fmt.Sprintf("/api/v1/org/%s", input.Code),
-		Output: &outputData,
-	})
-	var output *GetOrgV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
-		output = &GetOrgV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
 		}

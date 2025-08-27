@@ -102,7 +102,9 @@ var Command = &cobra.Command{
 			return fmt.Errorf("org retrieval failed: %w", err)
 		}
 
-		fmt.Printf("✨ Enter the email of the person you want to add to %s:\n\n", org.Data.Name)
+		if viper.GetString("email") == "" {
+			fmt.Printf("✨ Enter the email of the person you want to add to %s:\n\n", org.Data.Name)
+		}
 
 	askForUserEmail:
 		userEmailInput := cli.CreatePrompt(cli.PromptOpts{

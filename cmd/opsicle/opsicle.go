@@ -10,6 +10,7 @@ import (
 	"opsicle/cmd/opsicle/login"
 	"opsicle/cmd/opsicle/logout"
 	"opsicle/cmd/opsicle/register"
+	"opsicle/cmd/opsicle/remove"
 	"opsicle/cmd/opsicle/reset"
 	"opsicle/cmd/opsicle/run"
 	"opsicle/cmd/opsicle/start"
@@ -94,6 +95,7 @@ func init() {
 	Command.AddCommand(login.Command)
 	Command.AddCommand(logout.Command)
 	Command.AddCommand(register.Command)
+	Command.AddCommand(remove.Command)
 	Command.AddCommand(reset.Command)
 	Command.AddCommand(run.Command)
 	Command.AddCommand(start.Command)

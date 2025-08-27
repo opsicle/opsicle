@@ -23,6 +23,6 @@ var (
 	ErrorUnrecognisedMfaType     = errors.New("unknown_mfa_type")
 	ErrorUnknown                 = errors.New("unknown_error")
 
-	ErrorDatabaseIssue = errors.New("__database_issue")
-	ErrorCodeIssue     = errors.New("__code_issue")
+	ErrorDatabaseIssue = errors.New("database_issue")
+	ErrorCodeIssue     = errors.New("code_issue")
 )
