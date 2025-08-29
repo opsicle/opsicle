@@ -6,6 +6,20 @@ import (
 	"opsicle/internal/controller/models"
 )
 
+type OrgUserMemberPermissions struct {
+	CanManageUsers bool `json:"canManageUsers"`
+}
+
+func isAllowedToManageOrgUsers(orgUser *models.OrgUser) bool {
+	switch models.OrgMemberType(orgUser.MemberType) {
+	case models.TypeOrgAdmin:
+		fallthrough
+	case models.TypeOrgManager:
+		return true
+	}
+	return false
+}
+
 type validateRequesterCanManageOrgUsersOpts struct {
 	OrgId           string
 	RequesterUserId string
@@ -28,14 +42,7 @@ func validateRequesterCanManageOrgUsers(opts validateRequesterCanManageOrgUsersO
 		}
 		return fmt.Errorf("failed to verify requester: %w", ErrorDatabaseIssue)
 	}
-	isAllowedToUpdateOrgUser := false
-	switch models.OrgMemberType(*requester.Org.MemberType) {
-	case models.TypeOrgAdmin:
-		fallthrough
-	case models.TypeOrgManager:
-		isAllowedToUpdateOrgUser = true
-	}
-	if !isAllowedToUpdateOrgUser {
+	if !isAllowedToManageOrgUsers(requester) {
 		return fmt.Errorf("requester is not an admin or manager: %w", ErrorInsufficientPermissions)
 	}
 	return nil

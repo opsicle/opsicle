@@ -12,7 +12,7 @@ var domainRegex = regexp.MustCompile(
 )
 
 var validDomainTlds = regexp.MustCompile(
-	`\.(ai|com\.[a-z]+|co|dev|io|me|net|org|gov\.[a-z]+|)$`,
+	`\.(ai|com|com\.[a-z]+|co|dev|io|me|net|org|gov\.[a-z]+|)$`,
 )
 
 func IsEmailValid(email string) (bool, error) {

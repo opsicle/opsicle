@@ -120,6 +120,16 @@ func (c clientOutput) Error() error {
 }
 
 func (c clientOutput) GetErrorCode() error {
+	switch c.code.Error() {
+	case ErrorInvalidCredentials.Error():
+		return ErrorInvalidCredentials
+	case ErrorInvalidInput.Error():
+		return ErrorInvalidInput
+	case ErrorInsufficientPermissions.Error():
+		return ErrorInsufficientPermissions
+	case ErrorDatabaseIssue.Error():
+		return ErrorDatabaseIssue
+	}
 	return c.code
 }
 
@@ -236,7 +246,7 @@ func (c Client) do(input request) (*clientOutput, error) {
 		}
 	}
 	if !response.Success {
-		return output, fmt.Errorf("%w: received status code %v: %w", ErrorClientUnsuccessfulResponse, output.GetStatusCode(), output.GetErrorCode())
+		return output, fmt.Errorf("%w: received status code %v ('%s'): %w", ErrorClientUnsuccessfulResponse, output.GetStatusCode(), output.GetMessage(), output.GetErrorCode())
 	}
 	return output, nil
 }

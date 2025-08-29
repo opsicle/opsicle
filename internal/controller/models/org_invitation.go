@@ -41,12 +41,12 @@ func (oui *OrgUserInvitation) DeleteById(opts DatabaseConnection) error {
 	return nil
 }
 
-// LoadFromId loads the data of this `OrgUserInvitation` instance
+// LoadV1 loads the data of this `OrgUserInvitation` instance
 // given the `.Id` property. If the `.Id` property is the
 // zero-value, this function returns an error. If no error
 // is returned, this `OrgUserInvitation` instance can be
 // expected to be populated with data from the database
-func (oui *OrgUserInvitation) LoadFromId(opts DatabaseConnection) error {
+func (oui *OrgUserInvitation) LoadV1(opts DatabaseConnection) error {
 	if oui.Id == "" {
 		return fmt.Errorf("invitation id invalid: %w", ErrorInvalidInput)
 	}
@@ -66,11 +66,11 @@ func (oui *OrgUserInvitation) LoadFromId(opts DatabaseConnection) error {
 	sqlArgs := []any{oui.Id}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return fmt.Errorf("models.OrgUserInvitation.LoadFromId: failed to prepare insert statement: %w", err)
+		return fmt.Errorf("models.OrgUserInvitation.LoadV1: failed to prepare insert statement: %w", err)
 	}
 	row := stmt.QueryRow(sqlArgs...)
 	if row.Err() != nil {
-		return fmt.Errorf("models.OrgUserInvitation.LoadFromId: failed to execute statement: %w", err)
+		return fmt.Errorf("models.OrgUserInvitation.LoadV1: failed to execute statement: %w", err)
 	}
 	if err := row.Scan(
 		&oui.InviterId,
@@ -83,9 +83,9 @@ func (oui *OrgUserInvitation) LoadFromId(opts DatabaseConnection) error {
 		&oui.LastUpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("models.OrgUserInvitation.LoadFromId: failed to retrieve invitation: %w: %w", ErrorNotFound, err)
+			return fmt.Errorf("models.OrgUserInvitation.LoadV1: failed to retrieve invitation: %w: %w", ErrorNotFound, err)
 		}
-		return fmt.Errorf("models.OrgUserInvitation.LoadFromId: failed to retrieve invitation: %w", err)
+		return fmt.Errorf("models.OrgUserInvitation.LoadV1: failed to retrieve invitation: %w", err)
 	}
 
 	return nil

@@ -49,7 +49,7 @@ var Command = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		controllerUrl := viper.GetString("controller-url")
-		methodId := "opsicle/update/org/user/perms"
+		methodId := "opsicle/create/org/user"
 		sessionToken, err := cli.RequireAuth(controllerUrl, methodId)
 		if err != nil {
 			return err
@@ -101,6 +101,15 @@ var Command = &cobra.Command{
 		})
 		if err != nil {
 			return fmt.Errorf("org retrieval failed: %w", err)
+		}
+		orgMembership, err := client.GetOrgMembershipV1(controller.GetOrgMembershipV1Input{
+			OrgId: org.Data.Id,
+		})
+		if err != nil {
+			return fmt.Errorf("org membership retrieval failed: %w", err)
+		}
+		if !orgMembership.Data.Permissions.CanManageUsers {
+			return fmt.Errorf("not allowed")
 		}
 
 		userIdentifier := viper.GetString("user-id")
@@ -172,6 +181,9 @@ var Command = &cobra.Command{
 			OrgId:  org.Data.Id,
 			UserId: userIdentifier,
 		}); err != nil {
+			if errors.Is(err, controller.ErrorInsufficientPermissions) {
+				return fmt.Errorf("not allowed")
+			}
 			return fmt.Errorf("failed to delete user: %w", err)
 		}
 

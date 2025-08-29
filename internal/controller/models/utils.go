@@ -74,12 +74,14 @@ func executeMysqlUpdate(opts mysqlQueryInput) error {
 	if err != nil {
 		return fmt.Errorf("%s: failed to execute update statement: %w", opts.FnSource, ErrorQueryFailed)
 	}
-	rowsAffected, err := results.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("%s: failed to get n(rows) updated: %w", opts.FnSource, ErrorRowsAffectedCheckFailed)
-	}
-	if !opts.RowsAffected(rowsAffected) {
-		return fmt.Errorf("%s: n(rows) updated was wrong (got %v): %w", opts.FnSource, rowsAffected, ErrorRowsAffectedCheckFailed)
+	if opts.RowsAffected != nil {
+		rowsAffected, err := results.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("%s: failed to get n(rows) updated: %w", opts.FnSource, ErrorRowsAffectedCheckFailed)
+		}
+		if !opts.RowsAffected(rowsAffected) {
+			return fmt.Errorf("%s: n(rows) updated was wrong (got %v): %w", opts.FnSource, rowsAffected, ErrorRowsAffectedCheckFailed)
+		}
 	}
 	return nil
 }

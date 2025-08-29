@@ -51,6 +51,7 @@ type CreateOrgUserV1Input struct {
 	Email                 string `json:"email"`
 	OrgId                 string `json:"-"`
 	IsTriggerEmailEnabled bool   `json:"isTriggerEmailEnabled"`
+	Type                  string `json:"type"`
 }
 
 type CreateOrgUserV1Output struct {
@@ -120,21 +121,11 @@ func (c Client) DeleteOrgUserV1(input DeleteOrgUserV1Input) (*DeleteOrgUserV1Out
 			Response: outputClient.Response,
 		}
 	}
-	if err != nil {
-		switch outputClient.GetErrorCode().Error() {
-		case ErrorInvalidInput.Error():
-			err = fmt.Errorf("%s: %w", outputClient.GetMessage(), ErrorInvalidInput)
-		case ErrorInsufficientPermissions.Error():
-			err = ErrorInsufficientPermissions
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
-		}
-	}
 	return output, err
 }
 
 type GetOrgV1Input struct {
-	Code string `json:"code"`
+	Code string `json:"-"`
 }
 type GetOrgV1Output struct {
 	Data GetOrgV1OutputData
@@ -161,6 +152,46 @@ func (c Client) GetOrgV1(input GetOrgV1Input) (*GetOrgV1Output, error) {
 	var output *GetOrgV1Output = nil
 	if !errors.Is(err, ErrorOutputNil) {
 		output = &GetOrgV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
+}
+
+type GetOrgMembershipV1Input struct {
+	OrgId string `json:"-"`
+}
+type GetOrgMembershipV1Output struct {
+	Data GetOrgMembershipV1OutputData
+	http.Response
+}
+
+type GetOrgMembershipV1OutputData struct {
+	JoinedAt   time.Time `json:"joinedAt"`
+	MemberType string    `json:"memberType"`
+	OrgCode    string    `json:"orgCode"`
+	OrgId      string    `json:"orgId"`
+	UserId     string    `json:"userId"`
+
+	Permissions GetOrgMembershipV1OutputPermissions `json:"permissions"`
+}
+
+type GetOrgMembershipV1OutputPermissions struct {
+	CanManageUsers bool `json:"canManageUsers"`
+}
+
+// GetOrgMembershipV1 retrieves the specified organisation using the org's codeword
+func (c Client) GetOrgMembershipV1(input GetOrgMembershipV1Input) (*GetOrgMembershipV1Output, error) {
+	var outputData GetOrgMembershipV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/org/%s/member", input.OrgId),
+		Output: &outputData,
+	})
+	var output *GetOrgMembershipV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &GetOrgMembershipV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
 		}

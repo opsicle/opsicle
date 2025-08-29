@@ -6,6 +6,7 @@ import (
 	"opsicle/internal/cli"
 	"opsicle/internal/validate"
 	"opsicle/pkg/controller"
+	"sort"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
@@ -132,9 +133,9 @@ var Command = &cobra.Command{
 		if !isUserIdentifiedValid {
 			if isUserIdentifiedSpecified {
 				fmt.Printf("⚠️  It looks like your specified user '%s' does not exist in the organisation\n", userIdentifier)
-				fmt.Println("   Please select a user from your organisation:")
+				fmt.Println("💬 Please select a user from your organisation:")
 			} else {
-				fmt.Println("Select the user from your organisation that you want to change permissions for:")
+				fmt.Println("💬 Select the user from your organisation that you want to change permissions for:")
 			}
 			fmt.Println("")
 			orgUsers, err := client.ListOrgUsersV1(controller.ListOrgUsersV1Input{
@@ -191,7 +192,7 @@ var Command = &cobra.Command{
 				fmt.Printf("⚠️  It looks like your indicated membership type '%s' is not valid\n", membershipType)
 				fmt.Println("   Please select one from the following:")
 			} else {
-				fmt.Println("What membership type should we grant the user?")
+				fmt.Println("💬 What membership type should we grant the user?")
 			}
 			fmt.Println("")
 			choices := []cli.SelectorChoice{}
@@ -201,6 +202,9 @@ var Command = &cobra.Command{
 					Value: orgMemberType,
 				})
 			}
+			sort.Slice(choices, func(i, j int) bool {
+				return choices[i].Label < choices[j].Label
+			})
 			orgMemberTypeSelection := cli.CreateSelector(cli.SelectorOpts{
 				Choices: choices,
 			})

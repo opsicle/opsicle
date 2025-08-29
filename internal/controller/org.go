@@ -28,6 +28,7 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleCreateOrgV1))).Methods(http.MethodPost)
 	v1.Handle("/{orgCode}", requiresAuth(http.HandlerFunc(handleGetOrgV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleCreateOrgUserV1))).Methods(http.MethodPost)
+	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleGetOrgCurrentUserV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleUpdateOrgUserV1))).Methods(http.MethodPatch)
 	v1.Handle("/{orgId}/member/{userId}", requiresAuth(http.HandlerFunc(handleDeleteOrgUserV1))).Methods(http.MethodDelete)
 	v1.Handle("/{orgId}/members", requiresAuth(http.HandlerFunc(handleListOrgUsersV1))).Methods(http.MethodGet)
@@ -164,7 +165,7 @@ func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", ErrorDatabaseIssue)
 		return
 	}
-	log(common.LogLevelDebug, fmt.Sprintf("successfully retrieved user[%s] in org[%s]", *orgUser.Id, orgUser.Org.GetId()))
+	log(common.LogLevelDebug, fmt.Sprintf("successfully retrieved user[%s] in org[%s]", orgUser.UserId, orgUser.OrgId))
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleGetOrgV1Output{
 		Code:      org.Code,
@@ -297,6 +298,7 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 
 type handleCreateOrgUserV1Input struct {
 	Email                 string `json:"email"`
+	Type                  string `json:"type"`
 	IsTriggerEmailEnabled bool   `json:"isTriggerEmailEnabled"`
 }
 type handleCreateOrgUserV1Output struct {
@@ -336,7 +338,6 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 
 	org, err := models.GetOrgV1(models.GetOrgV1Opts{
 		Db: db,
-
 		Id: &orgId,
 	})
 	if err != nil {
@@ -348,28 +349,20 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isInviterPrivileged := false
-	orgInviter, err := org.GetUserV1(models.GetOrgUserV1Opts{
-		Db:     db,
-		UserId: session.UserId,
-	})
-	if err != nil {
-		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate inviter", ErrorInvalidInput)
+	if err := validateRequesterCanManageOrgUsers(validateRequesterCanManageOrgUsersOpts{
+		OrgId:           orgId,
+		RequesterUserId: session.UserId,
+	}); err != nil {
+		switch true {
+		case errors.Is(err, ErrorInsufficientPermissions):
+			log(common.LogLevelError, fmt.Sprintf("user[%s] doesn't have permissions to add a member to org[%s]: %s", session.UserId, orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", ErrorInsufficientPermissions)
+			return
+		case errors.Is(err, ErrorDatabaseIssue):
+			log(common.LogLevelError, fmt.Sprintf("encountered database issue while processing request by user[%s] to add user with email[%s] to org[%s]: %s", session.UserId, input.Email, orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve inviter", ErrorDatabaseIssue)
-		return
-	}
-	switch *orgInviter.Org.MemberType {
-	case "admin":
-		fallthrough
-	case "maanger":
-		isInviterPrivileged = true
-	}
-	if !isInviterPrivileged {
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "not allowed", ErrorInsufficientPermissions)
-		return
 	}
 
 	isAcceptorExists := false
@@ -393,9 +386,10 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	invitationOpts := models.InviteOrgUserV1Opts{
-		Db:        db,
-		InviterId: session.UserId,
-		JoinCode:  joinCode,
+		Db:             db,
+		InviterId:      session.UserId,
+		JoinCode:       joinCode,
+		MembershipType: input.Type,
 	}
 	if isAcceptorExists {
 		invitationOpts.AcceptorId = acceptor.Id
@@ -443,7 +437,7 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 						joinCode,
 						remoteAddr,
 						userAgent,
-						orgInviter.Email,
+						session.Username,
 						org.Name,
 						org.Code,
 					),
@@ -474,6 +468,57 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		IsExistingUser: invitationOutput.IsExistingUser,
 	}
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleGetOrgCurrentUserV1Output struct {
+	JoinedAt   time.Time `json:"joinedAt"`
+	MemberType string    `json:"memberType"`
+	OrgCode    string    `json:"orgCode"`
+	OrgId      string    `json:"orgId"`
+	UserId     string    `json:"userId"`
+
+	Permissions OrgUserMemberPermissions `json:"permissions"`
+}
+
+func handleGetOrgCurrentUserV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+	if _, err := uuid.Parse(orgId); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid org id: %s", session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		return
+	}
+
+	log(common.LogLevelDebug, fmt.Sprintf("received request by user[%s] to get information on their membership in org[%s]", session.UserId, orgId))
+
+	org := models.Org{Id: &orgId}
+	orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{
+		Db:     db,
+		UserId: session.UserId,
+	})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s] from org[%s]: %s", session.UserId, orgId, err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user", ErrorInvalidInput)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user", ErrorDatabaseIssue)
+		return
+	}
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleGetOrgCurrentUserV1Output{
+		JoinedAt:   orgUser.JoinedAt,
+		MemberType: orgUser.MemberType,
+		OrgCode:    orgUser.OrgCode,
+		OrgId:      orgUser.OrgId,
+		UserId:     orgUser.UserId,
+
+		Permissions: OrgUserMemberPermissions{
+			CanManageUsers: isAllowedToManageOrgUsers(orgUser),
+		},
+	})
 }
 
 type handleUpdateOrgInvitationV1Output struct {
@@ -512,7 +557,7 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orgInvite := models.OrgUserInvitation{Id: invitationId}
-	if err := orgInvite.LoadFromId(models.DatabaseConnection{Db: db}); err != nil {
+	if err := orgInvite.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed find invitation", ErrorInvitationInvalid)
 			return
@@ -551,7 +596,6 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 		orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{
 			Db:     db,
 			UserId: session.UserId,
-			OrgId:  org.Id,
 		})
 		if err != nil {
 			if errors.Is(err, models.ErrorNotFound) {
@@ -563,12 +607,12 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 		}
 
 		output := handleUpdateOrgInvitationV1Output{
-			JoinedAt:       *orgUser.JoinedOrgAt,
-			MembershipType: *orgUser.Org.MemberType,
-			OrgId:          *orgUser.Org.Id,
-			OrgCode:        orgUser.Org.Code,
-			OrgName:        orgUser.Org.Name,
-			UserId:         *orgUser.Id,
+			JoinedAt:       orgUser.JoinedAt,
+			MembershipType: orgUser.MemberType,
+			OrgId:          orgUser.OrgId,
+			OrgCode:        orgUser.OrgCode,
+			OrgName:        orgUser.OrgName,
+			UserId:         orgUser.UserId,
 		}
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 	} else {
@@ -621,7 +665,7 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", ErrorInsufficientPermissions)
 			return
 		case errors.Is(err, ErrorDatabaseIssue):
-			log(common.LogLevelError, fmt.Sprintf("encountered database issue while processing request by user[%s] to delete user[%s] from org[%s]: %w", session.UserId, userId, orgId, err))
+			log(common.LogLevelError, fmt.Sprintf("encountered database issue while processing request by user[%s] to delete user[%s] from org[%s]: %s", session.UserId, userId, orgId, err))
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
 			return
 		}
@@ -632,6 +676,30 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		OrgId:  orgId,
 		UserId: userId,
 	}
+	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", ErrorDatabaseIssue)
+		return
+	}
+	if orgUser.MemberType == string(models.TypeOrgAdmin) {
+		// verify org user is not the last administrator
+		org := models.Org{Id: &orgId}
+		adminsCount, err := org.GetRoleCountV1(models.GetRoleCountV1Opts{
+			Db:   db,
+			Role: models.TypeOrgAdmin,
+		})
+		if err != nil {
+			log(common.LogLevelError, fmt.Sprintf("encountered database issue while retrieving member count from org[%s]: %s", orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+			return
+		}
+		if adminsCount == 1 {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to remove only administrator", ErrorInvalidInput)
+			return
+		}
+	}
+
+	// delete the org user
+
 	if err := orgUser.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to remove user[%s] from org[%s]: %s", userId, orgId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove member", ErrorDatabaseIssue)
@@ -720,13 +788,48 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	orgUser := models.OrgUser{OrgId: orgId, UserId: userId}
+	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to load user[%s] in org[%s]: %s", userId, orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user", ErrorDatabaseIssue)
+		return
+	}
+
+	// if changing permissions, ensure the only administrator is not updated to
+	// remove administrator permissions if they're the only administrator
+	// remaining
+
+	if orgUser.MemberType == string(models.TypeOrgAdmin) {
+		if membershipType, ok := input.Update["type"]; ok {
+			if membershipType.(string) != string(models.TypeOrgAdmin) {
+				org := models.Org{Id: &orgId}
+				adminsCount, err := org.GetRoleCountV1(models.GetRoleCountV1Opts{
+					Db:   db,
+					Role: models.TypeOrgAdmin,
+				})
+				if err != nil {
+					log(common.LogLevelError, fmt.Sprintf("encountered database issue while retrieving member count from org[%s]: %s", orgId, err))
+					common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+					return
+				}
+				if adminsCount == 1 {
+					common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update membership type of the only administrator", ErrorInvalidInput)
+					return
+				}
+			}
+		}
+	}
+
 	// make org user changes
 
-	orgUser := models.OrgUser{OrgId: orgId, UserId: userId}
 	if err := orgUser.UpdateFieldsV1(models.UpdateOrgUserFieldsV1{
 		Db:          db,
 		FieldsToSet: input.Update,
 	}); err != nil {
+		if errors.Is(err, models.ErrorInvalidInput) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update org user", ErrorInvalidInput)
+			return
+		}
 		log(common.LogLevelError, fmt.Sprintf("request by user[%s] to update user[%s] in org[%s] failed: %s", session.UserId, userId, orgId, err))
 		if errors.Is(err, models.ErrorInvalidInput) {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update org user", ErrorInvalidInput)

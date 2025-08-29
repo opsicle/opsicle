@@ -38,11 +38,9 @@ func (ou *OrgUser) UpdateFieldsV1(opts UpdateOrgUserFieldsV1) error {
 	sqlArgs = append(sqlArgs, ou.OrgId, ou.UserId)
 
 	return executeMysqlUpdate(mysqlQueryInput{
-		Db:           opts.Db,
-		Stmt:         sqlStmt,
-		Args:         sqlArgs,
-		RowsAffected: oneRowAffected,
-		FnSource:     "models.OrgUser.UpdateFieldsV1",
+		Db:       opts.Db,
+		Stmt:     sqlStmt,
+		Args:     sqlArgs,
+		FnSource: "models.OrgUser.UpdateFieldsV1",
 	})
-	return nil
 }

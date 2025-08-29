@@ -134,14 +134,46 @@ func (o Org) GetId() string {
 	return *o.Id
 }
 
+type GetRoleCountV1Opts struct {
+	Db *sql.DB
+
+	Role OrgMemberType
+}
+
+func (o Org) GetRoleCountV1(opts GetRoleCountV1Opts) (int, error) {
+	sqlStmt := `
+		SELECT
+			COUNT(*)
+			FROM org_users
+			WHERE
+				org_id = ?
+				AND type = ?
+	`
+	sqlArgs := []any{*o.Id, opts.Role}
+	stmt, err := opts.Db.Prepare(sqlStmt)
+	if err != nil {
+		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to prepare select statement: %w", ErrorStmtPreparationFailed)
+	}
+	res := stmt.QueryRow(sqlArgs...)
+	if res.Err() != nil {
+		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to execute select statement: %w", ErrorSelectFailed)
+	}
+	var roleCount int
+	if err := res.Scan(&roleCount); err != nil {
+		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to scan results: %w", ErrorGenericDatabaseIssue)
+	}
+	return roleCount, nil
+}
+
 type GetOrgUserV1Opts struct {
 	Db *sql.DB
 
 	UserId string
-	OrgId  *string
 }
 
-func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*User, error) {
+// GetUserV1 retrieves the user as the organisation understands it
+// based on the provided `UserId“
+func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*OrgUser, error) {
 	sqlStmt := `
 		SELECT
 			users.email,
@@ -160,23 +192,22 @@ func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*User, error) {
 	sqlArgs := []any{*o.Id, opts.UserId}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return nil, fmt.Errorf("models.Org.GetUserV1: failed to prepare select statement: %w", err)
+		return nil, fmt.Errorf("models.Org.GetUserV1: failed to prepare select statement: %w", ErrorStmtPreparationFailed)
 	}
 
 	res := stmt.QueryRow(sqlArgs...)
 	if res.Err() != nil {
-		return nil, fmt.Errorf("models.Org.GetUserV1: failed to execute select statement: %w", err)
+		return nil, fmt.Errorf("models.Org.GetUserV1: failed to execute select statement: %w", ErrorSelectFailed)
 	}
-	var userInstance User
-	userInstance.Org = &Org{}
+	var userInstance OrgUser
 	if err := res.Scan(
-		&userInstance.Email,
-		&userInstance.Id,
-		&userInstance.Org.Id,
-		&userInstance.Org.Code,
-		&userInstance.Org.Name,
-		&userInstance.Org.MemberType,
-		&userInstance.JoinedOrgAt,
+		&userInstance.UserEmail,
+		&userInstance.UserId,
+		&userInstance.OrgId,
+		&userInstance.OrgCode,
+		&userInstance.OrgName,
+		&userInstance.MemberType,
+		&userInstance.JoinedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrorNotFound
@@ -190,10 +221,11 @@ func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*User, error) {
 type InviteOrgUserV1Opts struct {
 	Db *sql.DB
 
-	AcceptorId    *string
-	AcceptorEmail *string
-	InviterId     string
-	JoinCode      string
+	AcceptorId     *string
+	AcceptorEmail  *string
+	InviterId      string
+	JoinCode       string
+	MembershipType string
 }
 
 type InviteUserV1Output struct {
@@ -202,6 +234,9 @@ type InviteUserV1Output struct {
 }
 
 func (o *Org) InviteUserV1(opts InviteOrgUserV1Opts) (*InviteUserV1Output, error) {
+	if _, ok := OrgMemberTypeMap[opts.MembershipType]; !ok {
+		opts.MembershipType = string(TypeOrgMember)
+	}
 	invitationId := uuid.NewString()
 	sqlInserts := []string{
 		"id",
@@ -215,7 +250,7 @@ func (o *Org) InviteUserV1(opts InviteOrgUserV1Opts) (*InviteUserV1Output, error
 		o.GetId(),
 		opts.InviterId,
 		opts.JoinCode,
-		TypeOrgMember,
+		opts.MembershipType,
 	}
 	isExistingUser := false
 	if opts.AcceptorId != nil {

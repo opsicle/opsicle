@@ -20,7 +20,7 @@ func (ou *OrgUser) LoadV1(opts DatabaseConnection) error {
 		u.email,
 		u.type,
 		o.code,
-		o.name,
+		o.name
 		FROM org_users ou
 			JOIN users u ON ou.user_id = u.id
 			JOIN orgs o ON ou.org_id = o.id
@@ -31,12 +31,12 @@ func (ou *OrgUser) LoadV1(opts DatabaseConnection) error {
 	sqlArgs := []any{ou.OrgId, ou.UserId}
 	stmt, err := opts.Db.Prepare(sqlStmt)
 	if err != nil {
-		return fmt.Errorf("models.OrgUser.LoadV1: failed to prepare statement: %w", ErrorStmtPreparationFailed)
+		return fmt.Errorf("models.OrgUser.LoadV1: failed to prepare statement: %w: %w", err, ErrorStmtPreparationFailed)
 	}
 
 	res := stmt.QueryRow(sqlArgs...)
 	if res.Err() != nil {
-		return fmt.Errorf("models.OrgUser.LoadV1: failed to execute statement: %w", ErrorQueryFailed)
+		return fmt.Errorf("models.OrgUser.LoadV1: failed to execute statement: %w: %w", err, ErrorQueryFailed)
 	}
 	if err := res.Scan(
 		&ou.JoinedAt,

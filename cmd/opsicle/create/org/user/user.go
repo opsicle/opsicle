@@ -6,6 +6,7 @@ import (
 	"opsicle/internal/cli"
 	"opsicle/internal/validate"
 	"opsicle/pkg/controller"
+	"sort"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sirupsen/logrus"
@@ -31,6 +32,12 @@ var flags cli.Flags = cli.Flags{
 		Name:         "org",
 		DefaultValue: "",
 		Usage:        "Codeword for the organisation to add someone to",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "member-type",
+		DefaultValue: "",
+		Usage:        "Type of membership that the user should have",
 		Type:         cli.FlagTypeString,
 	},
 }
@@ -142,6 +149,52 @@ var Command = &cobra.Command{
 			goto askForUserEmail
 		}
 
+		orgMemberTypes, err := client.ListOrgMemberTypesV1()
+		if err != nil {
+			return fmt.Errorf("org member types retrieval failed: %w", err)
+		}
+		membershipType := viper.GetString("member-type")
+		isMembershipTypeSpecified := membershipType != ""
+		isMembershipTypeValid := false
+		if isMembershipTypeSpecified {
+			for _, orgMemberType := range orgMemberTypes.Data {
+				if membershipType == orgMemberType {
+					isMembershipTypeValid = true
+				}
+			}
+		}
+
+		if !isMembershipTypeValid {
+			if isMembershipTypeSpecified {
+				fmt.Printf("⚠️  It looks like your indicated membership type '%s' is not valid\n", membershipType)
+				fmt.Println("   Please select one from the following:")
+			} else {
+				fmt.Println("💬 What membership type should we grant the user?")
+			}
+			fmt.Println("")
+			choices := []cli.SelectorChoice{}
+			for _, orgMemberType := range orgMemberTypes.Data {
+				choices = append(choices, cli.SelectorChoice{
+					Label: orgMemberType,
+					Value: orgMemberType,
+				})
+			}
+			sort.Slice(choices, func(i, j int) bool {
+				return choices[i].Label < choices[j].Label
+			})
+			orgMemberTypeSelection := cli.CreateSelector(cli.SelectorOpts{
+				Choices: choices,
+			})
+			orgMemberTypeSelector := tea.NewProgram(orgMemberTypeSelection)
+			if _, err := orgMemberTypeSelector.Run(); err != nil {
+				return fmt.Errorf("failed to get user input: %w", err)
+			}
+			if orgMemberTypeSelection.GetExitCode() == cli.PromptCancelled {
+				return errors.New("user cancelled")
+			}
+			membershipType = orgMemberTypeSelection.GetValue()
+		}
+
 		fmt.Printf("⏳ Adding user['%s'] to org['%s']...\n", userEmail, org.Data.Name)
 		fmt.Println("")
 
@@ -149,6 +202,7 @@ var Command = &cobra.Command{
 			Email:                 userEmail,
 			OrgId:                 org.Data.Id,
 			IsTriggerEmailEnabled: true,
+			Type:                  membershipType,
 		})
 		if err != nil {
 			if errors.Is(err, controller.ErrorInvitationExists) {

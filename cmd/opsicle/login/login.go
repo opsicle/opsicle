@@ -53,7 +53,9 @@ var Command = &cobra.Command{
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, _, err := controller.GetSessionToken()
+		controllerUrl := viper.GetString("controller-url")
+		methodId := "opsicle/create/org/user"
+		_, err := cli.RequireAuth(controllerUrl, methodId)
 		if err == nil {
 			fmt.Println("⚠️ You're already logged in, run `opsicle logout` first before running this command")
 			return fmt.Errorf("you are already logged in")
@@ -116,7 +118,6 @@ var Command = &cobra.Command{
 		}
 		password := model.GetValue("password")
 
-		controllerUrl := viper.GetString("controller-url")
 		client, err := controller.NewClient(controller.NewClientOpts{
 			ControllerUrl: controllerUrl,
 			Id:            "opsicle/login",
