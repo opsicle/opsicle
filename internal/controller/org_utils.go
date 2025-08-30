@@ -47,3 +47,22 @@ func validateRequesterCanManageOrgUsers(opts validateRequesterCanManageOrgUsersO
 	}
 	return nil
 }
+
+type validateUserIsNotLastAdminOpts struct {
+	OrgId  string
+	UserId string
+}
+
+// validateUserIsNotLastAdmin verifies that the provided UserId
+// is not the last administrator in the organisation
+func validateUserIsNotLastAdmin(opts validateUserIsNotLastAdminOpts) error {
+	org := models.Org{Id: &opts.OrgId}
+	admins, err := org.GetAdminsV1(models.DatabaseConnection{Db: db})
+	if err != nil {
+		return fmt.Errorf("failed to retrieve admin list: %w", err)
+	}
+	if len(admins) == 1 && admins[0].UserId == opts.UserId {
+		return ErrorOrgRequiresOneAdmin
+	}
+	return nil
+}

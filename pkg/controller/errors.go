@@ -18,6 +18,7 @@ var (
 	ErrorMfaRequired             = errors.New("mfa_required")
 	ErrorMfaTokenInvalid         = errors.New("mfa_token_invalid")
 	ErrorOrgExists               = errors.New("org_exists")
+	ErrorOrgRequiresOneAdmin     = errors.New("org_requires_one_admin")
 	ErrorSessionExpired          = errors.New("session_expired")
 	ErrorUserExistsInOrg         = errors.New("user_exists_in_org")
 	ErrorUserLoginFailed         = errors.New("login_failed")

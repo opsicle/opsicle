@@ -134,35 +134,52 @@ func (o Org) GetId() string {
 	return *o.Id
 }
 
-type GetRoleCountV1Opts struct {
-	Db *sql.DB
-
-	Role OrgMemberType
-}
-
-func (o Org) GetRoleCountV1(opts GetRoleCountV1Opts) (int, error) {
+func (o Org) GetAdminsV1(opts DatabaseConnection) ([]OrgUser, error) {
 	sqlStmt := `
-		SELECT
-			COUNT(*)
-			FROM org_users
+		SELECT 
+			u.email,
+			u.id,
+			o.id,
+			o.code,
+			o.name,
+			ou.type,
+			ou.joined_at
+			FROM org_users ou
+				JOIN orgs o ON o.id = ou.org_id
+				JOIN users u ON u.id = ou.user_id
 			WHERE
-				org_id = ?
-				AND type = ?
+				ou.org_id = ? AND ou.type = ?
 	`
-	sqlArgs := []any{*o.Id, opts.Role}
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to prepare select statement: %w", ErrorStmtPreparationFailed)
+	sqlArgs := []any{*o.Id, TypeOrgAdmin}
+	results := []OrgUser{}
+	if err := executeMysqlSelects(mysqlQueryInput{
+		Db:       opts.Db,
+		Stmt:     sqlStmt,
+		Args:     sqlArgs,
+		FnSource: "models.Org.GetAdminsV1",
+		ProcessRow: func(r *sql.Rows) error {
+			orgUser := OrgUser{}
+			if err := r.Scan(
+				&orgUser.UserEmail,
+				&orgUser.UserId,
+				&orgUser.OrgId,
+				&orgUser.OrgCode,
+				&orgUser.OrgName,
+				&orgUser.MemberType,
+				&orgUser.JoinedAt,
+			); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return ErrorNotFound
+				}
+				return err
+			}
+			results = append(results, orgUser)
+			return nil
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("models.Org.GetAdminsV1: failed to get admins: %w", err)
 	}
-	res := stmt.QueryRow(sqlArgs...)
-	if res.Err() != nil {
-		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to execute select statement: %w", ErrorSelectFailed)
-	}
-	var roleCount int
-	if err := res.Scan(&roleCount); err != nil {
-		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to scan results: %w", ErrorGenericDatabaseIssue)
-	}
-	return roleCount, nil
+	return results, nil
 }
 
 type GetOrgUserV1Opts struct {
@@ -216,6 +233,37 @@ func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*OrgUser, error) {
 	}
 
 	return &userInstance, nil
+}
+
+type GetRoleCountV1Opts struct {
+	Db *sql.DB
+
+	Role OrgMemberType
+}
+
+func (o Org) GetRoleCountV1(opts GetRoleCountV1Opts) (int, error) {
+	sqlStmt := `
+		SELECT
+			COUNT(*)
+			FROM org_users
+			WHERE
+				org_id = ?
+				AND type = ?
+	`
+	sqlArgs := []any{*o.Id, opts.Role}
+	stmt, err := opts.Db.Prepare(sqlStmt)
+	if err != nil {
+		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to prepare select statement: %w", ErrorStmtPreparationFailed)
+	}
+	res := stmt.QueryRow(sqlArgs...)
+	if res.Err() != nil {
+		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to execute select statement: %w", ErrorSelectFailed)
+	}
+	var roleCount int
+	if err := res.Scan(&roleCount); err != nil {
+		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to scan results: %w", ErrorGenericDatabaseIssue)
+	}
+	return roleCount, nil
 }
 
 type InviteOrgUserV1Opts struct {

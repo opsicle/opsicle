@@ -199,6 +199,43 @@ func (c Client) GetOrgMembershipV1(input GetOrgMembershipV1Input) (*GetOrgMember
 	return output, err
 }
 
+type LeaveOrgV1Input struct {
+	OrgId string `json:"-"`
+}
+
+type LeaveOrgV1Output struct {
+	Data LeaveOrgV1OutputData
+
+	http.Response
+}
+
+type LeaveOrgV1OutputData struct {
+	IsSuccessful bool `json:"isSuccessful"`
+}
+
+func (c Client) LeaveOrgV1(input LeaveOrgV1Input) (*LeaveOrgV1Output, error) {
+	var outputData LeaveOrgV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodDelete,
+		Path:   fmt.Sprintf("/api/v1/org/%s/member", input.OrgId),
+		Output: &outputData,
+	})
+	var output *LeaveOrgV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &LeaveOrgV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorOrgRequiresOneAdmin.Error():
+			err = ErrorOrgRequiresOneAdmin
+		}
+	}
+	return output, err
+}
+
 type ListOrgsV1Output struct {
 	Data ListOrgsV1OutputData
 

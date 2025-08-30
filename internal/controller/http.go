@@ -20,11 +20,13 @@ import (
 
 type HttpApplicationOpts struct {
 	AdminToken          string
-	SessionSigningToken string
 	DatabaseConnection  *sql.DB
 	EmailConfig         *SmtpServerConfig
+	LivenessChecks      []func() error
+	ReadinessChecks     []func() error
 	PublicServerUrl     *url.URL
 	ServiceLogs         chan<- common.ServiceLog
+	SessionSigningToken string
 }
 
 // GetHttpApplication godoc
@@ -79,6 +81,12 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 
 	handler := mux.NewRouter()
 	handler.NotFoundHandler = common.GetNotFoundHandler()
+	if opts.LivenessChecks != nil {
+		livenessChecks = append(livenessChecks, opts.LivenessChecks...)
+	}
+	if opts.ReadinessChecks != nil {
+		readinessChecks = append(readinessChecks, opts.ReadinessChecks...)
+	}
 	registerHealthcheckRoutes(RouteRegistrationOpts{
 		Router:      handler,
 		ServiceLogs: opts.ServiceLogs,

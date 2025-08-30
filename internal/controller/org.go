@@ -30,6 +30,7 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleCreateOrgUserV1))).Methods(http.MethodPost)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleGetOrgCurrentUserV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleUpdateOrgUserV1))).Methods(http.MethodPatch)
+	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleLeaveOrgV1))).Methods(http.MethodDelete)
 	v1.Handle("/{orgId}/member/{userId}", requiresAuth(http.HandlerFunc(handleDeleteOrgUserV1))).Methods(http.MethodDelete)
 	v1.Handle("/{orgId}/members", requiresAuth(http.HandlerFunc(handleListOrgUsersV1))).Methods(http.MethodGet)
 	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateOrgInvitationV1))).Methods(http.MethodPatch)
@@ -622,6 +623,52 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 		}
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", nil)
 	}
+}
+
+type handleLeaveOrgV1Output struct {
+	IsSuccessful bool `json:"isSuccessful"`
+}
+
+func handleLeaveOrgV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+	if _, err := uuid.Parse(orgId); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid org id: %s", session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		return
+	}
+
+	log(common.LogLevelDebug, fmt.Sprintf("received request by user[%s] to leave org[%s]", session.UserId, orgId))
+
+	orgUser := models.OrgUser{
+		OrgId:  orgId,
+		UserId: session.UserId,
+	}
+	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", ErrorDatabaseIssue)
+		return
+	}
+	if err := validateUserIsNotLastAdmin(validateUserIsNotLastAdminOpts{
+		OrgId:  orgId,
+		UserId: session.UserId,
+	}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] is the last admin and cannot leave the organisation: %s", session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "user is last admin", ErrorOrgRequiresOneAdmin)
+		return
+	}
+
+	// delete the org user
+
+	if err := orgUser.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to remove user[%s] from org[%s]: %s", session.UserId, orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove member", ErrorDatabaseIssue)
+		return
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleLeaveOrgV1Output{IsSuccessful: true})
 }
 
 type handleDeleteOrgUserV1Output struct {

@@ -47,6 +47,7 @@ var Command = &cobra.Command{
 		methodId := "opsicle/list/org/invitations"
 		sessionToken, err := cli.RequireAuth(controllerUrl, methodId)
 		if err != nil {
+			fmt.Println("⚠️  You must be logged-in to run this command")
 			return err
 		}
 

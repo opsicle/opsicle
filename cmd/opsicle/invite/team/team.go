@@ -1,4 +1,4 @@
-package user
+package team
 
 import (
 	"errors"
@@ -9,7 +9,6 @@ import (
 	"sort"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -47,9 +46,9 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:     "user",
-	Aliases: []string{"o"},
-	Short:   "Adds a user to an organisation",
+	Use:     "team-member",
+	Aliases: []string{"team", "t"},
+	Short:   "Invite a team member to an organisation",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},
@@ -58,6 +57,7 @@ var Command = &cobra.Command{
 		methodId := "opsicle/create/org/user"
 		sessionToken, err := cli.RequireAuth(controllerUrl, methodId)
 		if err != nil {
+			fmt.Println("⚠️  You must be logged-in to run this command")
 			return err
 		}
 
@@ -72,45 +72,23 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
-		orgCode := viper.GetString("org")
-		if orgCode == "" {
-			logrus.Debugf("retrieving available organisations to current user")
-			listOrgsOutput, err := client.ListOrgsV1()
-			if err != nil {
-				return fmt.Errorf("controller request failed")
-			}
-
-			fmt.Println("✨ Select an organisation to add users to:")
-			fmt.Println("")
-			choices := []cli.SelectorChoice{}
-			for _, org := range listOrgsOutput.Data {
-				choices = append(choices, cli.SelectorChoice{
-					Description: org.Name,
-					Label:       org.Code,
-					Value:       org.Code,
-				})
-			}
-			orgSelection := cli.CreateSelector(cli.SelectorOpts{
-				Choices: choices,
-			})
-			orgSelector := tea.NewProgram(orgSelection)
-			if _, err := orgSelector.Run(); err != nil {
-				return fmt.Errorf("failed to get user input: %w", err)
-			}
-			if orgSelection.GetExitCode() == cli.PromptCancelled {
-				return errors.New("user cancelled")
-			}
-			orgCode = orgSelection.GetValue()
+		orgCode, err := cli.HandleOrgSelection(cli.HandleOrgSelectionOpts{
+			Client:    client,
+			UserInput: viper.GetString("org"),
+		})
+		if err != nil {
+			return fmt.Errorf("org selection failed: %w", err)
 		}
+
 		org, err := client.GetOrgV1(controller.GetOrgV1Input{
-			Code: orgCode,
+			Code: *orgCode,
 		})
 		if err != nil {
 			return fmt.Errorf("org retrieval failed: %w", err)
 		}
 
 		if viper.GetString("email") == "" {
-			fmt.Printf("✨ Enter the email of the person you want to add to %s:\n\n", org.Data.Name)
+			fmt.Printf("💬 Enter the email of the person you want to add to %s:\n\n", org.Data.Name)
 		}
 
 	askForUserEmail:
@@ -195,7 +173,7 @@ var Command = &cobra.Command{
 			membershipType = orgMemberTypeSelection.GetValue()
 		}
 
-		fmt.Printf("⏳ Adding user['%s'] to org['%s']...\n", userEmail, org.Data.Name)
+		fmt.Printf("⏳ Adding <%s> to the organisation %s <%s> as a <%s>...\n", userEmail, org.Data.Name, org.Data.Code, membershipType)
 		fmt.Println("")
 
 		createOrgUserOutput, err := client.CreateOrgUserV1(controller.CreateOrgUserV1Input{

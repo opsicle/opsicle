@@ -9,7 +9,6 @@ import (
 func RequireAuth(controllerUrl string, methodId string) (string, error) {
 	sessionToken, _, err := controller.GetSessionToken()
 	if err != nil {
-		fmt.Println("⚠️ You must be logged-in to run this command")
 		return "", fmt.Errorf("not authenticated")
 	}
 

@@ -8,6 +8,8 @@ import (
 	"opsicle/internal/controller"
 	"opsicle/internal/database"
 	"opsicle/internal/email"
+	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -149,8 +151,9 @@ var Command = &cobra.Command{
 		logrus.Debugf("started logging engine")
 
 		logrus.Infof("establishing connection to database...")
+		connectionId := "opsicle/controller"
 		databaseConnection, err := database.ConnectMysql(database.ConnectOpts{
-			ConnectionId: "opsicle/controller",
+			ConnectionId: connectionId,
 			Host:         viper.GetString("mysql-host"),
 			Port:         viper.GetInt("mysql-port"),
 			Username:     viper.GetString("mysql-user"),
@@ -161,6 +164,39 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to establish connection to database: %w", err)
 		}
 		logrus.Debugf("established connection to database")
+		logrus.Infof("starting connection freshness verifier...")
+		databaseConnectionOk := true
+		databaseConnectionStatusLastUpdatedAt := time.Now()
+		databaseConnectionStatusUpdates := make(chan bool)
+		var databaseConnectionStatusMutex sync.Mutex
+		go func() {
+			for {
+				statusUpdate := <-databaseConnectionStatusUpdates
+				databaseConnectionStatusMutex.Lock()
+				if statusUpdate != databaseConnectionOk {
+					logrus.Debugf("database connection freshness status switched to '%v'", statusUpdate)
+					databaseConnectionStatusLastUpdatedAt = time.Now()
+				}
+				databaseConnectionOk = statusUpdate
+				databaseConnectionStatusMutex.Unlock()
+			}
+		}()
+		go func() {
+			for {
+				logrus.Tracef("verifying database connection freshness...")
+				if err := database.CheckMysqlConnection(connectionId); err != nil {
+					logrus.Errorf("failed to check mysql connection with id '%s': %s", connectionId, err)
+					databaseConnectionStatusUpdates <- false
+					if err := database.RefreshMysqlConnection(connectionId); err != nil {
+						logrus.Errorf("failed to refresh mysql connection with id '%s': %s", connectionId, err)
+					}
+				} else {
+					logrus.Tracef("database connection freshness verified")
+					databaseConnectionStatusUpdates <- true
+				}
+				<-time.After(3 * time.Second)
+			}
+		}()
 
 		logrus.Infof("establishing connection to cache...")
 		if err := cache.InitRedis(cache.InitRedisOpts{
@@ -177,7 +213,23 @@ var Command = &cobra.Command{
 
 		sessionSigningToken := viper.GetString("session-signing-token")
 		controllerOpts := controller.HttpApplicationOpts{
-			DatabaseConnection:  databaseConnection,
+			DatabaseConnection: databaseConnection,
+			ReadinessChecks: []func() error{
+				func() error {
+					if !databaseConnectionOk {
+						return fmt.Errorf("database connection is pending restoration")
+					}
+					return nil
+				},
+			},
+			LivenessChecks: []func() error{
+				func() error {
+					if !databaseConnectionOk && databaseConnectionStatusLastUpdatedAt.Before(time.Now().Add(-30*time.Second)) {
+						return fmt.Errorf("database connection is invalid")
+					}
+					return nil
+				},
+			},
 			ServiceLogs:         serviceLogs,
 			SessionSigningToken: sessionSigningToken,
 		}

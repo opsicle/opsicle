@@ -236,7 +236,7 @@ func (c Client) do(input request) (*clientOutput, error) {
 	}
 	output.message = response.Message
 	output.code = errors.New(response.Code)
-	if response.Data != nil {
+	if response.Data != nil && input.Output != nil {
 		responseData, err := json.Marshal(response.Data)
 		if err != nil {
 			return output, fmt.Errorf("%w: %w", ErrorClientMarshalResponseData, err)

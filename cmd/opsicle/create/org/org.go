@@ -3,7 +3,6 @@ package org
 import (
 	"errors"
 	"fmt"
-	"opsicle/cmd/opsicle/create/org/user"
 	"opsicle/internal/cli"
 	"opsicle/internal/validate"
 	"opsicle/pkg/controller"
@@ -38,7 +37,6 @@ var flags cli.Flags = cli.Flags{
 }
 
 func init() {
-	Command.AddCommand(user.Command)
 	flags.AddToCommand(Command)
 }
 

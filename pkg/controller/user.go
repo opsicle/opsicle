@@ -49,7 +49,7 @@ func (c Client) CreateUserV1(input CreateUserV1Input) (*CreateUserV1Output, erro
 			Response: outputClient.Response,
 		}
 	}
-	if err != nil {
+	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
 		case ErrorEmailExists.Error():
 			err = ErrorEmailExists
