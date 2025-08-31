@@ -6,3 +6,8 @@ vendor
 
 # for local environment variable management
 .envrc
+
+data/.mongodb/data
+data/.mysql/data
+data/.nats/data
+data/.redis/data

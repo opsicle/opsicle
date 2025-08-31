@@ -17,13 +17,22 @@ type InitRedisOpts struct {
 
 // InitRedis initialises a singleton instance of a Redis cache
 func InitRedis(opts InitRedisOpts) error {
-	client, err := redis.New(redis.NewOpts{
+	redisOpts := redis.NewOpts{
 		Addr:           opts.Addr,
 		Username:       opts.Username,
 		Password:       opts.Password,
 		CheckRwEnabled: true,
-		ServiceLogs:    &opts.ServiceLogs,
-	})
+	}
+	if opts.ServiceLogs != nil {
+		redisOpts.ServiceLogs = &opts.ServiceLogs
+	} else {
+		initNoopServiceLog()
+		var serviceLogs chan<- common.ServiceLog = noopServiceLog
+		redisOpts.ServiceLogs = &serviceLogs
+		go startNoopServiceLog()
+		defer stopNoopServiceLog()
+	}
+	client, err := redis.New(redisOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create redis client: %w", err)
 	}

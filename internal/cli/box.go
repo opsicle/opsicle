@@ -141,7 +141,7 @@ func ShowWarningWithConfirmation(message string, isFullScreen bool) error {
 
 func printBoxedMessage(header, asciiColor, message string) {
 	width, _, _ := term.GetSize(int(os.Stdout.Fd()))
-	if width == 0 {
+	if width == 0 || width > 72 {
 		width = 72
 	}
 	header = lipgloss.NewStyle().Bold(true).Render(header)

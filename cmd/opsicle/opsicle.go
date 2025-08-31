@@ -3,6 +3,7 @@ package opsicle
 import (
 	"fmt"
 	"opsicle/cmd/opsicle/admin"
+	"opsicle/cmd/opsicle/check"
 	"opsicle/cmd/opsicle/create"
 	"opsicle/cmd/opsicle/get"
 	"opsicle/cmd/opsicle/invite"
@@ -90,6 +91,7 @@ func init() {
 	Command.SetVersionTemplate(cli.Logo + "\n" + `{{with .DisplayName}}{{printf "%s " .}}{{end}}{{printf "version %s" .Version}}`)
 
 	Command.AddCommand(admin.Command)
+	Command.AddCommand(check.Command)
 	Command.AddCommand(create.Command)
 	Command.AddCommand(get.Command)
 	Command.AddCommand(invite.Command)

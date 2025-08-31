@@ -18,6 +18,10 @@ type Instance struct {
 	ServiceLogs chan<- common.ServiceLog
 }
 
+func (i *Instance) Close() error {
+	return i.Client.Close()
+}
+
 func (i *Instance) Set(key string, value string, ttl time.Duration) error {
 	status := i.Client.Set(key, value, ttl)
 	if status.Err() != nil {
@@ -57,6 +61,14 @@ func (i *Instance) Del(key string) error {
 	}
 	i.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "key[%s] deletion succeeded", key)
 	i.ServiceLogs <- common.ServiceLogf(common.LogLevelTrace, "delete key[%s] response: %s", key, response.String())
+	return nil
+}
+
+func (i *Instance) Ping() error {
+	status := i.Client.Ping()
+	if status.Err() != nil {
+		return fmt.Errorf("failed to ping server: %w", status.Err())
+	}
 	return nil
 }
 

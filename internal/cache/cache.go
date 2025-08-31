@@ -11,6 +11,8 @@ type Cache interface {
 	Get(key string) (value string, err error)
 	Scan(prefix string) (keys []string, err error)
 	Del(key string) (err error)
+	Ping() (err error)
+	Close() (err error)
 }
 
 func Get() Cache {

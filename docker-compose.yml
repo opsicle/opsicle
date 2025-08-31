@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # opsicle:
   #   build:
@@ -16,6 +14,18 @@ services:
   #   ports:
   #     - "8080:8080"
 
+  mongodb:
+    image: mongo:8.0.13
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: opsicle
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - ./data/.mongodb/data:/data/db
+
   mysql:
     image: mysql:8
     container_name: database
@@ -28,7 +38,28 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./data/.mysql:/var/lib/mysql
+      - ./data/.mysql/data:/var/lib/mysql
+
+  nats:
+    image: nats:2.11.8-alpine
+    container_name: nats
+    restart: unless-stopped
+    environment:
+      NATS_ROOT_PASSWORD: password
+      NATS_USER: opsicle
+      NATS_PASSWORD: password
+      # generate these with 'nsc generate nkey --user'
+      # if changing these, remember to import them into .envrc
+      NATS_DEV_NKEY_PRIVATE: SUADZTA4VJHBCO7K75DQ3IN7KZGWHKEI26D2IYEABRN5TXXYHXLWNDYT4A
+      NATS_DEV_NKEY_PUBLIC: UCESTFGBXTT5CP2UWKQAIARTTFSBX3RFIFYLWX4VVUWM4LA4BF2X6FCC
+    command: ["-js", "--server_name", "nats-server", "--config", "/etc/nats/nats.conf"]
+    ports:
+      - "4222:4222"   # Client connections
+      - "6222:6222"   # Routes (cluster comms)
+      - "8222:8222"   # Monitoring
+    volumes:
+      - ./data/.nats/nats.conf:/etc/nats/nats.conf:ro
+      - ./data/.nats/data:/data
 
   redis:
     image: redis:7-alpine
