@@ -174,7 +174,11 @@ var Command = &cobra.Command{
 				statusUpdate := <-databaseConnectionStatusUpdates
 				databaseConnectionStatusMutex.Lock()
 				if statusUpdate != databaseConnectionOk {
-					logrus.Debugf("database connection freshness status switched to '%v'", statusUpdate)
+					logAtLevel := logrus.Infof
+					if !statusUpdate {
+						logAtLevel = logrus.Warnf
+					}
+					logAtLevel("database connection freshness status switched to '%v'", statusUpdate)
 					databaseConnectionStatusLastUpdatedAt = time.Now()
 				}
 				databaseConnectionOk = statusUpdate

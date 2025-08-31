@@ -79,5 +79,6 @@ func HandleOrgSelection(opts HandleOrgSelectionOpts) (orgCode *string, err error
 		return nil, errors.New("user cancelled")
 	}
 	selectedOrg := orgSelection.GetValue()
+
 	return &selectedOrg, nil
 }
