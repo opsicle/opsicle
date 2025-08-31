@@ -70,7 +70,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to ping database: %w", err)
 		}
 		cli.PrintBoxedSuccessMessage(fmt.Sprintf(
-			"Successfully connected to database at url[%s:%v]",
+			"Successfully connected to audit database at url[%s:%v]",
 			viper.GetString("mongo-host"),
 			viper.GetInt("mongo-port"),
 		))

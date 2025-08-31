@@ -82,7 +82,7 @@ var Command = &cobra.Command{
 		}
 		defer databaseConnection.Close()
 		cli.PrintBoxedSuccessMessage(fmt.Sprintf(
-			"Successfully connected to database at url[%s:%v]",
+			"Successfully connected to platform database at url[%s:%v]",
 			viper.GetString("mysql-host"),
 			viper.GetInt("mysql-port"),
 		))
