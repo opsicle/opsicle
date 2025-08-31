@@ -139,22 +139,33 @@ func ShowWarningWithConfirmation(message string, isFullScreen bool) error {
 	return nil
 }
 
-func GetBoxedErrorMessage(message string) string {
+func printBoxedMessage(header, asciiColor, message string) {
 	width, _, _ := term.GetSize(int(os.Stdout.Fd()))
 	if width == 0 {
 		width = 72
 	}
+	header = lipgloss.NewStyle().Bold(true).Render(header)
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.ThickBorder()).
-		BorderForeground(lipgloss.Color("9")). // red
+		BorderForeground(lipgloss.Color(asciiColor)).
 		Padding(1, 2).
 		Width(width - 3).
 		Align(lipgloss.Left)
-	return boxStyle.Render(
-		fmt.Sprintf(
-			"%s\n\n%s",
-			lipgloss.NewStyle().Bold(true).Render("🔴 ERROR"),
-			message,
-		),
-	)
+	fmt.Println(boxStyle.Render(fmt.Sprintf("%s\n\n%s", header, message)))
+}
+
+func PrintBoxedErrorMessage(message string) {
+	printBoxedMessage("🔴 ERROR", AsciiRed, message)
+}
+
+func PrintBoxedInfoMessage(message string) {
+	printBoxedMessage("🔵 INFORMATION", AsciiBlue, message)
+}
+
+func PrintBoxedWarningMessage(message string) {
+	printBoxedMessage("🟡 WARNING", AsciiYellow, message)
+}
+
+func PrintBoxedSuccessMessage(message string) {
+	printBoxedMessage("✅ SUCCESS", AsciiGreen, message)
 }

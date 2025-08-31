@@ -159,8 +159,20 @@ var Command = &cobra.Command{
 			OrgId:  org.Data.Id,
 			UserId: userIdentifier,
 		}); err != nil {
-			if errors.Is(err, controller.ErrorInsufficientPermissions) {
-				return fmt.Errorf("not allowed")
+			switch true {
+			case errors.Is(err, controller.ErrorInsufficientPermissions):
+				{
+					cli.PrintBoxedErrorMessage("You don't have sufficient permissions to remove a user")
+					return fmt.Errorf("insufficient permissions")
+				}
+			case errors.Is(err, controller.ErrorOrgRequiresOneAdmin):
+				{
+					cli.PrintBoxedErrorMessage(
+						"The user you are trying to remove is the last administrator which cannot be removed\n\n" +
+							"Assign another user with the <admin> role before trying again",
+					)
+					return fmt.Errorf("last admin cannot be deleted")
+				}
 			}
 			return fmt.Errorf("failed to delete user: %w", err)
 		}

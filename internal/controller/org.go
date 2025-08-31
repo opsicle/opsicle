@@ -727,22 +727,13 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", ErrorDatabaseIssue)
 		return
 	}
-	if orgUser.MemberType == string(models.TypeOrgAdmin) {
-		// verify org user is not the last administrator
-		org := models.Org{Id: &orgId}
-		adminsCount, err := org.GetRoleCountV1(models.GetRoleCountV1Opts{
-			Db:   db,
-			Role: models.TypeOrgAdmin,
-		})
-		if err != nil {
-			log(common.LogLevelError, fmt.Sprintf("encountered database issue while retrieving member count from org[%s]: %s", orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
-			return
-		}
-		if adminsCount == 1 {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to remove only administrator", ErrorInvalidInput)
-			return
-		}
+	if err := validateUserIsNotLastAdmin(validateUserIsNotLastAdminOpts{
+		OrgId:  orgId,
+		UserId: session.UserId,
+	}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] is the last admin and cannot leave the organisation: %s", session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "user is last admin", ErrorOrgRequiresOneAdmin)
+		return
 	}
 
 	// delete the org user

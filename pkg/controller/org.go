@@ -81,7 +81,7 @@ func (c Client) CreateOrgUserV1(input CreateOrgUserV1Input) (*CreateOrgUserV1Out
 			Response: outputClient.Response,
 		}
 	}
-	if err != nil {
+	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
 		case ErrorInvitationExists.Error():
 			err = ErrorInvitationExists
@@ -119,6 +119,14 @@ func (c Client) DeleteOrgUserV1(input DeleteOrgUserV1Input) (*DeleteOrgUserV1Out
 		output = &DeleteOrgUserV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorOrgRequiresOneAdmin.Error():
+			err = ErrorOrgRequiresOneAdmin
+		case ErrorInsufficientPermissions.Error():
+			err = ErrorInsufficientPermissions
 		}
 	}
 	return output, err

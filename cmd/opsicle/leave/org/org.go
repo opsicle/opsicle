@@ -54,6 +54,10 @@ var Command = &cobra.Command{
 			fmt.Println("⚠️  You must be logged-in to run this command")
 			return err
 		}
+		cli.PrintLogo()
+		cli.PrintBoxedInfoMessage(
+			"This command helps you to leave an organisation you're currently in",
+		)
 		client, err := controller.NewClient(controller.NewClientOpts{
 			ControllerUrl: controllerUrl,
 			BearerAuth: &controller.NewClientBearerAuthOpts{
@@ -106,10 +110,10 @@ var Command = &cobra.Command{
 			OrgId: org.Data.Id,
 		}); err != nil {
 			if errors.Is(err, controller.ErrorOrgRequiresOneAdmin) {
-				fmt.Println(cli.GetBoxedErrorMessage(
-					"You are the last administrator and cannot leave without appointing another member as an adminsitrator\n" +
-						"To do this, you can run `opsicle update org user perms` and grant another member the <admin> permission",
-				))
+				cli.PrintBoxedErrorMessage(
+					"You are the last administrator of the organisation and cannot be removed\n\n" +
+						"Assign another user with the <admin> role before trying again",
+				)
 				return fmt.Errorf("org requires at least one admin")
 			}
 			logrus.Errorf("failed to leave org: %s", err)
