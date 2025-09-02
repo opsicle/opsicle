@@ -2,12 +2,14 @@ package controller
 
 import (
 	"fmt"
+	"opsicle/internal/audit"
 	"opsicle/internal/cache"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/controller"
 	"opsicle/internal/database"
 	"opsicle/internal/email"
+	"os"
 	"sync"
 	"time"
 
@@ -30,36 +32,55 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
+		Name:         "mongo-host",
+		DefaultValue: "127.0.0.1",
+		Usage:        "Specifies the hostname of the MongoDB instance",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "mongo-port",
+		DefaultValue: "27017",
+		Usage:        "Specifies the port which the MongoDB instance is listening on",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "mongo-user",
+		DefaultValue: "opsicle",
+		Usage:        "Specifies the username to use to login to the MongoDB instance",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "mongo-password",
+		DefaultValue: "password",
+		Usage:        "Specifies the password to use to login to the MongoDB instance",
+		Type:         cli.FlagTypeString,
+	},
+	{
 		Name:         "mysql-host",
-		Short:        'H',
 		DefaultValue: "127.0.0.1",
 		Usage:        "specifies the hostname of the database",
 		Type:         cli.FlagTypeString,
 	},
 	{
 		Name:         "mysql-port",
-		Short:        'P',
 		DefaultValue: "3306",
 		Usage:        "specifies the port which the database is listening on",
 		Type:         cli.FlagTypeString,
 	},
 	{
 		Name:         "mysql-database",
-		Short:        'N',
 		DefaultValue: "opsicle",
 		Usage:        "specifies the name of the central database schema",
 		Type:         cli.FlagTypeString,
 	},
 	{
 		Name:         "mysql-user",
-		Short:        'U',
 		DefaultValue: "opsicle",
 		Usage:        "specifies the username to use to login",
 		Type:         cli.FlagTypeString,
 	},
 	{
 		Name:         "mysql-password",
-		Short:        'p',
 		DefaultValue: "password",
 		Usage:        "specifies the password to use to login",
 		Type:         cli.FlagTypeString,
@@ -150,8 +171,99 @@ var Command = &cobra.Command{
 		common.StartServiceLogLoop(serviceLogs)
 		logrus.Debugf("started logging engine")
 
-		logrus.Infof("establishing connection to database...")
 		connectionId := "opsicle/controller"
+
+		logrus.Infof("establishing connection to audit database...")
+		auditDatabaseConnection, err := database.ConnectMongo(database.ConnectOpts{
+			ConnectionId: connectionId,
+			Host:         viper.GetString("mongo-host"),
+			Port:         viper.GetInt("mongo-port"),
+			Username:     viper.GetString("mongo-user"),
+			Password:     viper.GetString("mongo-password"),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to establish connection to audit database: %w", err)
+		}
+		logrus.Debugf("established connection to audit database")
+		logrus.Infof("starting audit database connection freshness verifier...")
+		auditDatabaseConnectionOk := false
+		auditDatabaseConnectionStatusLastUpdatedAt := time.Now()
+		auditDatabaseConnectionStatusUpdates := make(chan bool)
+		var auditDatabaseConnectionStatusMutex sync.Mutex
+		var auditModuleError error = nil
+		var auditModuleErrorMutex sync.Mutex
+		go func() {
+			for {
+				if auditModuleError == nil {
+					logrus.Trace("audit module is ok")
+					<-time.After(3 * time.Second)
+					continue
+				}
+				if auditDatabaseConnectionOk {
+					logrus.Tracef("(re)trying initialisation of audit module (last error: %s)...", auditModuleError)
+					auditModuleErrorMutex.Lock()
+					auditModuleError = audit.InitMongo(auditDatabaseConnection)
+					if auditModuleError != nil {
+						logrus.Errorf("failed to initialise audit module: %s", auditModuleError)
+					}
+					auditModuleErrorMutex.Unlock()
+				} else {
+					logrus.Tracef("audit module is not ok (error: %s), waiting for audit database restoration...", auditModuleError)
+				}
+				<-time.After(3 * time.Second)
+			}
+		}()
+		go func() {
+			for {
+				statusUpdate := <-auditDatabaseConnectionStatusUpdates
+				auditDatabaseConnectionStatusMutex.Lock()
+				if statusUpdate != auditDatabaseConnectionOk {
+					logAtLevel := logrus.Infof
+					if !statusUpdate {
+						logAtLevel = logrus.Warnf
+						auditModuleError = fmt.Errorf("database connection lost")
+					}
+					logAtLevel("audit database connection freshness status switched to '%v'", statusUpdate)
+					auditDatabaseConnectionStatusLastUpdatedAt = time.Now()
+				}
+				auditDatabaseConnectionOk = statusUpdate
+				auditDatabaseConnectionStatusMutex.Unlock()
+			}
+		}()
+		go func() {
+			for {
+				logrus.Tracef("verifying audit database connection freshness...")
+				if err := database.CheckMongoConnection(connectionId); err != nil {
+					logrus.Errorf("failed to check mongo connection with id '%s': %s", connectionId, err)
+					auditDatabaseConnectionStatusUpdates <- false
+					if err := database.RefreshMongoConnection(connectionId); err != nil {
+						logrus.Errorf("failed to refresh mongo connection with id '%s': %s", connectionId, err)
+					} else {
+						if err := audit.InitMongo(auditDatabaseConnection); err != nil {
+							logrus.Errorf("failed to re-initialise audit module: %s", err)
+						}
+					}
+				} else {
+					logrus.Tracef("audit database connection freshness verified")
+					auditDatabaseConnectionStatusUpdates <- true
+				}
+				<-time.After(3 * time.Second)
+			}
+		}()
+		if auditModuleError = audit.InitMongo(auditDatabaseConnection); auditModuleError != nil {
+			return fmt.Errorf("failed to initialise audit module: %w", auditModuleError)
+		}
+		hostname, _ := os.Hostname()
+		userId := os.Getuid()
+		audit.Log(audit.LogEntry{
+			EntityId:     fmt.Sprintf("%v@%s", userId, hostname),
+			EntityType:   audit.ControllerEntity,
+			Verb:         audit.Connect,
+			ResourceId:   fmt.Sprintf("%s:%v", viper.GetString("mongo-host"), viper.GetInt("mongo-port")),
+			ResourceType: audit.DbResource,
+		})
+
+		logrus.Infof("establishing connection to platform database...")
 		databaseConnection, err := database.ConnectMysql(database.ConnectOpts{
 			ConnectionId: connectionId,
 			Host:         viper.GetString("mysql-host"),
@@ -161,46 +273,53 @@ var Command = &cobra.Command{
 			Database:     viper.GetString("mysql-database"),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to establish connection to database: %w", err)
+			return fmt.Errorf("failed to establish connection to platform database: %w", err)
 		}
-		logrus.Debugf("established connection to database")
-		logrus.Infof("starting connection freshness verifier...")
-		databaseConnectionOk := true
-		databaseConnectionStatusLastUpdatedAt := time.Now()
-		databaseConnectionStatusUpdates := make(chan bool)
-		var databaseConnectionStatusMutex sync.Mutex
+		logrus.Debugf("established connection to platform database")
+		logrus.Infof("starting platform database connection freshness verifier...")
+		platformDatabaseConnectionOk := false
+		platformDatabaseConnectionStatusLastUpdatedAt := time.Now()
+		platformDatabaseConnectionStatusUpdates := make(chan bool)
+		var platformDatabaseConnectionStatusMutex sync.Mutex
 		go func() {
 			for {
-				statusUpdate := <-databaseConnectionStatusUpdates
-				databaseConnectionStatusMutex.Lock()
-				if statusUpdate != databaseConnectionOk {
+				statusUpdate := <-platformDatabaseConnectionStatusUpdates
+				platformDatabaseConnectionStatusMutex.Lock()
+				if statusUpdate != platformDatabaseConnectionOk {
 					logAtLevel := logrus.Infof
 					if !statusUpdate {
 						logAtLevel = logrus.Warnf
 					}
-					logAtLevel("database connection freshness status switched to '%v'", statusUpdate)
-					databaseConnectionStatusLastUpdatedAt = time.Now()
+					logAtLevel("platform database connection freshness status switched to '%v'", statusUpdate)
+					platformDatabaseConnectionStatusLastUpdatedAt = time.Now()
 				}
-				databaseConnectionOk = statusUpdate
-				databaseConnectionStatusMutex.Unlock()
+				platformDatabaseConnectionOk = statusUpdate
+				platformDatabaseConnectionStatusMutex.Unlock()
 			}
 		}()
 		go func() {
 			for {
-				logrus.Tracef("verifying database connection freshness...")
+				logrus.Tracef("verifying platform database connection freshness...")
 				if err := database.CheckMysqlConnection(connectionId); err != nil {
 					logrus.Errorf("failed to check mysql connection with id '%s': %s", connectionId, err)
-					databaseConnectionStatusUpdates <- false
+					platformDatabaseConnectionStatusUpdates <- false
 					if err := database.RefreshMysqlConnection(connectionId); err != nil {
 						logrus.Errorf("failed to refresh mysql connection with id '%s': %s", connectionId, err)
 					}
 				} else {
-					logrus.Tracef("database connection freshness verified")
-					databaseConnectionStatusUpdates <- true
+					logrus.Tracef("platform database connection freshness verified")
+					platformDatabaseConnectionStatusUpdates <- true
 				}
 				<-time.After(3 * time.Second)
 			}
 		}()
+		audit.Log(audit.LogEntry{
+			EntityId:     fmt.Sprintf("%v@%s", userId, hostname),
+			EntityType:   audit.ControllerEntity,
+			Verb:         audit.Execute,
+			ResourceId:   fmt.Sprintf("%s:%v", viper.GetString("mysql-host"), viper.GetInt("mysql-port")),
+			ResourceType: audit.DbResource,
+		})
 
 		logrus.Infof("establishing connection to cache...")
 		if err := cache.InitRedis(cache.InitRedisOpts{
@@ -212,6 +331,13 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to initialise redis cache: %w", err)
 		}
 		logrus.Debugf("established connection to cache")
+		audit.Log(audit.LogEntry{
+			EntityId:     fmt.Sprintf("%v@%s", userId, hostname),
+			EntityType:   audit.ControllerEntity,
+			Verb:         audit.Connect,
+			ResourceId:   viper.GetString("redis-addr"),
+			ResourceType: audit.CacheResource,
+		})
 
 		logrus.Infof("initialising application...")
 
@@ -220,16 +346,28 @@ var Command = &cobra.Command{
 			DatabaseConnection: databaseConnection,
 			ReadinessChecks: []func() error{
 				func() error {
-					if !databaseConnectionOk {
-						return fmt.Errorf("database connection is pending restoration")
+					if !auditDatabaseConnectionOk {
+						return fmt.Errorf("audit database connection is pending restoration")
+					}
+					return nil
+				},
+				func() error {
+					if !platformDatabaseConnectionOk {
+						return fmt.Errorf("platform database connection is pending restoration")
 					}
 					return nil
 				},
 			},
 			LivenessChecks: []func() error{
 				func() error {
-					if !databaseConnectionOk && databaseConnectionStatusLastUpdatedAt.Before(time.Now().Add(-30*time.Second)) {
-						return fmt.Errorf("database connection is invalid")
+					if !auditDatabaseConnectionOk && auditDatabaseConnectionStatusLastUpdatedAt.Before(time.Now().Add(-30*time.Second)) {
+						return fmt.Errorf("audit database connection is invalid")
+					}
+					return nil
+				},
+				func() error {
+					if !platformDatabaseConnectionOk && platformDatabaseConnectionStatusLastUpdatedAt.Before(time.Now().Add(-30*time.Second)) {
+						return fmt.Errorf("platform database connection is invalid")
 					}
 					return nil
 				},

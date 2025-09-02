@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"opsicle/internal/audit"
 	"opsicle/internal/common"
 	"opsicle/internal/common/images"
 	"opsicle/internal/controller/models"
@@ -105,7 +106,17 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("successfully created org[%s] with id[%s]", input.Code, orgId))
-
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Create,
+		ResourceId:   orgId,
+		ResourceType: audit.OrgResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleCreateOrgV1Output{
 		Id:   orgId,
 		Code: input.Code,
@@ -167,6 +178,17 @@ func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("successfully retrieved user[%s] in org[%s]", orgUser.UserId, orgUser.OrgId))
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Get,
+		ResourceId:   orgUser.UserId,
+		ResourceType: audit.OrgUserResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleGetOrgV1Output{
 		Code:      org.Code,
@@ -234,6 +256,16 @@ func handleListOrgsV1(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.List,
+		ResourceType: audit.OrgResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
@@ -294,6 +326,17 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 			},
 		)
 	}
+
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.List,
+		ResourceType: audit.OrgUserResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
@@ -463,6 +506,20 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Create,
+		ResourceId:   invitationOutput.InvitationId,
+		ResourceType: audit.OrgUserInvitationResource,
+		FieldId:      acceptor.Id,
+		FieldType:    audit.UserResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
+
 	output := handleCreateOrgUserV1Output{
 		Id:             invitationOutput.InvitationId,
 		JoinCode:       joinCode,
@@ -509,6 +566,17 @@ func handleGetOrgCurrentUserV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user", ErrorDatabaseIssue)
 		return
 	}
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Create,
+		ResourceId:   session.UserId,
+		ResourceType: audit.OrgUserResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleGetOrgCurrentUserV1Output{
 		JoinedAt:   orgUser.JoinedAt,
 		MemberType: orgUser.MemberType,
@@ -615,12 +683,34 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 			OrgName:        orgUser.OrgName,
 			UserId:         orgUser.UserId,
 		}
+		audit.Log(audit.LogEntry{
+			EntityId:     session.UserId,
+			EntityType:   audit.UserEntity,
+			Verb:         audit.Update,
+			ResourceId:   orgInvite.Id,
+			ResourceType: audit.OrgUserInvitationResource,
+			Status:       audit.Success,
+			SrcIp:        &session.SourceIp,
+			SrcUa:        &session.UserAgent,
+			DstHost:      &r.Host,
+		})
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 	} else {
 		if err := orgInvite.DeleteById(models.DatabaseConnection{Db: db}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
 			return
 		}
+		audit.Log(audit.LogEntry{
+			EntityId:     session.UserId,
+			EntityType:   audit.UserEntity,
+			Verb:         audit.Delete,
+			ResourceId:   orgInvite.Id,
+			ResourceType: audit.OrgUserInvitationResource,
+			Status:       audit.Success,
+			SrcIp:        &session.SourceIp,
+			SrcUa:        &session.UserAgent,
+			DstHost:      &r.Host,
+		})
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", nil)
 	}
 }
@@ -668,6 +758,17 @@ func handleLeaveOrgV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Delete,
+		ResourceId:   session.UserId,
+		ResourceType: audit.OrgUserResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleLeaveOrgV1Output{IsSuccessful: true})
 }
 
@@ -744,6 +845,17 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Delete,
+		ResourceId:   userId,
+		ResourceType: audit.OrgUserResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleDeleteOrgUserV1Output{IsSuccessful: true})
 }
 
@@ -877,6 +989,17 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Delete,
+		ResourceId:   userId,
+		ResourceType: audit.OrgUserResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateOrgUserV1Output{IsSuccessful: true})
 }
 
@@ -888,5 +1011,16 @@ func handleListOrgMemberTypesV1(w http.ResponseWriter, r *http.Request) {
 	for memberType := range models.OrgMemberTypeMap {
 		memberTypes = append(memberTypes, memberType)
 	}
+
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.List,
+		ResourceType: audit.OrgMemberTypesResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", memberTypes)
 }

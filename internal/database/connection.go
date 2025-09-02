@@ -148,6 +148,46 @@ func ConnectMysql(opts ConnectOpts) (*sql.DB, error) {
 	return connection, nil
 }
 
+func CheckMongoConnection(connectionId string) error {
+	mongoConnections, ok := connectionConfigs["mongo"]
+	if !ok {
+		return fmt.Errorf("connection[%s] not found", connectionId)
+	}
+	if _, ok := mongoConnections[connectionId]; !ok {
+		return fmt.Errorf("connection[%s] not found", connectionId)
+	}
+	connection, ok := ConnectionsMongo[connectionId]
+	if !ok {
+		return fmt.Errorf("connection[%s] not found", connectionId)
+	}
+	pingCtx, cancelPing := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancelPing()
+	if err := connection.Ping(pingCtx, nil); err != nil {
+		return fmt.Errorf("connection[%s] disconnected: %w", connectionId, err)
+	}
+	return nil
+}
+
+func RefreshMongoConnection(connectionId string) error {
+	mongoConnections, ok := connectionConfigs["mongo"]
+	if !ok {
+		return fmt.Errorf("connection[%s] not found", connectionId)
+	}
+	if _, ok := mongoConnections[connectionId]; !ok {
+		return fmt.Errorf("connection[%s] not found", connectionId)
+	}
+	_, ok = ConnectionsMongo[connectionId]
+	if !ok {
+		return fmt.Errorf("connection[%s] not found", connectionId)
+	}
+	if connectionConfig, ok := connectionConfigs["mongo"][connectionId]; ok {
+		if _, err := ConnectMongo(connectionConfig); err != nil {
+			return fmt.Errorf("failed to reconnect: %w", err)
+		}
+	}
+	return nil
+}
+
 func CheckMysqlConnection(connectionId string) error {
 	mysqlConnections, ok := connectionConfigs["mysql"]
 	if !ok {

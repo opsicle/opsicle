@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"opsicle/internal/common"
+	"time"
 )
 
 type CreateUserV1Input struct {
@@ -45,6 +46,45 @@ func (c Client) CreateUserV1(input CreateUserV1Input) (*CreateUserV1Output, erro
 	var output *CreateUserV1Output = nil
 	if !errors.Is(err, ErrorOutputNil) {
 		output = &CreateUserV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorEmailExists.Error():
+			err = ErrorEmailExists
+		}
+	}
+	return output, err
+}
+
+type ListUserAuditLogsV1Output struct {
+	Data ListUserAuditLogsV1OutputData
+
+	http.Response
+}
+
+type ListUserAuditLogsV1OutputData []ListUserAuditLogsV1OutputDataAuditLog
+
+type ListUserAuditLogsV1OutputDataAuditLog struct {
+}
+
+type ListUserAuditLogsV1Input struct {
+	Cursor time.Time `json:"cursor"`
+}
+
+func (c Client) ListUserAuditLogsV1(input ListUserAuditLogsV1Input) (*ListUserAuditLogsV1Output, error) {
+	var outputData ListUserAuditLogsV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   "/api/v1/user/logs",
+		Data:   input,
+		Output: &outputData,
+	})
+	var output *ListUserAuditLogsV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &ListUserAuditLogsV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
 		}

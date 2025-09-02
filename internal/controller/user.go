@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"opsicle/internal/audit"
 	"opsicle/internal/auth"
 	"opsicle/internal/common"
 	"opsicle/internal/common/images"
@@ -27,16 +28,46 @@ func registerUserRoutes(opts RouteRegistrationOpts) {
 
 	v1 = opts.Router.PathPrefix("/v1/user").Subrouter()
 
-	v1.HandleFunc("/password", handleUpdateUserPasswordV1).Methods(http.MethodPatch)
+	v1.Handle("/logs", requiresAuth(http.HandlerFunc(handleListUserAuditLogsV1))).Methods(http.MethodGet)
 	v1.Handle("/mfa", requiresAuth(http.HandlerFunc(handleCreateUserMfaV1))).Methods(http.MethodPost)
 	v1.Handle("/mfa/{mfaId}", requiresAuth(http.HandlerFunc(handleVerifyUserMfaV1))).Methods(http.MethodPost)
 	v1.Handle("/mfas", requiresAuth(http.HandlerFunc(handleListUserMfasV1))).Methods(http.MethodGet)
 	v1.HandleFunc("/mfas", handleListUserMfaTypesV1).Methods(http.MethodOptions)
 	v1.Handle("/org-invitations", requiresAuth(http.HandlerFunc(handleListUserOrgInvitationsV1))).Methods(http.MethodGet)
+	v1.HandleFunc("/password", handleUpdateUserPasswordV1).Methods(http.MethodPatch)
 
 	v1 = opts.Router.PathPrefix("/v1/verification").Subrouter()
 
 	v1.HandleFunc("/{verificationCode}", handleVerifyUserV1).Methods(http.MethodGet)
+}
+
+type handleListUserAuditLogsV1Input struct {
+	Cursor time.Time
+}
+
+func handleListUserAuditLogsV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		return
+	}
+	var input handleListUserAuditLogsV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		return
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("retrieving audit logs for user[%s]", session.UserId))
+
+	logs, err := audit.GetByEntity(session.UserId, audit.UserEntity, input.Cursor, 20)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve audit logs", ErrorDatabaseIssue)
+		return
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", logs)
 }
 
 type handleCreateUserV1Input struct {
@@ -172,6 +203,18 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	userAgent := r.UserAgent()
+	audit.Log(audit.LogEntry{
+		EntityId:     *user.Id,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Create,
+		ResourceId:   *user.Id,
+		ResourceType: audit.UserResource,
+		Status:       audit.Success,
+		SrcIp:        &r.RemoteAddr,
+		SrcUa:        &userAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleCreateUserV1Output{
 		Id:    *user.Id,
 		Email: user.Email,
@@ -237,6 +280,18 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 		}
 
 		userMfa.UserEmail = &user.Email
+
+		audit.Log(audit.LogEntry{
+			EntityId:     session.UserId,
+			EntityType:   audit.UserEntity,
+			Verb:         audit.Create,
+			ResourceId:   userMfa.Id,
+			ResourceType: audit.UserMfaResource,
+			Status:       audit.Success,
+			SrcIp:        &session.SourceIp,
+			SrcUa:        &session.UserAgent,
+			DstHost:      &r.Host,
+		})
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userMfa)
 	default:
 		common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to recognise type of mfa", ErrorUnrecognisedMfaType)
@@ -301,6 +356,17 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify mfa", ErrorDatabaseIssue)
 			return
 		}
+		audit.Log(audit.LogEntry{
+			EntityId:     session.UserId,
+			EntityType:   audit.UserEntity,
+			Verb:         audit.Verify,
+			ResourceId:   mfaId,
+			ResourceType: audit.UserMfaResource,
+			Status:       audit.Success,
+			SrcIp:        &session.SourceIp,
+			SrcUa:        &session.UserAgent,
+			DstHost:      &r.Host,
+		})
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleVerifyUserMfaV1Output{
 			Id:     userMfa.Id,
 			Type:   userMfa.Type,
@@ -324,6 +390,16 @@ func handleListUserMfasV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list user mfas", err)
 		return
 	}
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.List,
+		ResourceType: audit.UserMfaResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userMfas.GetRedacted())
 }
 
@@ -373,7 +449,16 @@ func handleListUserOrgInvitationsV1(w http.ResponseWriter, r *http.Request) {
 			},
 		)
 	}
-
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.List,
+		ResourceType: audit.OrgUserInvitationResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
@@ -417,6 +502,17 @@ func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify user", ErrorInvalidVerificationCode)
 		return
 	}
+	userAgent := r.UserAgent()
+	audit.Log(audit.LogEntry{
+		EntityId:     *userInstance.Id,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Verify,
+		ResourceType: audit.UserEmailVerificationCodeResource,
+		Status:       audit.Success,
+		SrcIp:        &r.RemoteAddr,
+		SrcUa:        &userAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userInstance)
 }
 
@@ -434,6 +530,7 @@ type handleUpdateUserPasswordV1Input struct {
 func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	log(common.LogLevelDebug, "this endpoint updates a user's password")
+	userAgent := r.UserAgent()
 
 	isUserLoggedIn := false
 	authorizationHeader := r.Header.Get("Authorization")
@@ -517,7 +614,18 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed password update", ErrorDatabaseIssue)
 			return
 		}
-
+		audit.Log(audit.LogEntry{
+			EntityId:     userId,
+			EntityType:   audit.UserEntity,
+			Verb:         audit.Update,
+			ResourceId:   userId,
+			ResourceType: audit.UserPasswordResource,
+			Data:         map[string]any{"authenticated": true},
+			Status:       audit.Success,
+			SrcIp:        &r.RemoteAddr,
+			SrcUa:        &userAgent,
+			DstHost:      &r.Host,
+		})
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s] successfully changed their password", userId))
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateUserPasswordV1Output{
 			IsSuccessful: true,
@@ -663,6 +771,18 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		audit.Log(audit.LogEntry{
+			EntityId:     userId,
+			EntityType:   audit.UserEntity,
+			Verb:         audit.Update,
+			ResourceId:   userId,
+			ResourceType: audit.UserPasswordResource,
+			Data:         map[string]any{"authenticated": false},
+			Status:       audit.Success,
+			SrcIp:        &r.RemoteAddr,
+			SrcUa:        &userAgent,
+			DstHost:      &r.Host,
+		})
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s] successfully changed their password", userId))
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateUserPasswordV1Output{
 			IsSuccessful: true,

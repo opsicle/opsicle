@@ -12,6 +12,12 @@ import (
 const authRequestContext common.HttpContextKey = "controller-auth"
 
 type identity struct {
+	// SourceIp is the IP address that the request came from
+	SourceIp string `json:"sourceIp"`
+
+	// UserAgent is the user agent of the request
+	UserAgent string `json:"userAgent"`
+
 	// UserId is the ID of the current caller
 	UserId string `json:"userId"`
 
@@ -40,8 +46,10 @@ func getRouteAuther(serviceLogs chan<- common.ServiceLog) func(http.Handler) htt
 			}
 			log(common.LogLevelInfo, fmt.Sprintf("request from user[%s]", sessionInfo.Username))
 			identityInstance := identity{
-				UserId:   sessionInfo.UserId,
-				Username: sessionInfo.Username,
+				SourceIp:  r.RemoteAddr,
+				UserId:    sessionInfo.UserId,
+				Username:  sessionInfo.Username,
+				UserAgent: r.UserAgent(),
 			}
 			authContext := context.WithValue(r.Context(), authRequestContext, identityInstance)
 			next.ServeHTTP(w, r.WithContext(authContext))

@@ -23,6 +23,7 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: opsicle
       MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: audit
     volumes:
       - ./data/.mongodb/data:/data/db
 

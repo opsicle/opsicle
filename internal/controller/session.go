@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"opsicle/internal/audit"
 	"opsicle/internal/auth"
 	"opsicle/internal/common"
 	"opsicle/internal/controller/models"
@@ -69,6 +70,7 @@ type handleCreateSessionV1Output struct {
 // @Router       /api/v1/session [post]
 func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	userAgent := r.UserAgent()
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", ErrorInvalidInput)
@@ -108,11 +110,21 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		authError = ErrorAccountSuspended
 	}
 	if authError != nil {
+		audit.Log(audit.LogEntry{
+			EntityId:     *userInstance.Id,
+			EntityType:   audit.UserEntity,
+			Verb:         audit.Login,
+			ResourceType: audit.SessionResource,
+			Status:       audit.Failed,
+			SrcIp:        &r.RemoteAddr,
+			SrcUa:        &userAgent,
+			DstHost:      &r.Host,
+		})
 		_, err := models.CreateUserLoginV1(models.CreateUserLoginV1Input{
 			Db:        db,
 			UserId:    *userInstance.Id,
 			IpAddress: r.RemoteAddr,
-			UserAgent: r.UserAgent(),
+			UserAgent: userAgent,
 			Status:    authError.Error(),
 		})
 		if err != nil {
@@ -137,7 +149,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 			UserId:      *userInstance.Id,
 			RequiresMfa: true,
 			IpAddress:   r.RemoteAddr,
-			UserAgent:   r.UserAgent(),
+			UserAgent:   userAgent,
 			Status:      "pending_mfa",
 		})
 		if err != nil {
@@ -158,7 +170,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		Db:        db,
 		UserId:    *userInstance.Id,
 		IpAddress: r.RemoteAddr,
-		UserAgent: r.UserAgent(),
+		UserAgent: userAgent,
 		Status:    "successful",
 	})
 	if err != nil {
@@ -182,6 +194,17 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log(common.LogLevelDebug, "successfully issued session token")
+	audit.Log(audit.LogEntry{
+		EntityId:     *userInstance.Id,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Login,
+		ResourceId:   sessionToken.Id,
+		ResourceType: audit.SessionResource,
+		Status:       audit.Success,
+		SrcIp:        &r.RemoteAddr,
+		SrcUa:        &userAgent,
+		DstHost:      &r.Host,
+	})
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleCreateSessionV1Output{
 		SessionId:    sessionToken.Id,
@@ -257,6 +280,7 @@ type handleDeleteSessionV1Output struct {
 // @Router       /api/v1/session [delete]
 func handleDeleteSessionV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	userAgent := r.UserAgent()
 	authorizationHeader := r.Header.Get("Authorization")
 	if strings.Index(authorizationHeader, "Bearer ") != 0 {
 		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to receive a valid authorization header", ErrorAuthRequired)
@@ -264,6 +288,10 @@ func handleDeleteSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 	authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
 	log(common.LogLevelDebug, "retrieved an authorization token successfully")
+	sessionInfo, err := models.GetSessionV1(models.GetSessionV1Opts{
+		BearerToken: authorizationToken,
+		CachePrefix: sessionCachePrefix,
+	})
 
 	sessionId, err := models.DeleteSessionV1(models.DeleteSessionV1Opts{
 		BearerToken: authorizationToken,
@@ -284,6 +312,17 @@ func handleDeleteSessionV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("session[%s] has been deleted", sessionId))
+	audit.Log(audit.LogEntry{
+		EntityId:     sessionInfo.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Logout,
+		ResourceId:   sessionId,
+		ResourceType: audit.SessionResource,
+		Status:       audit.Success,
+		SrcIp:        &r.RemoteAddr,
+		SrcUa:        &userAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleDeleteSessionV1Output{
 		SessionId: sessionId,
 	})
@@ -313,6 +352,7 @@ type handleStartSessionWithMfaV1Output struct {
 // @Router       /api/v1/session/mfa [post]
 func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	userAgent := r.UserAgent()
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", ErrorInvalidInput)
@@ -375,6 +415,16 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 						log(common.LogLevelError, fmt.Sprintf("failed to set mfa status for user[%s]'s login[%s] to mfa_failed", *user.Id, userLogin.Id))
 					}
 					log(common.LogLevelError, fmt.Sprintf("failed to validate mfa for user[%s] of type[%s]", *user.Id, userMfa.Type))
+					audit.Log(audit.LogEntry{
+						EntityId:     *user.Id,
+						EntityType:   audit.UserEntity,
+						Verb:         audit.LoginWithMfa,
+						ResourceType: audit.SessionResource,
+						Status:       audit.Failed,
+						SrcIp:        &r.RemoteAddr,
+						SrcUa:        &userAgent,
+						DstHost:      &r.Host,
+					})
 					common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to authenticate user mfa", ErrorMfaTokenInvalid)
 					return
 				}
@@ -406,6 +456,17 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				log(common.LogLevelDebug, "successfully issued session token")
+				audit.Log(audit.LogEntry{
+					EntityId:     *user.Id,
+					EntityType:   audit.UserEntity,
+					Verb:         audit.LoginWithMfa,
+					ResourceId:   sessionOutput.Id,
+					ResourceType: audit.SessionResource,
+					Status:       audit.Success,
+					SrcIp:        &r.RemoteAddr,
+					SrcUa:        &userAgent,
+					DstHost:      &r.Host,
+				})
 
 				common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleStartSessionWithMfaV1Output{
 					SessionId:    sessionOutput.Id,
