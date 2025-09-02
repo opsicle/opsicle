@@ -128,12 +128,8 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := models.GetUserV1(models.GetUserV1Opts{
-		Db: db,
-
-		Email: &input.Email,
-	})
-	if err != nil {
+	user := models.User{Email: input.Email}
+	if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", err)
 		return
 	}
@@ -243,18 +239,15 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("creating mfa of type[%s] for user[%s]", input.MfaType, session.UserId))
 
-	user, err := models.GetUserV1(models.GetUserV1Opts{
-		Db: db,
-		Id: &session.UserId,
-	})
-	if err != nil {
+	user := models.User{Id: &session.UserId}
+	if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s]: %s", session.UserId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", ErrorDatabaseIssue)
 		return
 	}
 
-	if !auth.ValidatePassword(input.Password, *user.PasswordHash) {
-		log(common.LogLevelError, "failed to validate user password")
+	if !user.ValidatePassword(input.Password) {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] entered the wrong password", user.GetId()))
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate user's current password", ErrorInvalidCredentials)
 		return
 	}
@@ -488,13 +481,13 @@ func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, "this endpoint verifies a user")
 	vars := mux.Vars(r)
 	verificationCode := vars["verificationCode"]
-	userInstance, err := models.VerifyUserV1(models.VerifyUserV1Opts{
+	user := models.User{}
+	if err := user.VerifyV1(models.VerifyUserV1Opts{
 		Db:               db,
 		VerificationCode: verificationCode,
 		UserAgent:        r.UserAgent(),
 		IpAddress:        r.RemoteAddr,
-	})
-	if err != nil {
+	}); err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify user", ErrorInvalidVerificationCode)
 			return
@@ -504,7 +497,7 @@ func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
 	}
 	userAgent := r.UserAgent()
 	audit.Log(audit.LogEntry{
-		EntityId:     *userInstance.Id,
+		EntityId:     user.GetId(),
 		EntityType:   audit.UserEntity,
 		Verb:         audit.Verify,
 		ResourceType: audit.UserEmailVerificationCodeResource,
@@ -513,7 +506,7 @@ func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
 		SrcUa:        &userAgent,
 		DstHost:      &r.Host,
 	})
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userInstance)
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", user)
 }
 
 type handleUpdateUserPasswordV1Output struct {
@@ -590,27 +583,25 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 
 		userId := sessionInfo.UserId
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: retrieving user details", userId))
-		user, err := models.GetUserV1(models.GetUserV1Opts{
-			Db: db,
-			Id: &userId,
-		})
-		if err != nil {
+		user := models.User{Id: &userId}
+		if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user", ErrorDatabaseIssue)
 			return
 		}
 
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: validating current password", userId))
 		if !auth.ValidatePassword(currentPassword, *user.PasswordHash) {
+			log(common.LogLevelError, fmt.Sprintf("current password verification failed: %s", err))
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed password verification", ErrorInvalidCredentials)
 			return
 		}
 
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: updating password", userId))
-		if err := models.UpdateUserPasswordV1(models.UpdateUserPasswordV1Input{
+		if err := user.UpdatePasswordV1(models.UpdateUserPasswordV1Input{
 			Db:          db,
-			UserId:      userId,
 			NewPassword: newPassword,
 		}); err != nil {
+			log(common.LogLevelError, fmt.Sprintf("password update failed: %s", err))
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed password update", ErrorDatabaseIssue)
 			return
 		}
@@ -640,12 +631,8 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		user, err := models.GetUserV1(models.GetUserV1Opts{
-			Db: db,
-
-			Email: &userEmail,
-		})
-		if err != nil {
+		user := models.User{Email: userEmail}
+		if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
 			if errors.Is(err, models.ErrorNotFound) {
 				// we send a success response because we don't want to alert the user if the email is
 				// incorrect
@@ -746,11 +733,8 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log(common.LogLevelDebug, fmt.Sprintf("identified request as user[%s]'s passwordReset attempt[%s]", passwordReset.UserId, passwordReset.Id))
-		user, err := models.GetUserV1(models.GetUserV1Opts{
-			Db: db,
-			Id: &passwordReset.UserId,
-		})
-		if err != nil {
+		user := models.User{Id: &passwordReset.Id}
+		if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
 			if errors.Is(err, models.ErrorNotFound) {
 				common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user referenced", ErrorInvalidInput)
 				return
@@ -759,12 +743,9 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		userId := *user.Id
-		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: updating password", userId))
-		if err := models.UpdateUserPasswordV1(models.UpdateUserPasswordV1Input{
-			Db: db,
-
-			UserId:      *user.Id,
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: updating password", user.GetId()))
+		if err := user.UpdatePasswordV1(models.UpdateUserPasswordV1Input{
+			Db:          db,
 			NewPassword: newPassword,
 		}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed password update", ErrorDatabaseIssue)
@@ -772,10 +753,10 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		}
 
 		audit.Log(audit.LogEntry{
-			EntityId:     userId,
+			EntityId:     user.GetId(),
 			EntityType:   audit.UserEntity,
 			Verb:         audit.Update,
-			ResourceId:   userId,
+			ResourceId:   user.GetId(),
 			ResourceType: audit.UserPasswordResource,
 			Data:         map[string]any{"authenticated": false},
 			Status:       audit.Success,
@@ -783,7 +764,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 			SrcUa:        &userAgent,
 			DstHost:      &r.Host,
 		})
-		log(common.LogLevelDebug, fmt.Sprintf("user[%s] successfully changed their password", userId))
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s] successfully changed their password", user.GetId()))
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateUserPasswordV1Output{
 			IsSuccessful: true,
 		})

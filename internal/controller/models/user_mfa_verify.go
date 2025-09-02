@@ -2,7 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"fmt"
 )
 
 type VerifyUserMfaV1Opts struct {
@@ -12,27 +11,16 @@ type VerifyUserMfaV1Opts struct {
 }
 
 func VerifyUserMfaV1(opts VerifyUserMfaV1Opts) error {
-	sqlArgs := []any{opts.Id}
-	sqlStmt := `
-	UPDATE user_mfa SET
-		is_verified = true,
-		verified_at = now()
-		WHERE id = ?
-	`
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("models.VerifyUserMfaV1: failed to prepare insert statement: %w", err)
-	}
-
-	results, err := stmt.Exec(sqlArgs...)
-	if err != nil {
-		return fmt.Errorf("models.VerifyUserMfaV1: failed to execute query: %w", err)
-	}
-	if rowsAffected, err := results.RowsAffected(); err != nil {
-		return fmt.Errorf("models.VerifyUserMfaV1: failed to get created row: %w", err)
-	} else if rowsAffected == 0 {
-		return fmt.Errorf("models.VerifyUserMfaV1: failed to create a row: %w", err)
-	}
-
-	return nil
+	return executeMysqlUpdate(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			UPDATE user_mfa SET
+				is_verified = true,
+				verified_at = now()
+				WHERE id = ?
+		`,
+		Args:         []any{opts.Id},
+		FnSource:     "models.VerifyUserMfaV1",
+		RowsAffected: oneRowAffected,
+	})
 }

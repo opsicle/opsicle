@@ -30,11 +30,8 @@ type CreateSessionV1Opts struct {
 }
 
 func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
-	userInstance, err := GetUserV1(GetUserV1Opts{
-		Db:    opts.Db,
-		Email: &opts.Email,
-	})
-	if err != nil {
+	user := User{Email: opts.Email}
+	if err := user.LoadByEmailV1(DatabaseConnection{Db: opts.Db}); err != nil {
 		return nil, fmt.Errorf("models.CreateSessionV1: failed to get user instance: %w", err)
 	}
 
@@ -52,13 +49,13 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 		Secret:   sessionSigningToken,
 		Subject:  "cli",
 		Ttl:      opts.ExpiresIn,
-		UserId:   *userInstance.Id,
-		Username: userInstance.Email,
+		UserId:   user.GetId(),
+		Username: user.Email,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("models.CreateSessionV1: failed to issue jwt: %w", err)
 	}
-	cacheKey := strings.Join([]string{opts.CachePrefix, *userInstance.Id, sessionId}, ":")
+	cacheKey := strings.Join([]string{opts.CachePrefix, user.GetId(), sessionId}, ":")
 	// random arbitrary cache expiration
 	cacheExpiryDuration := time.Hour * 24 * 7
 	if err := cache.Get().Set(cacheKey, sessionId, cacheExpiryDuration); err != nil {

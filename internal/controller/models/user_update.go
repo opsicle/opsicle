@@ -4,17 +4,21 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
-type UpdateOrgUserFieldsV1 struct {
+type UpdateUserFieldsV1 struct {
 	Db *sql.DB
 
 	FieldsToSet map[string]any
 }
 
-func (ou *OrgUser) UpdateFieldsV1(opts UpdateOrgUserFieldsV1) error {
-	if err := ou.validate(); err != nil {
-		return err
+func (u *User) UpdateFieldsV1(opts UpdateUserFieldsV1) error {
+	if u.Id == nil {
+		return fmt.Errorf("missing id")
+	} else if _, err := uuid.Parse(*u.Id); err != nil {
+		return fmt.Errorf("invalid id")
 	}
 	sqlArgs := []any{}
 	fieldNames := []string{}
@@ -36,13 +40,13 @@ func (ou *OrgUser) UpdateFieldsV1(opts UpdateOrgUserFieldsV1) error {
 	return executeMysqlUpdate(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: fmt.Sprintf(`
-			UPDATE org_users
+			UPDATE users
 				SET %s
-				WHERE org_id = ? AND user_id = ?
+				WHERE id = ?
 			`,
 			strings.Join(fieldsToSet, ", "),
 		),
-		Args: append(sqlArgs, ou.OrgId, ou.UserId),
+		Args: append(sqlArgs, *u.Id),
 		FnSource: fmt.Sprintf(
 			"models.OrgUser.UpdateFieldsV1['%s']",
 			strings.Join(fieldNames, "','"),

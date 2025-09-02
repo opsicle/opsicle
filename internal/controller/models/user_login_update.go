@@ -15,28 +15,26 @@ type updateUserLoginV1Input struct {
 
 func updateUserLoginV1(opts updateUserLoginV1Input) error {
 	fieldsToSet := []string{}
+	sqlArgs := []any{}
 	for field, value := range opts.FieldsToSet {
 		switch v := value.(type) {
 		case string:
-			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = \"%s\"", field, v))
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
+			sqlArgs = append(sqlArgs, v)
 		case []byte:
-			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = \"%s\"", field, string(v)))
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
+			sqlArgs = append(sqlArgs, string(v))
 		default:
-			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = %v", field, v))
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
+			sqlArgs = append(sqlArgs, fmt.Sprintf("%v", v))
 		}
 	}
-	sqlStmt := fmt.Sprintf(`UPDATE user_login SET %s WHERE id = ?`, strings.Join(fieldsToSet, ", "))
-	sqlArgs := []any{}
-
-	sqlArgs = append(sqlArgs, opts.Id)
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("models.updateUserLoginV1: failed to prepare insert statement: %w", err)
-	}
-	if _, err := stmt.Exec(sqlArgs...); err != nil {
-		return fmt.Errorf("models.updateUserLoginV1: failed to execute statement: %w", err)
-	}
-	return nil
+	return executeMysqlUpdate(mysqlQueryInput{
+		Db:       opts.Db,
+		Stmt:     fmt.Sprintf(`UPDATE user_login SET %s WHERE id = ?`, strings.Join(fieldsToSet, ", ")),
+		Args:     append(sqlArgs, opts.Id),
+		FnSource: "models.updateUserLoginV1",
+	})
 }
 
 type SetUserLoginMfaSucceededV1Input struct {

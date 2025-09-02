@@ -12,3 +12,11 @@ const (
 	// TypeUser is used to indicate a normal user of the system
 	TypeUser UserType = "user"
 )
+
+type UserLoadSelector string
+
+const (
+	SelectorUserId               UserLoadSelector = "user_id"
+	SelectorUserEmail            UserLoadSelector = "user_email"
+	SelectorUserVerificationCode UserLoadSelector = "user_verification_code"
+)

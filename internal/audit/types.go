@@ -14,6 +14,7 @@ type Verb string
 const (
 	Create       Verb = "create"
 	Delete       Verb = "delete"
+	ForcedLogout Verb = "forced_logout"
 	Update       Verb = "update"
 	Get          Verb = "get"
 	List         Verb = "list"

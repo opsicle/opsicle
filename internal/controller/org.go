@@ -410,17 +410,14 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isAcceptorExists := false
-	acceptor, err := models.GetUserV1(models.GetUserV1Opts{
-		Db:    db,
-		Email: &input.Email,
-	})
-	if err != nil {
+	acceptor := models.User{Email: input.Email}
+	if err := acceptor.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
 		if !errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve acceptor", ErrorDatabaseIssue)
 			return
 		}
 	} else {
-		isAcceptorExists = true && acceptor != nil
+		isAcceptorExists = true
 	}
 
 	joinCode, err := common.GenerateRandomString(32)
@@ -906,16 +903,13 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	userId := ""
 
 	if isUserEmail {
-		user, err := models.GetUserV1(models.GetUserV1Opts{
-			Db:    db,
-			Email: &input.User,
-		})
-		if err != nil {
+		user := models.User{Email: input.User}
+		if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid user email: %s", session.UserId, err))
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user identifier", ErrorInvalidInput)
 			return
 		}
-		userId = *user.Id
+		userId = user.GetId()
 	} else {
 		userId = input.User
 	}

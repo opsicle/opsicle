@@ -2,7 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -81,6 +80,15 @@ type Org struct {
 	JoinedAt *time.Time `json:"joinedAt"`
 }
 
+func (o Org) assertIdDefined() error {
+	if o.Id == nil {
+		return fmt.Errorf("id undefined: %w", errorInputValidationFailed)
+	} else if _, err := uuid.Parse(*o.Id); err != nil {
+		return fmt.Errorf("id not uuid: %w", errorInputValidationFailed)
+	}
+	return nil
+}
+
 type AddUserToOrgV1 struct {
 	Db *sql.DB
 
@@ -89,43 +97,33 @@ type AddUserToOrgV1 struct {
 }
 
 func (o *Org) AddUserV1(opts AddUserToOrgV1) error {
+	if err := o.assertIdDefined(); err != nil {
+		return err
+	}
 	memberType := TypeOrgMember
 	if opts.MemberType != "" {
 		if _, ok := OrgMemberTypeMap[opts.MemberType]; ok {
 			memberType = OrgMemberType(opts.MemberType)
 		}
 	}
-	sqlStmt := `
-	INSERT INTO org_users(
-		org_id,
-		user_id,
-		type
-	) VALUES (
-	 ?,
-	 ?,
-	 ?
-	)`
-	sqlArgs := []any{
-		*o.Id,
-		opts.UserId,
-		memberType,
-	}
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("org.Org.AddUserV1: failed to prepare insert statement: %w", err)
-	}
-
-	res, err := stmt.Exec(sqlArgs...)
-	if err != nil {
-		return fmt.Errorf("org.Org.AddUserV1: failed to execute insert statement: %w", err)
-	}
-
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("org.Org.AddUserV1: failed to retrieve the number of rows affected: %w", err)
-	}
-	if rowsAffected != 1 {
-		return fmt.Errorf("org.Org.AddUserV1: failed to insert only 1 user")
+	if err := executeMysqlInsert(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			INSERT INTO org_users(
+				org_id,
+				user_id,
+				type
+			) VALUES (?, ?, ?)
+		`,
+		Args: []any{
+			*o.Id,
+			opts.UserId,
+			memberType,
+		},
+		FnSource:     "models.Org.AddUserV1",
+		RowsAffected: oneRowAffected,
+	}); err != nil {
+		return err
 	}
 	return nil
 }
@@ -135,29 +133,30 @@ func (o Org) GetId() string {
 }
 
 func (o Org) GetAdminsV1(opts DatabaseConnection) ([]OrgUser, error) {
-	sqlStmt := `
-		SELECT 
-			u.email,
-			u.id,
-			o.id,
-			o.code,
-			o.name,
-			ou.type,
-			ou.joined_at
-			FROM org_users ou
-				JOIN orgs o ON o.id = ou.org_id
-				JOIN users u ON u.id = ou.user_id
-			WHERE
-				ou.org_id = ? AND ou.type = ?
-	`
-	sqlArgs := []any{*o.Id, TypeOrgAdmin}
+	if err := o.assertIdDefined(); err != nil {
+		return nil, err
+	}
 	results := []OrgUser{}
 	if err := executeMysqlSelects(mysqlQueryInput{
-		Db:       opts.Db,
-		Stmt:     sqlStmt,
-		Args:     sqlArgs,
+		Db: opts.Db,
+		Stmt: `
+			SELECT 
+				u.email,
+				u.id,
+				o.id,
+				o.code,
+				o.name,
+				ou.type,
+				ou.joined_at
+				FROM org_users ou
+					JOIN orgs o ON o.id = ou.org_id
+					JOIN users u ON u.id = ou.user_id
+				WHERE
+					ou.org_id = ? AND ou.type = ?
+		`,
+		Args:     []any{*o.Id, TypeOrgAdmin},
 		FnSource: "models.Org.GetAdminsV1",
-		ProcessRow: func(r *sql.Rows) error {
+		ProcessRows: func(r *sql.Rows) error {
 			orgUser := OrgUser{}
 			if err := r.Scan(
 				&orgUser.UserEmail,
@@ -168,9 +167,6 @@ func (o Org) GetAdminsV1(opts DatabaseConnection) ([]OrgUser, error) {
 				&orgUser.MemberType,
 				&orgUser.JoinedAt,
 			); err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return ErrorNotFound
-				}
 				return err
 			}
 			results = append(results, orgUser)
@@ -191,47 +187,43 @@ type GetOrgUserV1Opts struct {
 // GetUserV1 retrieves the user as the organisation understands it
 // based on the provided `UserId“
 func (o *Org) GetUserV1(opts GetOrgUserV1Opts) (*OrgUser, error) {
-	sqlStmt := `
-		SELECT
-			users.email,
-			users.id,
-			orgs.id,
-			orgs.code,
-			orgs.name,
-			org_users.type,
-			org_users.joined_at
-			FROM org_users
-				JOIN orgs ON orgs.id = org_users.org_id
-				JOIN users ON users.id = org_users.user_id
-			WHERE
-				org_id = ? AND user_id = ?
-	`
-	sqlArgs := []any{*o.Id, opts.UserId}
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return nil, fmt.Errorf("models.Org.GetUserV1: failed to prepare select statement: %w", ErrorStmtPreparationFailed)
-	}
-
-	res := stmt.QueryRow(sqlArgs...)
-	if res.Err() != nil {
-		return nil, fmt.Errorf("models.Org.GetUserV1: failed to execute select statement: %w", ErrorSelectFailed)
+	if err := o.assertIdDefined(); err != nil {
+		return nil, err
 	}
 	var userInstance OrgUser
-	if err := res.Scan(
-		&userInstance.UserEmail,
-		&userInstance.UserId,
-		&userInstance.OrgId,
-		&userInstance.OrgCode,
-		&userInstance.OrgName,
-		&userInstance.MemberType,
-		&userInstance.JoinedAt,
-	); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrorNotFound
-		}
-		return nil, fmt.Errorf("models.Org.GetUserV1: failed to load selected data into memory: %w", err)
+	if err := executeMysqlSelect(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			SELECT
+				users.email,
+				users.id,
+				orgs.id,
+				orgs.code,
+				orgs.name,
+				org_users.type,
+				org_users.joined_at
+				FROM org_users
+					JOIN orgs ON orgs.id = org_users.org_id
+					JOIN users ON users.id = org_users.user_id
+				WHERE
+					org_id = ? AND user_id = ?
+		`,
+		Args:     []any{*o.Id, opts.UserId},
+		FnSource: "models.Org.GetUserV1",
+		ProcessRow: func(r *sql.Row) error {
+			return r.Scan(
+				&userInstance.UserEmail,
+				&userInstance.UserId,
+				&userInstance.OrgId,
+				&userInstance.OrgCode,
+				&userInstance.OrgName,
+				&userInstance.MemberType,
+				&userInstance.JoinedAt,
+			)
+		},
+	}); err != nil {
+		return nil, err
 	}
-
 	return &userInstance, nil
 }
 
@@ -242,26 +234,24 @@ type GetRoleCountV1Opts struct {
 }
 
 func (o Org) GetRoleCountV1(opts GetRoleCountV1Opts) (int, error) {
-	sqlStmt := `
+	var roleCount int
+	if err := executeMysqlSelect(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
 		SELECT
 			COUNT(*)
 			FROM org_users
 			WHERE
 				org_id = ?
 				AND type = ?
-	`
-	sqlArgs := []any{*o.Id, opts.Role}
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to prepare select statement: %w", ErrorStmtPreparationFailed)
-	}
-	res := stmt.QueryRow(sqlArgs...)
-	if res.Err() != nil {
-		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to execute select statement: %w", ErrorSelectFailed)
-	}
-	var roleCount int
-	if err := res.Scan(&roleCount); err != nil {
-		return -1, fmt.Errorf("models.Org.GetRoleCountV1: failed to scan results: %w", ErrorGenericDatabaseIssue)
+	`,
+		Args:     []any{*o.Id, opts.Role},
+		FnSource: "models.Org.GetRoleCountV1",
+		ProcessRow: func(r *sql.Row) error {
+			return r.Scan(&roleCount)
+		},
+	}); err != nil {
+		return -1, err
 	}
 	return roleCount, nil
 }
@@ -286,6 +276,7 @@ func (o *Org) InviteUserV1(opts InviteOrgUserV1Opts) (*InviteUserV1Output, error
 		opts.MembershipType = string(TypeOrgMember)
 	}
 	invitationId := uuid.NewString()
+
 	sqlInserts := []string{
 		"id",
 		"org_id",
@@ -320,25 +311,17 @@ func (o *Org) InviteUserV1(opts InviteOrgUserV1Opts) (*InviteUserV1Output, error
 		strings.Join(sqlInserts, ", "),
 		strings.Join(sqlPlaceholders, ", "),
 	)
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return nil, fmt.Errorf("org.Org.InviteUserV1: failed to prepare insert statement: %w", err)
-	}
-	res, err := stmt.Exec(sqlArgs...)
-	if err != nil {
-		if isMysqlDuplicateError(err) {
-			return nil, fmt.Errorf("org.Org.InviteUserV1: invite already exists (%w): %w", ErrorDuplicateEntry, err)
-		}
-		return nil, fmt.Errorf("org.Org.InviteUserV1: failed to execute insert statement: %w", err)
+
+	if err := executeMysqlInsert(mysqlQueryInput{
+		Db:           opts.Db,
+		Stmt:         sqlStmt,
+		Args:         sqlArgs,
+		FnSource:     "models.Org.InviteUserV1",
+		RowsAffected: oneRowAffected,
+	}); err != nil {
+		return nil, err
 	}
 
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("org.Org.InviteUserV1: failed to retrieve the number of rows affected: %w", err)
-	}
-	if rowsAffected != 1 {
-		return nil, fmt.Errorf("org.Org.InviteUserV1: failed to insert only 1 user")
-	}
 	return &InviteUserV1Output{
 		InvitationId:   invitationId,
 		IsExistingUser: isExistingUser,
@@ -346,86 +329,73 @@ func (o *Org) InviteUserV1(opts InviteOrgUserV1Opts) (*InviteUserV1Output, error
 }
 
 func (o *Org) ListUsersV1(opts DatabaseConnection) ([]OrgUser, error) {
-	if o.Id == nil {
-		return nil, fmt.Errorf("no org id specified: %w", ErrorInvalidInput)
-	}
-	sqlStmt := `
-		SELECT
-			ou.joined_at,
-			ou.type,
-			o.code,
-			o.id,
-			o.name,
-			u.email,
-			u.id,
-			u.type
-			FROM org_users ou
-				JOIN users u ON ou.user_id = u.id
-				JOIN orgs o ON ou.org_id = o.id
-			WHERE
-				org_id = ?
-	`
-	sqlArgs := []any{*o.Id}
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return nil, fmt.Errorf("models.Org.ListUsersV1: failed to prepare select statement: %w", err)
-	}
-
-	results, err := stmt.Query(sqlArgs...)
-	if err != nil {
-		return nil, fmt.Errorf("models.Org.ListUsersV1: failed to execute select statement: %w", err)
+	if err := o.assertIdDefined(); err != nil {
+		return nil, err
 	}
 	output := []OrgUser{}
-	for results.Next() {
-		orgUser := OrgUser{}
-		if err := results.Scan(
-			&orgUser.JoinedAt,
-			&orgUser.MemberType,
-			&orgUser.OrgCode,
-			&orgUser.OrgId,
-			&orgUser.OrgName,
-			&orgUser.UserEmail,
-			&orgUser.UserId,
-			&orgUser.UserType,
-		); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, ErrorNotFound
+	if err := executeMysqlSelects(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			SELECT
+				ou.joined_at,
+				ou.type,
+				o.code,
+				o.id,
+				o.name,
+				u.email,
+				u.id,
+				u.type
+				FROM org_users ou
+					JOIN users u ON ou.user_id = u.id
+					JOIN orgs o ON ou.org_id = o.id
+				WHERE
+					org_id = ?
+		`,
+		Args:     []any{*o.Id},
+		FnSource: "models.Org.ListUsersV1",
+		ProcessRows: func(r *sql.Rows) error {
+			orgUser := OrgUser{}
+			if err := r.Scan(
+				&orgUser.JoinedAt,
+				&orgUser.MemberType,
+				&orgUser.OrgCode,
+				&orgUser.OrgId,
+				&orgUser.OrgName,
+				&orgUser.UserEmail,
+				&orgUser.UserId,
+				&orgUser.UserType,
+			); err != nil {
+				return err
 			}
-			return nil, fmt.Errorf("models.Org.ListUsersV1: failed to load selected data into memory: %w", err)
-		}
-		output = append(output, orgUser)
+			output = append(output, orgUser)
+			return nil
+		},
+	}); err != nil {
+		return nil, err
 	}
 
 	return output, nil
 }
 
-type LoadOrgUserCountV1Opts struct {
-	Db *sql.DB
-}
-
-func (o *Org) LoadUserCountV1(opts LoadOrgUserCountV1Opts) (int, error) {
-	sqlStmt := `
-		SELECT COUNT(*) AS 'count'
-			FROM org_users
-			WHERE
-				org_id = ?
-	`
-	sqlArgs := []any{*o.Id}
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return -1, fmt.Errorf("models.Org.GetUserCountV1: failed to prepare select statement: %w", err)
+func (o *Org) LoadUserCountV1(opts DatabaseConnection) (int, error) {
+	if err := o.assertIdDefined(); err != nil {
+		return -1, err
 	}
-
-	res := stmt.QueryRow(sqlArgs...)
-	if res.Err() != nil {
-		return -1, fmt.Errorf("models.Org.GetUserCountV1: failed to execute select statement: %w", err)
+	if err := executeMysqlSelect(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			SELECT COUNT(*) AS 'count'
+				FROM org_users
+				WHERE
+					org_id = ?
+		`,
+		Args:     []any{*o.Id},
+		FnSource: "models.Org.LoadUserCountV1",
+		ProcessRow: func(r *sql.Row) error {
+			return r.Scan(&o.UserCount)
+		},
+	}); err != nil {
+		return -1, err
 	}
-	if err := res.Scan(&o.UserCount); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return -1, nil
-		}
-		return -1, fmt.Errorf("models.Org.GetUserCountV1: failed to load selected data into memory: %w", err)
-	}
-
 	return *o.UserCount, nil
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var flags cli.Flags = cli.Flags{
+var Flags cli.Flags = cli.Flags{
 	{
 		Name:         "controller-url",
 		Short:        'u',
@@ -42,15 +42,15 @@ var flags cli.Flags = cli.Flags{
 }
 
 func init() {
-	flags.AddToCommand(Command)
+	Flags.AddToCommand(Command)
 }
 
 var Command = &cobra.Command{
 	Use:     "team-member",
 	Aliases: []string{"team", "t"},
-	Short:   "Invite a team member to an organisation",
+	Short:   "Invite a team member to an organisation (alias of `opsicle create org user)",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		flags.BindViper(cmd)
+		Flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		controllerUrl := viper.GetString("controller-url")

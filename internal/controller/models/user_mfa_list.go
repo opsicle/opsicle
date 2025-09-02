@@ -47,49 +47,45 @@ func ListUserMfasV1(opts ListUserMfasV1Opts) (UserMfas, error) {
 		selectorValue = *opts.Email
 	}
 
-	sqlStmt := fmt.Sprintf(`
-	SELECT
-		user_mfa.id,
-    user_mfa.type,
-		user_mfa.secret,
-		user_mfa.is_verified,
-		user_mfa.verified_at,
-		user_mfa.created_at,
-		user_mfa.last_updated_at
-		FROM user_mfa
-			JOIN users ON users.id = user_mfa.user_id
-		WHERE %s = ?
-			AND user_mfa.is_verified = true
-	`, selectorField)
-	sqlArgs := []any{selectorValue}
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return nil, fmt.Errorf("models.ListUserMfasV1: failed to prepare insert statement: %w", err)
-	}
-
-	rows, err := stmt.Query(sqlArgs...)
-	if err != nil {
-		return nil, fmt.Errorf("models.ListUserMfasV1: failed to query: %w", err)
-	}
-
 	output := UserMfas{}
-	for rows.Next() {
-		userMfa := UserMfa{}
-		if err := rows.Scan(
-			&userMfa.Id,
-			&userMfa.Type,
-			&userMfa.Secret,
-			&userMfa.IsVerified,
-			&userMfa.VerifiedAt,
-			&userMfa.CreatedAt,
-			&userMfa.LastUpdatedAt,
-		); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, nil
+	if err := executeMysqlSelects(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: fmt.Sprintf(`
+			SELECT
+				user_mfa.id,
+				user_mfa.type,
+				user_mfa.secret,
+				user_mfa.is_verified,
+				user_mfa.verified_at,
+				user_mfa.created_at,
+				user_mfa.last_updated_at
+				FROM user_mfa
+					JOIN users ON users.id = user_mfa.user_id
+				WHERE %s = ?
+					AND user_mfa.is_verified = true
+			`,
+			selectorField,
+		),
+		Args: []any{selectorValue},
+		ProcessRows: func(r *sql.Rows) error {
+			userMfa := UserMfa{}
+			if err := r.Scan(
+				&userMfa.Id,
+				&userMfa.Type,
+				&userMfa.Secret,
+				&userMfa.IsVerified,
+				&userMfa.VerifiedAt,
+				&userMfa.CreatedAt,
+				&userMfa.LastUpdatedAt,
+			); err != nil {
+				return err
 			}
-			return nil, fmt.Errorf("models.ListUserMfasV1: failed to get a user_mfa row: %w", err)
-		}
-		output = append(output, userMfa)
+			output = append(output, userMfa)
+			return nil
+		},
+	}); err != nil {
+		return nil, err
 	}
+
 	return output, nil
 }

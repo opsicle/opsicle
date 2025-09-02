@@ -2,8 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"errors"
-	"fmt"
 )
 
 // LoadV1 loads an organisation user based on the `UserId` and `OrgId`,
@@ -13,43 +11,37 @@ func (ou *OrgUser) LoadV1(opts DatabaseConnection) error {
 	if err := ou.validate(); err != nil {
 		return err
 	}
-	sqlStmt := `
-	SELECT 
-		ou.joined_at,
-		ou.type,
-		u.email,
-		u.type,
-		o.code,
-		o.name
-		FROM org_users ou
-			JOIN users u ON ou.user_id = u.id
-			JOIN orgs o ON ou.org_id = o.id
-		WHERE 
-			ou.org_id = ?
-			AND ou.user_id = ?
-	`
-	sqlArgs := []any{ou.OrgId, ou.UserId}
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("models.OrgUser.LoadV1: failed to prepare statement: %w: %w", err, ErrorStmtPreparationFailed)
-	}
-
-	res := stmt.QueryRow(sqlArgs...)
-	if res.Err() != nil {
-		return fmt.Errorf("models.OrgUser.LoadV1: failed to execute statement: %w: %w", err, ErrorQueryFailed)
-	}
-	if err := res.Scan(
-		&ou.JoinedAt,
-		&ou.MemberType,
-		&ou.UserEmail,
-		&ou.UserType,
-		&ou.OrgCode,
-		&ou.OrgName,
-	); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrorNotFound
-		}
-		return fmt.Errorf("models.OrgUser.LoadV1: failed to load selected data into memory: %w", err)
+	if err := executeMysqlSelect(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			SELECT 
+				ou.joined_at,
+				ou.type,
+				u.email,
+				u.type,
+				o.code,
+				o.name
+				FROM org_users ou
+					JOIN users u ON ou.user_id = u.id
+					JOIN orgs o ON ou.org_id = o.id
+				WHERE 
+					ou.org_id = ?
+					AND ou.user_id = ?
+		`,
+		Args:     []any{ou.OrgId, ou.UserId},
+		FnSource: "models.OrgUser.LoadV1",
+		ProcessRow: func(r *sql.Row) error {
+			return r.Scan(
+				&ou.JoinedAt,
+				&ou.MemberType,
+				&ou.UserEmail,
+				&ou.UserType,
+				&ou.OrgCode,
+				&ou.OrgName,
+			)
+		},
+	}); err != nil {
+		return err
 	}
 	return nil
 }

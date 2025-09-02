@@ -2,7 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 )
 
@@ -27,47 +26,46 @@ func GetOrgV1(opts GetOrgV1Opts) (*Org, error) {
 		selectorField = "code"
 		selectorValue = *opts.Code
 	}
-	stmt, err := opts.Db.Prepare(fmt.Sprintf(`
-	SELECT 
-		id,
-		name,
-		created_at,
-		last_updated_at,
-		is_deleted,
-		deleted_at,
-		is_disabled,
-		disabled_at,
-		code,
-		type,
-		motd
-		FROM orgs
-		WHERE %s = ?`, selectorField))
-	if err != nil {
-		return nil, fmt.Errorf("models.GetOrgV1: failed to prepare insert statement: %w", err)
-	}
 
-	res := stmt.QueryRow(selectorValue)
-	if res.Err() != nil {
-		return nil, fmt.Errorf("models.GetOrgV1: failed to query org using : %w", err)
+	var output Org
+	if err := executeMysqlSelect(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: fmt.Sprintf(`
+			SELECT 
+				id,
+				name,
+				created_at,
+				last_updated_at,
+				is_deleted,
+				deleted_at,
+				is_disabled,
+				disabled_at,
+				code,
+				type,
+				motd
+				FROM orgs
+				WHERE %s = ?`,
+			selectorField,
+		),
+		Args:     []any{selectorValue},
+		FnSource: "models.GetOrgV1",
+		ProcessRow: func(r *sql.Row) error {
+			return r.Scan(
+				&output.Id,
+				&output.Name,
+				&output.CreatedAt,
+				&output.UpdatedAt,
+				&output.IsDeleted,
+				&output.DeletedAt,
+				&output.IsDisabled,
+				&output.DisabledAt,
+				&output.Code,
+				&output.Type,
+				&output.Motd,
+			)
+		},
+	}); err != nil {
+		return nil, err
 	}
-	var org Org
-	if err := res.Scan(
-		&org.Id,
-		&org.Name,
-		&org.CreatedAt,
-		&org.UpdatedAt,
-		&org.IsDeleted,
-		&org.DeletedAt,
-		&org.IsDisabled,
-		&org.DisabledAt,
-		&org.Code,
-		&org.Type,
-		&org.Motd,
-	); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("models.GetOrgV1: failed to execute insert statement: %w", err)
-	}
-	return &org, nil
+	return &output, nil
 }

@@ -2,7 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -29,50 +28,37 @@ type CreateOrgV1Opts struct {
 func CreateOrgV1(opts CreateOrgV1Opts) (string, error) {
 	orgUuid := uuid.NewString()
 
-	stmt, err := opts.Db.Prepare(`
-	INSERT INTO orgs(
-		id,
-		name,
-		code,
-		type,
-		created_by
-	) VALUES (?, ?, ?, ?, ?)`)
-	if err != nil {
-		return "", fmt.Errorf("models.CreateOrgV1: failed to prepare insert statement for orgs: %w", err)
+	if err := executeMysqlInsert(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			INSERT INTO orgs(
+				id,
+				name,
+				code,
+				type,
+				created_by
+			) VALUES (?, ?, ?, ?, ?)
+		`,
+		Args: []any{
+			orgUuid,
+			opts.Name,
+			opts.Code,
+			string(opts.Type),
+			opts.UserId,
+		},
+		FnSource:     "models.CreateOrgV1",
+		RowsAffected: oneRowAffected,
+	}); err != nil {
+		return "", err
 	}
 
-	_, err = stmt.Exec(
-		orgUuid,
-		opts.Name,
-		opts.Code,
-		string(opts.Type),
-		opts.UserId,
-	)
-	if err != nil {
-		if isMysqlDuplicateError(err) {
-			return "", fmt.Errorf("models.CreateOrgV1: failed to create an org with a duplicate codeword: %w", ErrorDuplicateEntry)
-		}
-		return "", fmt.Errorf("models.CreateOrgV1: failed to execute insert statement for orgs: %w", err)
-	}
-
-	stmt, err = opts.Db.Prepare(`
-	INSERT INTO org_users(
-		org_id,
-		user_id,
-		type
-	) VALUES (?, ?, ?)
-	`)
-	if err != nil {
-		return "", fmt.Errorf("models.CreateOrgV1: failed to prepare insert statement for org_users: %w", err)
-	}
-
-	_, err = stmt.Exec(
-		orgUuid,
-		opts.UserId,
-		TypeOrgAdmin,
-	)
-	if err != nil {
-		return "", fmt.Errorf("models.CreateOrgV1: failed to execute insert statement for org_users: %w", err)
+	org := Org{Id: &orgUuid}
+	if err := org.AddUserV1(AddUserToOrgV1{
+		Db:         opts.Db,
+		UserId:     opts.UserId,
+		MemberType: string(TypeOrgAdmin),
+	}); err != nil {
+		return "", err
 	}
 
 	return orgUuid, nil

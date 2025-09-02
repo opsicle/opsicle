@@ -121,21 +121,18 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create user: %w", err)
 		}
 
-		user, err := models.GetUserV1(models.GetUserV1Opts{
-			Db: databaseConnection,
-
-			Email: &email,
-		})
-		if err != nil {
+		user := models.User{Email: email}
+		if err := user.LoadByEmailV1(models.DatabaseConnection{Db: databaseConnection}); err != nil {
 			return fmt.Errorf("failed to retrieve user: %w", err)
 		}
 
-		user, err = models.VerifyUserV1(models.VerifyUserV1Opts{
+		if err = user.VerifyV1(models.VerifyUserV1Opts{
 			Db: databaseConnection,
 
 			VerificationCode: user.EmailVerificationCode,
-		})
-		if err != nil {
+			UserAgent:        "admin",
+			IpAddress:        "127.0.0.1",
+		}); err != nil {
 			return fmt.Errorf("failed to verify user: %w", err)
 		}
 

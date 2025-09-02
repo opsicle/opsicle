@@ -88,30 +88,27 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive a valid org email", ErrorInvalidInput)
 		return
 	}
-	userInstance, err := models.GetUserV1(models.GetUserV1Opts{
-		Db:    db,
-		Email: &input.Email,
-	})
-	if err != nil {
+	user := models.User{Email: input.Email}
+	if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to query user by email: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to receive a valid user", ErrorDatabaseIssue)
 		return
 	}
 
-	userInstance.Password = &input.Password
 	var authError error = nil
-	if !userInstance.ValidatePassword() {
+	if !user.ValidatePassword(input.Password) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to create session", ErrorInvalidCredentials)
 		authError = ErrorInvalidCredentials
-	} else if !userInstance.IsEmailVerified {
+	} else if !user.IsEmailVerified {
 		common.SendHttpFailResponse(w, r, http.StatusLocked, "failed to create session", ErrorEmailUnverified)
 		authError = ErrorEmailUnverified
-	} else if userInstance.IsDisabled || userInstance.IsDeleted {
+	} else if user.IsDisabled || user.IsDeleted {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create session", ErrorAccountSuspended)
 		authError = ErrorAccountSuspended
 	}
 	if authError != nil {
 		audit.Log(audit.LogEntry{
-			EntityId:     *userInstance.Id,
+			EntityId:     user.GetId(),
 			EntityType:   audit.UserEntity,
 			Verb:         audit.Login,
 			ResourceType: audit.SessionResource,
@@ -122,7 +119,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		})
 		_, err := models.CreateUserLoginV1(models.CreateUserLoginV1Input{
 			Db:        db,
-			UserId:    *userInstance.Id,
+			UserId:    user.GetId(),
 			IpAddress: r.RemoteAddr,
 			UserAgent: userAgent,
 			Status:    authError.Error(),
@@ -137,7 +134,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 
 	userMfas, err := models.ListUserMfasV1(models.ListUserMfasV1Opts{
 		Db:     db,
-		UserId: userInstance.Id,
+		UserId: user.Id,
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list user's mfas: %s", err))
@@ -146,7 +143,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	} else if len(userMfas) > 0 {
 		userLoginId, err := models.CreateUserLoginV1(models.CreateUserLoginV1Input{
 			Db:          db,
-			UserId:      *userInstance.Id,
+			UserId:      user.GetId(),
 			RequiresMfa: true,
 			IpAddress:   r.RemoteAddr,
 			UserAgent:   userAgent,
@@ -168,7 +165,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 
 	userLoginId, err := models.CreateUserLoginV1(models.CreateUserLoginV1Input{
 		Db:        db,
-		UserId:    *userInstance.Id,
+		UserId:    user.GetId(),
 		IpAddress: r.RemoteAddr,
 		UserAgent: userAgent,
 		Status:    "successful",
@@ -195,7 +192,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 	log(common.LogLevelDebug, "successfully issued session token")
 	audit.Log(audit.LogEntry{
-		EntityId:     *userInstance.Id,
+		EntityId:     user.GetId(),
 		EntityType:   audit.UserEntity,
 		Verb:         audit.Login,
 		ResourceId:   sessionToken.Id,
@@ -292,6 +289,39 @@ func handleDeleteSessionV1(w http.ResponseWriter, r *http.Request) {
 		BearerToken: authorizationToken,
 		CachePrefix: sessionCachePrefix,
 	})
+	if err != nil {
+		sessionId := "<invalid session>"
+		if sessionInfo != nil {
+			sessionId = sessionInfo.Id
+			audit.Log(audit.LogEntry{
+				EntityId:     sessionInfo.UserId,
+				EntityType:   audit.UserEntity,
+				Verb:         audit.ForcedLogout,
+				ResourceId:   sessionId,
+				ResourceType: audit.SessionResource,
+				Status:       audit.Success,
+				SrcIp:        &r.RemoteAddr,
+				SrcUa:        &userAgent,
+				DstHost:      &r.Host,
+			})
+		} else {
+			audit.Log(audit.LogEntry{
+				EntityId:     sessionInfo.UserId,
+				EntityType:   audit.UserEntity,
+				Verb:         audit.ForcedLogout,
+				ResourceType: audit.SessionResource,
+				Status:       audit.Success,
+				SrcIp:        &r.RemoteAddr,
+				SrcUa:        &userAgent,
+				DstHost:      &r.Host,
+			})
+		}
+		log(common.LogLevelWarn, fmt.Sprintf("failed to get session[%s]: %s", sessionId, err))
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleDeleteSessionV1Output{
+			SessionId: sessionId,
+		})
+		return
+	}
 
 	sessionId, err := models.DeleteSessionV1(models.DeleteSessionV1Opts{
 		BearerToken: authorizationToken,
@@ -381,12 +411,8 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := models.GetUserV1(models.GetUserV1Opts{
-		Db: db,
-
-		Id: &userLogin.UserId,
-	})
-	if err != nil {
+	user := models.User{Id: &userLogin.UserId}
+	if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user", ErrorGeneric)
 		return
 	}

@@ -88,6 +88,10 @@ var flags cli.Flags = cli.Flags{
 }
 
 func init() {
+	cobra.AddTemplateFunc("prependText", func() string {
+		return cli.Logo + "\n"
+	})
+	Command.SetHelpTemplate(`{{ prependText }}` + Command.HelpTemplate())
 	Command.SetVersionTemplate(cli.Logo + "\n" + `{{with .DisplayName}}{{printf "%s " .}}{{end}}{{printf "version %s" .Version}}`)
 
 	Command.AddCommand(admin.Command)
@@ -132,7 +136,7 @@ var Command = &cobra.Command{
 	Use:     "opsicle",
 	Short:   "Runbook automations by Platform Engineers for Platform Engineers",
 	Version: config.GetVersion(),
-	Long:    cli.Logo + "\nRunbook automations by Platform Engineers for Platform Engineers",
+	Long:    "Runbook automations by Platform Engineers for Platform Engineers",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		isGenerateDocs := viper.GetBool("docs")
 		if isGenerateDocs {

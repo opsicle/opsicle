@@ -2,8 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"errors"
-	"fmt"
 )
 
 type GetUserLoginV1Input struct {
@@ -13,39 +11,34 @@ type GetUserLoginV1Input struct {
 }
 
 func GetUserLoginV1(opts GetUserLoginV1Input) (*UserLogin, error) {
-	sqlStmt := `
-	SELECT 
-		id,
-		user_id,
-		ip_address,
-		user_agent,
-		is_pending_mfa,
-		expires_at
-		FROM user_login
-			WHERE id = ?
-	`
-	sqlArgs := []any{opts.LoginId}
-	stmt, err := opts.Db.Prepare(sqlStmt)
-	if err != nil {
-		return nil, fmt.Errorf("models.GetUserLoginV1: failed to prepare insert statement: %w", err)
-	}
-	row := stmt.QueryRow(sqlArgs...)
-	if row.Err() != nil {
-		return nil, fmt.Errorf("models.GetUserLoginV1: failed to execute statement: %w", err)
-	}
 	userLogin := UserLogin{}
-	if err := row.Scan(
-		&userLogin.Id,
-		&userLogin.UserId,
-		&userLogin.IpAddress,
-		&userLogin.UserAgent,
-		&userLogin.IsPendingMfa,
-		&userLogin.ExpiresAt,
-	); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("models.GetUserLoginV1: failed to find a row: %w", ErrorNotFound)
-		}
-		return nil, fmt.Errorf("models.GetUserLoginV1: failed to retrieve user login: %w", err)
+	if err := executeMysqlSelect(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			SELECT 
+				id,
+				user_id,
+				ip_address,
+				user_agent,
+				is_pending_mfa,
+				expires_at
+				FROM user_login
+					WHERE id = ?
+			`,
+		Args:     []any{opts.LoginId},
+		FnSource: "models.GetUserLoginV1",
+		ProcessRow: func(r *sql.Row) error {
+			return r.Scan(
+				&userLogin.Id,
+				&userLogin.UserId,
+				&userLogin.IpAddress,
+				&userLogin.UserAgent,
+				&userLogin.IsPendingMfa,
+				&userLogin.ExpiresAt,
+			)
+		},
+	}); err != nil {
+		return nil, err
 	}
 	return &userLogin, nil
 }
