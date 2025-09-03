@@ -2,6 +2,7 @@ package list
 
 import (
 	"opsicle/cmd/opsicle/list/approval_request"
+	"opsicle/cmd/opsicle/list/audit_logs"
 	"opsicle/cmd/opsicle/list/orgs"
 
 	"github.com/spf13/cobra"
@@ -9,6 +10,7 @@ import (
 
 func init() {
 	Command.AddCommand(approval_request.Command)
+	Command.AddCommand(audit_logs.Command)
 	Command.AddCommand(orgs.Command)
 }
 

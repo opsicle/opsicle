@@ -42,8 +42,12 @@ func registerUserRoutes(opts RouteRegistrationOpts) {
 }
 
 type handleListUserAuditLogsV1Input struct {
-	Cursor time.Time
+	Cursor  time.Time `json:"cursor"`
+	Limit   int64     `json:"limit"`
+	Reverse bool      `json:"reverse"`
 }
+
+type handleListUserAuditLogsV1Output models.AuditLogs
 
 func handleListUserAuditLogsV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
@@ -61,13 +65,18 @@ func handleListUserAuditLogsV1(w http.ResponseWriter, r *http.Request) {
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving audit logs for user[%s]", session.UserId))
 
-	logs, err := audit.GetByEntity(session.UserId, audit.UserEntity, input.Cursor, 20)
+	user := models.User{Id: &session.UserId}
+	auditLogs, err := user.ListAuditLogsV1(models.ListAuditLogsV1Opts{
+		Timestamp: input.Cursor,
+		Limit:     input.Limit,
+		Reverse:   input.Reverse,
+	})
 	if err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve audit logs", ErrorDatabaseIssue)
 		return
 	}
 
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", logs)
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleListUserAuditLogsV1Output(auditLogs))
 }
 
 type handleCreateUserV1Input struct {

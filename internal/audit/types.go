@@ -88,22 +88,22 @@ const (
 type LogEntries []LogEntry
 
 type LogEntry struct {
-	EntityId     string         `bson:"entityId"`
-	EntityType   EntityType     `bson:"entityType"`
-	Verb         Verb           `bson:"verb"`
-	ResourceId   string         `bson:"resourceId,omitempty"`
-	ResourceType ResourceType   `bson:"resourceType,omitempty"`
-	Status       Status         `bson:"status,omitempty"`
-	FieldId      *string        `bson:"fieldId,omitempty"`
-	FieldType    ResourceType   `bson:"fieldType,omitempty"`
-	SrcIp        *string        `bson:"srcIp,omitempty"`
-	SrcUa        *string        `bson:"srcUa,omitempty"`
-	DstHost      *string        `bson:"dstHost,omitempty"`
-	Timestamp    time.Time      `bson:"timestamp"`
-	Data         map[string]any `bson:"data,omitempty"`
+	EntityId     string         `json:"entityId" bson:"entityId"`
+	EntityType   EntityType     `json:"entityType" bson:"entityType"`
+	Verb         Verb           `json:"verb" bson:"verb"`
+	ResourceId   string         `json:"resourceId,omitempty" bson:"resourceId,omitempty"`
+	ResourceType ResourceType   `json:"resourceType,omitempty" bson:"resourceType,omitempty"`
+	Status       Status         `json:"status,omitempty" bson:"status,omitempty"`
+	FieldId      *string        `json:"fieldId,omitempty" bson:"fieldId,omitempty"`
+	FieldType    ResourceType   `json:"fieldType,omitempty" bson:"fieldType,omitempty"`
+	SrcIp        *string        `json:"srcIp,omitempty" bson:"srcIp,omitempty"`
+	SrcUa        *string        `json:"srcUa,omitempty" bson:"srcUa,omitempty"`
+	DstHost      *string        `json:"dstHost,omitempty" bson:"dstHost,omitempty"`
+	Timestamp    time.Time      `json:"timestamp" bson:"timestamp"`
+	Data         map[string]any `json:"data,omitempty" bson:"data,omitempty"`
 }
 
 type Logger interface {
 	Log(log LogEntry) error
-	GetByEntity(entityId string, entityType EntityType, cursor time.Time, limit int64) (LogEntries, error)
+	GetByEntity(entityId string, entityType EntityType, cursor time.Time, limit int64, reverseTimeOrder bool) (LogEntries, error)
 }

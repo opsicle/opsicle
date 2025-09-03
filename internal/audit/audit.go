@@ -20,9 +20,9 @@ func Log(log LogEntry) error {
 	return ErrorNotInitialized
 }
 
-func GetByEntity(entityId string, entityType EntityType, cursor time.Time, limit int64) (LogEntries, error) {
+func GetByEntity(entityId string, entityType EntityType, cursor time.Time, limit int64, reverseTimeOrder bool) (LogEntries, error) {
 	if client != nil {
-		return client.GetByEntity(entityId, entityType, cursor, limit)
+		return client.GetByEntity(entityId, entityType, cursor, limit, reverseTimeOrder)
 	}
 	logrus.Warnf("audit.GetByEntity called without a valid logger")
 	return nil, ErrorNotInitialized
@@ -60,12 +60,22 @@ func (c *mongoLogger) Log(logEntry LogEntry) error {
 	return nil
 }
 
-func (c *mongoLogger) GetByEntity(entityId string, entityType EntityType, cursor time.Time, limit int64) (LogEntries, error) {
+func (c *mongoLogger) GetByEntity(entityId string, entityType EntityType, cursor time.Time, limit int64, reverseTimeOrder bool) (LogEntries, error) {
 	findTimeout := 3 * time.Second
 	findCtx, cancelFind := context.WithTimeout(context.Background(), findTimeout)
 	defer cancelFind()
+	timeOrder := 1
+	if reverseTimeOrder {
+		timeOrder = -1
+	}
 	res, err := c.Db.Collection(string(entityType)).
-		Find(findCtx, bson.M{"entityId": entityId, "timestamp": bson.M{"$lte": cursor}}, options.Find().SetLimit(limit))
+		Find(
+			findCtx,
+			bson.M{"entityId": entityId, "timestamp": bson.M{"$lte": cursor}},
+			options.Find().
+				SetLimit(limit).
+				SetSort(bson.D{{Key: "timestamp", Value: timeOrder}}),
+		)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, fmt.Errorf("timeout[%v] on find", findTimeout)

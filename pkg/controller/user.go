@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"opsicle/internal/audit"
 	"opsicle/internal/common"
 	"time"
 )
@@ -65,13 +66,12 @@ type ListUserAuditLogsV1Output struct {
 	http.Response
 }
 
-type ListUserAuditLogsV1OutputData []ListUserAuditLogsV1OutputDataAuditLog
-
-type ListUserAuditLogsV1OutputDataAuditLog struct {
-}
+type ListUserAuditLogsV1OutputData audit.LogEntries
 
 type ListUserAuditLogsV1Input struct {
-	Cursor time.Time `json:"cursor"`
+	Cursor  time.Time `json:"cursor"`
+	Limit   int64     `json:"limit"`
+	Reverse bool      `json:"reverse"`
 }
 
 func (c Client) ListUserAuditLogsV1(input ListUserAuditLogsV1Input) (*ListUserAuditLogsV1Output, error) {
@@ -87,12 +87,6 @@ func (c Client) ListUserAuditLogsV1(input ListUserAuditLogsV1Input) (*ListUserAu
 		output = &ListUserAuditLogsV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
-		}
-	}
-	if err != nil && outputClient != nil {
-		switch outputClient.GetErrorCode().Error() {
-		case ErrorEmailExists.Error():
-			err = ErrorEmailExists
 		}
 	}
 	return output, err
