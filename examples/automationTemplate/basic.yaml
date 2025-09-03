@@ -3,7 +3,7 @@ type: AutomationTemplate
 metadata:
   name: basic
   labels:
-    opsicle/description: "this is a basic automation template resource"
+    opsicle.io/description: "this is a basic automation template resource"
 spec:
   approvalPolicy:
     policyRef: tg-one

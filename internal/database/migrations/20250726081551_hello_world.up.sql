@@ -73,14 +73,35 @@ CREATE TABLE IF NOT EXISTS `approval_policies` (
     FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `automation_templates` (
-    id VARCHAR(36) PRIMARY KEY,
-    org_id VARCHAR(36) NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    content TEXT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE
+    `id` VARCHAR(36) PRIMARY KEY,
+    `name` VARCHAR(255) NOT NULL,
+    `description` TEXT,
+    `version` BIGINT NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_by` VARCHAR(36),
+    `last_updated_at` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    `last_updated_by` VARCHAR(36),
+    FOREIGN KEY (created_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (last_updated_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE TABLE IF NOT EXISTS `automation_template_versions` (
+    `automation_template_id` VARCHAR(36),
+    `version` BIGINT NOT NULL,
+    `content` TEXT NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_by` VARCHAR(36),
+    FOREIGN KEY (automation_template_id) REFERENCES `automation_templates`(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE TABLE IF NOT EXISTS `automation_template_users` (
+    `automation_template_id` VARCHAR(36) NOT NULL,
+    `user_id` VARCHAR(36) NOT NULL,
+    `can_view` BOOLEAN NOT NULL DEFAULT FALSE,
+    `can_execute` BOOLEAN NOT NULL DEFAULT FALSE,
+    `can_update` BOOLEAN NOT NULL DEFAULT FALSE,
+    `can_delete` BOOLEAN NOT NULL DEFAULT FALSE,
+    `can_invite` BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY (automation_template_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS `automation_runs` (
     id VARCHAR(36) PRIMARY KEY,

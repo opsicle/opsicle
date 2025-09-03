@@ -497,6 +497,7 @@ func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
 		UserAgent:        r.UserAgent(),
 		IpAddress:        r.RemoteAddr,
 	}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to verify user: %s", err))
 		if errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify user", ErrorInvalidVerificationCode)
 			return

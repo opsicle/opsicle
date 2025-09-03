@@ -24,6 +24,9 @@ func updateUserLoginV1(opts updateUserLoginV1Input) error {
 		case []byte:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, string(v))
+		case bool:
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
+			sqlArgs = append(sqlArgs, v)
 		default:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, fmt.Sprintf("%v", v))

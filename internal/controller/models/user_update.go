@@ -26,12 +26,17 @@ func (u *User) UpdateFieldsV1(opts UpdateUserFieldsV1) error {
 	for field, value := range opts.FieldsToSet {
 		fieldNames = append(fieldNames, field)
 		switch v := value.(type) {
+		case DatabaseFunction:
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = %s", field, v))
 		case string:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, v)
 		case []byte:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, string(v))
+		case bool:
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
+			sqlArgs = append(sqlArgs, v)
 		default:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, fmt.Sprintf("%v", v))

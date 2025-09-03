@@ -23,7 +23,7 @@ func (u *User) VerifyV1(opts VerifyUserV1Opts) error {
 		FieldsToSet: map[string]any{
 			"email_verification_code":      "",
 			"is_email_verified":            true,
-			"email_verified_at":            "NOW()",
+			"email_verified_at":            DatabaseFunction("NOW()"),
 			"email_verified_by_user_agent": opts.UserAgent,
 			"email_verified_by_ip_address": opts.IpAddress,
 		},

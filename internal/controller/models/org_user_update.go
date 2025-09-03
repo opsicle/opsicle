@@ -28,6 +28,9 @@ func (ou *OrgUser) UpdateFieldsV1(opts UpdateOrgUserFieldsV1) error {
 		case []byte:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, string(v))
+		case bool:
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
+			sqlArgs = append(sqlArgs, v)
 		default:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, fmt.Sprintf("%v", v))
