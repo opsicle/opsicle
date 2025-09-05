@@ -82,14 +82,18 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
-		automationTemplate, err := client.CreateAutomationTemplateV1(controller.CreateAutomationTemplateV1Input{
+		automationTemplate, err := client.SubmitAutomationTemplateV1(controller.SubmitAutomationTemplateV1Input{
 			Data: automationTemplateData,
 		})
 		if err != nil {
 			return fmt.Errorf("automation template creation failed: %w", err)
 		}
 
-		fmt.Printf("✅ AutomationTemplate['%s'] has been created with UUID '%s'\n", automationTemplateInstance.Metadata.Name, automationTemplate.Data.Id)
+		if automationTemplate.Data.Version > 1 {
+			fmt.Printf("✅ Your automation template <%s> has been updated to v%v\n", automationTemplate.Data.Name, automationTemplate.Data.Version)
+		} else {
+			fmt.Printf("✅ A new automation template <%s> has been created at v%v with UUID '%s'\n", automationTemplate.Data.Name, automationTemplate.Data.Version, automationTemplate.Data.Id)
+		}
 
 		return nil
 	},

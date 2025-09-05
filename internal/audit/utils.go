@@ -6,10 +6,14 @@ func Interpret(log LogEntry) string {
 	switch log.Verb {
 	case Create:
 		switch log.ResourceType {
+		case AutomationTemplateResource:
+			return fmt.Sprintf("Created an automation template (ID: %s)", log.ResourceId)
 		case OrgUserInvitationResource:
 			return "Invited a user"
 		case OrgResource:
-			return "Created an organisation"
+			return fmt.Sprintf("Created an organisation (ID: %s)", log.ResourceId)
+		case UserResource:
+			return "Created account"
 		}
 	case ForcedLogout:
 		return "Session was invalidated with automatic logout triggered"
@@ -26,6 +30,16 @@ func Interpret(log LogEntry) string {
 		return "Logged into Opsicle"
 	case Logout:
 		return "Logged out of Opsicle"
+	case Update:
+		switch log.ResourceType {
+		case AutomationTemplateResource:
+			return fmt.Sprintf("Updated automation template with ID %s", log.ResourceId)
+		}
+	case Verify:
+		switch log.ResourceType {
+		case UserEmailVerificationCodeResource:
+			return "Verified email"
+		}
 	}
 	return fmt.Sprintf(
 		"Entity[%s[%s]] performed action[%s] on Resource[%s[%s]]",

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/cmd/opsicle"
+	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
 	"os"
 
@@ -26,6 +27,11 @@ func handleError(err error) {
 		logrus.Errorf("Exiting due to error: %s\n", err)
 	}
 	switch true {
+	case errors.Is(err, controller.ErrorDatabaseIssue):
+		cli.PrintBoxedErrorMessage(
+			`Unfortunately something went wrong on our side, our team has likely been alerted and will handle it`,
+		)
+		os.Exit(0b100)
 	case errors.Is(err, controller.ErrorConnectionRefused):
 		fmt.Println("⚠️  The controller instance you are trying to connect to does not seem accessible")
 		fmt.Println("   > Verify your controller URL specified at --controller-url")
@@ -33,7 +39,7 @@ func handleError(err error) {
 		fmt.Println("     ```")
 		fmt.Println("     nc -zv ${CONTROLLER_SVC_URL} ${CONTROLLER_SVC_PORT}")
 		fmt.Println("     ```")
-		os.Exit(2)
+		os.Exit(0b10)
 	case errors.Is(err, controller.ErrorConnectionTimedOut):
 		fmt.Println("⚠️  The controller instance you are trying to connect to has timed out on a connection")
 		fmt.Println("   > Verify that you aren't being blocked by a firewall")
@@ -41,6 +47,6 @@ func handleError(err error) {
 		fmt.Println("     ```")
 		fmt.Println("     nc -zv ${CONTROLLER_SVC_URL} ${CONTROLLER_SVC_PORT}")
 		fmt.Println("     ```")
-		os.Exit(2)
+		os.Exit(0b10)
 	}
 }

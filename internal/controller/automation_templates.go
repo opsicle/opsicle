@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"opsicle/internal/audit"
 	"opsicle/internal/automations"
 	"opsicle/internal/common"
 	"opsicle/internal/controller/models"
@@ -18,20 +19,22 @@ func registerAutomationTemplatesRoutes(opts RouteRegistrationOpts) {
 
 	v1 := opts.Router.PathPrefix("/v1/automation-templates").Subrouter()
 
-	v1.Handle("", requiresAuth(http.HandlerFunc(createAutomationTemplateHandlerV1))).Methods(http.MethodPost)
+	v1.Handle("", requiresAuth(http.HandlerFunc(handleSubmitAutomationTemplateV1))).Methods(http.MethodPost)
 	v1.Handle("", requiresAuth(http.HandlerFunc(listAutomationTemplatesHandlerV1))).Methods(http.MethodGet)
 	v1.Handle("/{id}", requiresAuth(http.HandlerFunc(getAutomationTemplateHandlerV1))).Methods(http.MethodGet)
 }
 
-type createAutomationTemplateHandlerV1Output struct {
-	Id string `json:"id"`
+type handleSubmitAutomationTemplateV1Output struct {
+	Id      string `json:"id"`
+	Name    string `json:"name"`
+	Version int64  `json:"version"`
 }
 
-type createAutomationTemplateHandlerV1Input struct {
+type handleSubmitAutomationTemplateV1Input struct {
 	Data []byte `json:"data"`
 }
 
-func createAutomationTemplateHandlerV1(w http.ResponseWriter, r *http.Request) {
+func handleSubmitAutomationTemplateV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	session := r.Context().Value(authRequestContext).(identity)
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is creating an automation template", session.UserId))
@@ -41,7 +44,7 @@ func createAutomationTemplateHandlerV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
 		return
 	}
-	var input createAutomationTemplateHandlerV1Input
+	var input handleSubmitAutomationTemplateV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
 		return
@@ -53,7 +56,7 @@ func createAutomationTemplateHandlerV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	automationTemplateId, err := models.CreateAutomationTemplateV1(models.CreateAutomationTemplateV1Opts{
+	automationTemplateVersion, err := models.SubmitAutomationTemplateV1(models.SubmitAutomationTemplateV1Opts{
 		Db:       db,
 		Template: template,
 		UserId:   session.UserId,
@@ -63,9 +66,27 @@ func createAutomationTemplateHandlerV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create automation tempalte", ErrorDatabaseIssue)
 		return
 	}
-	output := createAutomationTemplateHandlerV1Output{
-		Id: automationTemplateId,
+	output := handleSubmitAutomationTemplateV1Output{
+		Id:      *automationTemplateVersion.Id,
+		Name:    *automationTemplateVersion.Name,
+		Version: *automationTemplateVersion.Version,
 	}
+
+	verb := audit.Create
+	if *automationTemplateVersion.Version > 1 {
+		verb = audit.Update
+	}
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         verb,
+		ResourceId:   *automationTemplateVersion.Id,
+		ResourceType: audit.AutomationTemplateResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 

@@ -101,7 +101,9 @@ CREATE TABLE IF NOT EXISTS `automation_template_users` (
     `can_update` BOOLEAN NOT NULL DEFAULT FALSE,
     `can_delete` BOOLEAN NOT NULL DEFAULT FALSE,
     `can_invite` BOOLEAN NOT NULL DEFAULT FALSE,
-    PRIMARY KEY (automation_template_id, user_id)
+    PRIMARY KEY (automation_template_id, user_id),
+    FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (automation_template_id) REFERENCES `automation_templates`(id) ON DELETE CASCADE ON UPDATE CASCADE,
 );
 CREATE TABLE IF NOT EXISTS `automation_runs` (
     id VARCHAR(36) PRIMARY KEY,

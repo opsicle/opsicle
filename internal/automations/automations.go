@@ -31,7 +31,7 @@ type Phase struct {
 	Image    string    `json:"image" yaml:"image"`
 	Commands []string  `json:"command" yaml:"commands"`
 	Timeout  int       `json:"timeout" yaml:"timeout"`
-	Logs     PhaseLogs `json:"logs" yaml:"logs"`
+	Logs     PhaseLogs `json:"logs,omitempty" yaml:"logs"`
 }
 
 type PhaseLogs []PhaseLog
