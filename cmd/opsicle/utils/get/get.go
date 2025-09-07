@@ -13,7 +13,7 @@ func init() {
 var Command = &cobra.Command{
 	Use:     "get",
 	Aliases: []string{"g"},
-	Short:   "Retrieves/generates stuff",
+	Short:   "Retrieves stuff",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},
