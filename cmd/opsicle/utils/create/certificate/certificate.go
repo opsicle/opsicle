@@ -1,8 +1,6 @@
 package certificate
 
 import (
-	"crypto/rsa"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"opsicle/internal/cli"
@@ -16,19 +14,19 @@ var flags cli.Flags = cli.Flags{
 	{
 		Name:         "output-dir",
 		Short:        'O',
-		DefaultValue: "./certs/",
+		DefaultValue: "./data/.app/certs/",
 		Usage:        "Defines the path to output the .crt and .key file to",
 		Type:         cli.FlagTypeString,
 	},
 	{
 		Name:         "ca-cert-path",
-		DefaultValue: "Path to the CA certificate",
+		DefaultValue: "",
 		Usage:        "Specifies the path to the CA certificate",
 		Type:         cli.FlagTypeString,
 	},
 	{
 		Name:         "ca-key-path",
-		DefaultValue: "Path to the CA certificate key",
+		DefaultValue: "",
 		Usage:        "Specifies the path to the CA certificate key",
 		Type:         cli.FlagTypeString,
 	},
@@ -77,23 +75,30 @@ func init() {
 var Command = &cobra.Command{
 	Use:     "certificate",
 	Aliases: []string{"cert"},
-	Short:   "Creates a TLS certificate for server/client use",
+	Short:   "Creates a TLS certificate and key for server/client use and places it in the directory provided at --output-dir",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		name := "default"
+		if len(args) > 0 {
+			name = args[0]
+		}
 		caCertPath := viper.GetString("ca-cert-path")
 		caKeyPath := viper.GetString("ca-key-path")
 		commonName := viper.GetString("cn")
 		organizations := viper.GetStringSlice("org")
 		keyBits := viper.GetInt("bits")
 
-		var caCert *x509.Certificate
-		var caKey *rsa.PrivateKey
+		var caCert *tls.Certificate
+		var caKey *tls.Key
 
-		if caCertPath == "" && caKeyPath == "" {
-			fmt.Printf("Generating a new CA...\n")
-			cert, err := tls.GenerateCertificateAuthority(&tls.CertificateAuthorityOptions{
+		isCaProvided := caCertPath != "" && caKeyPath != ""
+
+		if !isCaProvided {
+			fmt.Printf("⏳ CA not provided, generating a new CA certificate/key pair...\n")
+			var err error
+			caCert, caKey, err = tls.GenerateCertificateAuthority(&tls.CertificateOptions{
 				CommonName:   commonName,
 				Organization: organizations,
 				KeyBits:      keyBits,
@@ -101,15 +106,17 @@ var Command = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to generate ca: %w", err)
 			}
-			caCert = cert.X509Certificate
-			caKey = cert.Key
 		} else {
-			fmt.Printf("Loading CA certificate from %s...\n", caCertPath)
-			fmt.Printf("Loading CA key from %s...\n", caKeyPath)
+			fmt.Printf("⏳ Loading CA certificate from %s...\n", caCertPath)
+			fmt.Printf("⏳ Loading CA key from %s...\n", caKeyPath)
 			var err error
-			caCert, caKey, err = tls.LoadCertificateAuthority(caCertPath, caKeyPath)
+			caCert, err = tls.LoadCertificate(caCertPath, caKeyPath)
 			if err != nil {
-				return fmt.Errorf("failed to load ca: %w", err)
+				return fmt.Errorf("failed to load ca cert: %w", err)
+			}
+			caKey, err = tls.LoadKey(caKeyPath)
+			if err != nil {
+				return fmt.Errorf("failed to load ca key: %w", err)
 			}
 		}
 
@@ -123,33 +130,54 @@ var Command = &cobra.Command{
 		for _, ip := range ips {
 			ipAddresses = append(ipAddresses, net.ParseIP(ip))
 		}
-		cert, err := tls.GenerateCertificate(&tls.CertificateOptions{
+
+		cert, key, err := tls.GenerateCertificate(&tls.CertificateOptions{
 			CommonName:   commonName,
 			Organization: organizations,
 			IsClient:     isClient,
 			DNSNames:     dnsNames,
 			IPs:          ipAddresses,
 			KeyBits:      keyBits,
-		}, caCert, caKey)
+		}, caCert.X509Certificate, caKey.RsaKey)
 		if err != nil {
 			return fmt.Errorf("failed to generate cert: %w", err)
 		}
 
 		outputDir := viper.GetString("output-dir")
 
-		certPath, keyPath, err := tls.ExportCertificate(outputDir, cert)
+		certPath, err := cert.Export(outputDir, name)
 		if err != nil {
-			return fmt.Errorf("failed to export ca: %w", err)
+			return fmt.Errorf("failed to export cert: %w", err)
+		}
+		keyPath, err := key.Export(outputDir, name)
+		if err != nil {
+			return fmt.Errorf("failed to export key: %w", err)
+		}
+		outputMessage := fmt.Sprintf(
+			"📄 Leaf certificate is at: %s\n"+
+				"🔑 Leaf key is at: %s",
+			certPath,
+			keyPath,
+		)
+		if !isCaProvided {
+			caCertPath, err := caCert.Export(outputDir, name+"-ca")
+			if err != nil {
+				return fmt.Errorf("failed to export cert: %w", err)
+			}
+			caKeyPath, err := caKey.Export(outputDir, name+"-ca")
+			if err != nil {
+				return fmt.Errorf("failed to export key: %w", err)
+			}
+			outputMessage = fmt.Sprintf(
+				"📄 CA certificate is at: %s\n"+
+					"🔑 CA key is at: %s\n%s",
+				caCertPath,
+				caKeyPath,
+				outputMessage,
+			)
 		}
 
-		cli.PrintBoxedSuccessMessage(
-			fmt.Sprintf(
-				"Certificate is at: %s\n"+
-					"Key is at: %s\n",
-				certPath,
-				keyPath,
-			),
-		)
+		cli.PrintBoxedSuccessMessage(outputMessage)
 
 		return nil
 	},

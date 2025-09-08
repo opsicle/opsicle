@@ -64,5 +64,10 @@ func InitNats(opts InitNatsOpts) (*nats.Conn, error) {
 		return nil, fmt.Errorf("failed to verify connection")
 	}
 	return connection, nil
-
 }
+
+type Nats struct {
+	Client *nats.Conn
+}
+
+func (n *Nats) Push() {}

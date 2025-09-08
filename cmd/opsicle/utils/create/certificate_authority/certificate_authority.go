@@ -13,7 +13,7 @@ var flags cli.Flags = cli.Flags{
 	{
 		Name:         "output-dir",
 		Short:        'O',
-		DefaultValue: "./certs/",
+		DefaultValue: "./data/.app/certs/",
 		Usage:        "Defines the path to output the .crt and .key file to",
 		Type:         cli.FlagTypeString,
 	},
@@ -49,11 +49,16 @@ var Command = &cobra.Command{
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		name := "default"
+		if len(args) > 0 {
+			name = args[0]
+		}
 		commonName := viper.GetString("cn")
 		organizations := viper.GetStringSlice("org")
 		keyBits := viper.GetInt("bits")
 
-		cert, err := tls.GenerateCertificateAuthority(&tls.CertificateAuthorityOptions{
+		fmt.Printf("⏳ Generating a new CA certificate/key pair...\n")
+		cert, key, err := tls.GenerateCertificateAuthority(&tls.CertificateOptions{
 			CommonName:   commonName,
 			Organization: organizations,
 			KeyBits:      keyBits,
@@ -64,15 +69,19 @@ var Command = &cobra.Command{
 
 		outputDir := viper.GetString("output-dir")
 
-		certPath, keyPath, err := tls.ExportCertificateAuthority(outputDir, cert)
+		certPath, err := cert.Export(outputDir, name+"-ca")
 		if err != nil {
-			return fmt.Errorf("failed to export ca: %w", err)
+			return fmt.Errorf("failed to export ca cert: %w", err)
+		}
+		keyPath, err := key.Export(outputDir, name+"-ca")
+		if err != nil {
+			return fmt.Errorf("failed to export ca key: %w", err)
 		}
 
 		cli.PrintBoxedSuccessMessage(
 			fmt.Sprintf(
-				"Certificate is at: %s\n"+
-					"Key is at: %s\n",
+				"📄 CA certificate is at: %s\n"+
+					"🔑 CA key is at: %s\n",
 				certPath,
 				keyPath,
 			),

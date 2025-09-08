@@ -43,7 +43,7 @@ var Command = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		controllerUrl := viper.GetString("controller-url")
-		methodId := "opsicle/list/audit-logs"
+		methodId := "opsicle/submit/template"
 		sessionToken, err := cli.RequireAuth(controllerUrl, methodId)
 		if err != nil {
 			fmt.Println("⚠️  You must be logged-in to run this command")

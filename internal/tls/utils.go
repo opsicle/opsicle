@@ -25,6 +25,38 @@ func ensurePrefix(dirOrPrefix string) string {
 	return dir
 }
 
+func GetUsage(cert *x509.Certificate) []string {
+	usages := []string{}
+	if cert.KeyUsage&x509.KeyUsageDigitalSignature != 0 {
+		usages = append(usages, "Digital Signature")
+	}
+	if cert.KeyUsage&x509.KeyUsageKeyEncipherment != 0 {
+		usages = append(usages, "Key Encipherment")
+	}
+	if cert.KeyUsage&x509.KeyUsageCertSign != 0 {
+		usages = append(usages, "Certificate Signing")
+	}
+	if cert.KeyUsage&x509.KeyUsageCRLSign != 0 {
+		usages = append(usages, "CRL Signing")
+	}
+	if cert.KeyUsage&x509.KeyUsageKeyAgreement != 0 {
+		usages = append(usages, "Key Agreement")
+	}
+	if cert.KeyUsage&x509.KeyUsageContentCommitment != 0 {
+		usages = append(usages, "Content Commitment")
+	}
+	if cert.KeyUsage&x509.KeyUsageDataEncipherment != 0 {
+		usages = append(usages, "Data Encipherment")
+	}
+	if cert.KeyUsage&x509.KeyUsageEncipherOnly != 0 {
+		usages = append(usages, "Encipher Only")
+	}
+	if cert.KeyUsage&x509.KeyUsageDecipherOnly != 0 {
+		usages = append(usages, "Decipher Only")
+	}
+	return usages
+}
+
 func marshalPKCS8PEM(key *rsa.PrivateKey) ([]byte, error) {
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {

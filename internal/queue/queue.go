@@ -1,12 +1,12 @@
 package queue
 
-var fifoQueue FifoQueue
+var fifo FifoQueue
 
 type FifoQueue interface {
 	Push(key string, data any)
 	Pop(key string) any
 }
 
-func GetFifoQueue() FifoQueue {
-	return fifoQueue
+func GetFifo() FifoQueue {
+	return fifo
 }

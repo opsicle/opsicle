@@ -51,8 +51,8 @@ var availableLogLevels = []string{
 
 var persistentFlags cli.Flags = cli.Flags{
 	{
-		Name:         "config-path",
-		Short:        'c',
+		Name:         "config",
+		Short:        'C',
 		DefaultValue: "~/.opsicle/config",
 		Usage:        "Defines the location of the global configuration used",
 		Type:         cli.FlagTypeString,
@@ -126,7 +126,7 @@ func init() {
 		persistentFlags.BindViper(Command, true)
 		flags.BindViper(Command)
 		cli.InitLogging(viper.GetString("log-level"))
-		configPath := viper.GetString("config-path")
+		configPath := viper.GetString("config")
 		logrus.Debugf("using configuration at path[%s]", configPath)
 		config.LoadGlobal(configPath)
 	})

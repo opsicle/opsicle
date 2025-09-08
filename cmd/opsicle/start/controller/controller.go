@@ -9,6 +9,7 @@ import (
 	"opsicle/internal/controller"
 	"opsicle/internal/database"
 	"opsicle/internal/email"
+	"opsicle/internal/queue"
 	"os"
 	"sync"
 	"time"
@@ -83,6 +84,32 @@ var flags cli.Flags = cli.Flags{
 		Name:         "mysql-password",
 		DefaultValue: "password",
 		Usage:        "specifies the password to use to login",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "nats-addr",
+		DefaultValue: "localhost:4222",
+		Usage:        "Specifies the hostname (including port) of the NATS server",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "nats-username",
+		DefaultValue: "opsicle",
+		Usage:        "Specifies the username used to login to NATS",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "nats-password",
+		DefaultValue: "password",
+		Usage:        "Specifies the password used to login to NATS",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name: "nats-nkey",
+		// this default value is the development nkey, this value must be aligned
+		// to the one in `./docker-compose.yml` in the root of the repository
+		DefaultValue: "SUADZTA4VJHBCO7K75DQ3IN7KZGWHKEI26D2IYEABRN5TXXYHXLWNDYT4A",
+		Usage:        "Specifies the nkey used to login to NATS",
 		Type:         cli.FlagTypeString,
 	},
 	{
@@ -172,6 +199,14 @@ var Command = &cobra.Command{
 		logrus.Debugf("started logging engine")
 
 		connectionId := "opsicle/controller"
+
+		/*
+		    _  _   _ ___ ___ _____   ___   _ _____ _   ___   _   ___ ___
+		   /_\| | | |   |_ _|_   _| |   \ /_|_   _/_\ | _ ) /_\ / __| __|
+		  / _ | |_| | |) | |  | |   | |) / _ \| |/ _ \| _ \/ _ \\__ | _|
+		 /_/ \_\___/|___|___| |_|   |___/_/ \_|_/_/ \_|___/_/ \_|___|___|
+
+		*/
 
 		logrus.Infof("establishing connection to audit database...")
 		auditDatabaseConnection, err := database.ConnectMongo(database.ConnectOpts{
@@ -263,6 +298,14 @@ var Command = &cobra.Command{
 			ResourceType: audit.DbResource,
 		})
 
+		/*
+		  ___ _      _ _____ ___ ___  ___ __  __   ___   _ _____ _   ___   _   ___ ___
+		 | _ | |    /_|_   _| __/ _ \| _ |  \/  | |   \ /_|_   _/_\ | _ ) /_\ / __| __|
+		 |  _| |__ / _ \| | | _| (_) |   | |\/| | | |) / _ \| |/ _ \| _ \/ _ \\__ | _|
+		 |_| |____/_/ \_|_| |_| \___/|_|_|_|  |_| |___/_/ \_|_/_/ \_|___/_/ \_|___|___|
+
+		*/
+
 		logrus.Infof("establishing connection to platform database...")
 		databaseConnection, err := database.ConnectMysql(database.ConnectOpts{
 			ConnectionId: connectionId,
@@ -321,6 +364,14 @@ var Command = &cobra.Command{
 			ResourceType: audit.DbResource,
 		})
 
+		/*
+		   ___   _   ___ _  _ ___
+		  / __| /_\ / __| || | __|
+		 | (__ / _ | (__| __ | _|
+		  \___/_/ \_\___|_||_|___|
+
+		*/
+
 		logrus.Infof("establishing connection to cache...")
 		if err := cache.InitRedis(cache.InitRedisOpts{
 			Addr:        viper.GetString("redis-addr"),
@@ -336,6 +387,33 @@ var Command = &cobra.Command{
 			EntityType:   audit.ControllerEntity,
 			Verb:         audit.Connect,
 			ResourceId:   viper.GetString("redis-addr"),
+			ResourceType: audit.CacheResource,
+		})
+
+		/*
+		   ___  _   _ ___ _   _ ___
+		  / _ \| | | | __| | | | __|
+		 | (_) | |_| | _|| |_| | _|
+		  \__\_\\___/|___|\___/|___|
+
+		*/
+		logrus.Infof("establishing connection to queue...")
+		nats, err := queue.InitNats(queue.InitNatsOpts{
+			Addr:        viper.GetString("nats-addr"),
+			Username:    viper.GetString("nats-username"),
+			Password:    viper.GetString("nats-password"),
+			NKey:        viper.GetString("nats-nkey"),
+			ServiceLogs: serviceLogs,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to initialise nats queue: %w", err)
+		}
+		logrus.Debugf("established connection to queue at %s", nats.ConnectedUrl())
+		audit.Log(audit.LogEntry{
+			EntityId:     fmt.Sprintf("%v@%s", userId, hostname),
+			EntityType:   audit.ControllerEntity,
+			Verb:         audit.Connect,
+			ResourceId:   viper.GetString("nats-addr"),
 			ResourceType: audit.CacheResource,
 		})
 

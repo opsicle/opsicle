@@ -34,6 +34,27 @@ CREATE TABLE IF NOT EXISTS `orgs` (
     `disabled_at` DATETIME,
     FOREIGN KEY (created_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE
 );
+CREATE TABLE IF NOT EXISTS `org_ca` (
+    `id` VARCHAR(36) PRIMARY KEY,
+    `org_id` VARCHAR(36) NOT NULL,
+    `cert_b64` TEXT NOT NULL,
+    `private_key_b64` TEXT NOT NULL,
+    `is_deactivated` BOOLEAN NOT NULL DEFAULT FALSE,
+    `created_at`      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `expires_at` TIMESTAMP NOT NULL,
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE DELETE ON UPDATE CASCADE
+);
+CREATE TABLE IF NOT EXISTS `org_worker_tokens` (
+    `id` VARCHAR(36) PRIMARY KEY,
+    `org_id` VARCHAR(36) NOT NULL,
+    `token` TEXT NOT NULL,
+    `cert_b64` TEXT NOT NULL,
+    `private_key_b64` TEXT NOT NULL,
+    `is_deactivated` BOOLEAN NOT NULL DEFAULT FALSE,
+    `created_at`      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `expires_at` TIMESTAMP NOT NULL,
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE DELETE ON UPDATE CASCADE
+);
 CREATE TABLE `org_user_invitations` (
     `id`              VARCHAR(36) NOT NULL,
     `inviter_id`      VARCHAR(36) NOT NULL,

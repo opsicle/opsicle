@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"opsicle/cmd/opsicle/utils/check"
 	"opsicle/cmd/opsicle/utils/create"
 	"opsicle/cmd/opsicle/utils/get"
 	"opsicle/cmd/opsicle/utils/send"
@@ -10,6 +11,7 @@ import (
 )
 
 func init() {
+	Command.AddCommand(check.Command)
 	Command.AddCommand(create.Command)
 	Command.AddCommand(get.Command)
 	Command.AddCommand(send.Command)

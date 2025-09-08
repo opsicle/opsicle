@@ -17,10 +17,10 @@ import (
 func registerAutomationTemplatesRoutes(opts RouteRegistrationOpts) {
 	requiresAuth := getRouteAuther(opts.ServiceLogs)
 
-	v1 := opts.Router.PathPrefix("/v1/automation-templates").Subrouter()
+	v1 := opts.Router.PathPrefix("/v1/templates").Subrouter()
 
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleSubmitAutomationTemplateV1))).Methods(http.MethodPost)
-	v1.Handle("", requiresAuth(http.HandlerFunc(listAutomationTemplatesHandlerV1))).Methods(http.MethodGet)
+	v1.Handle("", requiresAuth(http.HandlerFunc(handleListTemplatesV1))).Methods(http.MethodGet)
 	v1.Handle("/{id}", requiresAuth(http.HandlerFunc(getAutomationTemplateHandlerV1))).Methods(http.MethodGet)
 }
 
@@ -103,8 +103,53 @@ func getAutomationTemplateHandlerV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusTooEarly, "not implemented yet")
 }
 
-func listAutomationTemplatesHandlerV1(w http.ResponseWriter, r *http.Request) {
+type handleListTemplatesV1Output []handleListTemplatesV1OutputTemplate
+
+type handleListTemplatesV1OutputTemplate struct {
+	Id          string `json:"id"`
+	Content     []byte `json:"content"`
+	Description string `json:"description"`
+	Name        string `json:"name"`
+	Version     int64  `json:"version"`
+}
+
+type handleListTemplatesV1Input struct {
+	Limit int `json:"limit"`
+}
+
+func handleListTemplatesV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	log(common.LogLevelInfo, "this endpoint lists automation templates")
-	w.Write([]byte("list"))
+	session := r.Context().Value(authRequestContext).(identity)
+
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		return
+	}
+	var input handleListTemplatesV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		return
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("retrieving automation templates for user[%s]", session.UserId))
+
+	user := models.User{Id: &session.UserId}
+	templates, err := user.ListTemplatesV1(models.DatabaseConnection{Db: db})
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list automation templates", ErrorDatabaseIssue)
+		return
+	}
+	output := handleListTemplatesV1Output{}
+	for _, template := range templates {
+		output = append(output, handleListTemplatesV1OutputTemplate{
+			Id:          *template.Id,
+			Description: *template.Description,
+			Name:        *template.Name,
+			Content:     template.Content,
+			Version:     *template.Version,
+		})
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
