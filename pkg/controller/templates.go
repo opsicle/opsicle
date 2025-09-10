@@ -2,7 +2,11 @@ package controller
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type ListTemplatesV1Output struct {
@@ -48,6 +52,67 @@ func (c Client) ListTemplatesV1(input ListTemplatesV1Input) (*ListTemplatesV1Out
 	return output, err
 }
 
+type ListTemplateVersionsV1Output struct {
+	Data ListTemplateVersionsV1OutputData
+
+	http.Response
+}
+
+type ListTemplateVersionsV1OutputData struct {
+	Template ListTemplateVersionsV1OutputTemplate  `json:"template"`
+	Versions []ListTemplateVersionsV1OutputVersion `json:"versions"`
+}
+
+type ListTemplateVersionsV1OutputTemplate struct {
+	Id            string                           `json:"id"`
+	Name          string                           `json:"name"`
+	Description   *string                          `json:"description"`
+	Version       int64                            `json:"version"`
+	CreatedAt     time.Time                        `json:"createdAt"`
+	CreatedBy     ListTemplateVersionsV1OutputUser `json:"createdBy"`
+	LastUpdatedAt time.Time                        `json:"lastUpdatedAt"`
+	LastUpdatedBy ListTemplateVersionsV1OutputUser `json:"lastUpdatedBy"`
+}
+
+type ListTemplateVersionsV1OutputVersion struct {
+	Content   string                           `json:"content"`
+	CreatedAt time.Time                        `json:"createdAt"`
+	CreatedBy ListTemplateVersionsV1OutputUser `json:"createdBy"`
+	Version   int64                            `json:"version"`
+}
+
+type ListTemplateVersionsV1OutputUser struct {
+	Id    string `json:"id"`
+	Email string `json:"email"`
+}
+
+type ListTemplateVersionsV1Input struct {
+	TemplateId string `json:"-"`
+}
+
+func (c Client) ListTemplateVersionsV1(input ListTemplateVersionsV1Input) (*ListTemplateVersionsV1Output, error) {
+	var outputData ListTemplateVersionsV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/template/%s/versions", input.TemplateId),
+		Output: &outputData,
+	})
+	var output *ListTemplateVersionsV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &ListTemplateVersionsV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		}
+	}
+	return output, err
+}
+
 type SubmitAutomationTemplateV1Output struct {
 	Data SubmitAutomationTemplateV1OutputData
 
@@ -68,7 +133,7 @@ func (c Client) SubmitAutomationTemplateV1(input SubmitAutomationTemplateV1Input
 	var outputData SubmitAutomationTemplateV1OutputData
 	outputClient, err := c.do(request{
 		Method: http.MethodPost,
-		Path:   "/api/v1/templates",
+		Path:   "/api/v1/template",
 		Data:   input,
 		Output: &outputData,
 	})
@@ -83,6 +148,50 @@ func (c Client) SubmitAutomationTemplateV1(input SubmitAutomationTemplateV1Input
 		switch outputClient.GetErrorCode().Error() {
 		case ErrorDatabaseIssue.Error():
 			err = ErrorDatabaseIssue
+		}
+	}
+	return output, err
+}
+
+type UpdateTemplateDefaultVersionV1Output struct {
+	Data UpdateTemplateDefaultVersionV1OutputData
+
+	http.Response
+}
+
+type UpdateTemplateDefaultVersionV1OutputData struct {
+	Version int64 `json:"version"`
+}
+
+type UpdateTemplateDefaultVersionV1Input struct {
+	TemplateId string `json:"-"`
+	Version    int64  `json:"version"`
+}
+
+func (c Client) UpdateTemplateDefaultVersionV1(input UpdateTemplateDefaultVersionV1Input) (*UpdateTemplateDefaultVersionV1Output, error) {
+	var outputData UpdateTemplateDefaultVersionV1OutputData
+	if _, err := uuid.Parse(input.TemplateId); err != nil {
+		return nil, fmt.Errorf("invalid template id")
+	}
+	outputClient, err := c.do(request{
+		Method: http.MethodPut,
+		Path:   fmt.Sprintf("/api/v1/template/%s/version", input.TemplateId),
+		Data:   input,
+		Output: &outputData,
+	})
+	var output *UpdateTemplateDefaultVersionV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &UpdateTemplateDefaultVersionV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		case ErrorNotFound.Error():
+			err = ErrorNotFound
 		}
 	}
 	return output, err

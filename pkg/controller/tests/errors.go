@@ -17,6 +17,7 @@ func TestControllerErrors(t *testing.T) {
 	validateSimilarty("ErrorAuthRequired", pkgController.ErrorAuthRequired, intController.ErrorAuthRequired, t)
 	validateSimilarty("ErrorEmailExists", pkgController.ErrorEmailExists, intController.ErrorEmailExists, t)
 	validateSimilarty("ErrorGeneric", pkgController.ErrorGeneric, intController.ErrorGeneric, t)
+	validateSimilarty("ErrorNotFound", pkgController.ErrorNotFound, intController.ErrorNotFound, t)
 	validateSimilarty("ErrorMfaRequired", pkgController.ErrorMfaRequired, intController.ErrorMfaRequired, t)
 	validateSimilarty("ErrorOrgRequiresOneAdmin", pkgController.ErrorOrgRequiresOneAdmin, intController.ErrorOrgRequiresOneAdmin, t)
 }

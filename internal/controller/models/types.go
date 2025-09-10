@@ -7,3 +7,9 @@ type DatabaseConnection struct {
 }
 
 type DatabaseFunction string
+
+type UpdateFieldsV1 struct {
+	Db *sql.DB
+
+	FieldsToSet map[string]any
+}

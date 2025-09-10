@@ -966,7 +966,7 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 
 	// make org user changes
 
-	if err := orgUser.UpdateFieldsV1(models.UpdateOrgUserFieldsV1{
+	if err := orgUser.UpdateFieldsV1(models.UpdateFieldsV1{
 		Db:          db,
 		FieldsToSet: input.Update,
 	}); err != nil {

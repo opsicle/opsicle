@@ -42,6 +42,9 @@ type mysqlQueryInput struct {
 }
 
 func executeMysqlDelete(opts mysqlQueryInput) error {
+	if opts.Db == nil {
+		return fmt.Errorf("%s: missing db input: %w", opts.FnSource, ErrorDatabaseUndefined)
+	}
 	inputStmt := strings.TrimSpace(opts.Stmt)
 	inputOp := strings.SplitN(strings.ReplaceAll(inputStmt, "\n", " "), " ", 2)
 	if strings.ToLower(inputOp[0]) != "delete" {
@@ -66,6 +69,9 @@ func executeMysqlDelete(opts mysqlQueryInput) error {
 }
 
 func executeMysqlInsert(opts mysqlQueryInput) error {
+	if opts.Db == nil {
+		return fmt.Errorf("%s: missing db input: %w", opts.FnSource, ErrorDatabaseUndefined)
+	}
 	inputStmt := strings.TrimSpace(opts.Stmt)
 	inputOp := strings.SplitN(strings.ReplaceAll(inputStmt, "\n", " "), " ", 2)
 	if strings.ToLower(inputOp[0]) != "insert" {
@@ -95,6 +101,9 @@ func executeMysqlInsert(opts mysqlQueryInput) error {
 }
 
 func executeMysqlSelect(opts mysqlQueryInput) error {
+	if opts.Db == nil {
+		return fmt.Errorf("%s: missing db input: %w", opts.FnSource, ErrorDatabaseUndefined)
+	}
 	inputStmt := strings.TrimSpace(opts.Stmt)
 	inputOp := strings.SplitN(strings.ReplaceAll(inputStmt, "\n", " "), " ", 2)
 	if strings.ToLower(inputOp[0]) != "select" {
@@ -121,6 +130,9 @@ func executeMysqlSelect(opts mysqlQueryInput) error {
 }
 
 func executeMysqlSelects(opts mysqlQueryInput) error {
+	if opts.Db == nil {
+		return fmt.Errorf("%s: missing db input: %w", opts.FnSource, ErrorDatabaseUndefined)
+	}
 	inputStmt := strings.TrimSpace(opts.Stmt)
 	inputOp := strings.SplitN(strings.ReplaceAll(inputStmt, "\n", " "), " ", 2)
 	if strings.ToLower(inputOp[0]) != "select" {

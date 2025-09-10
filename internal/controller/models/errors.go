@@ -6,9 +6,11 @@ import (
 
 var (
 	ErrorCredentialsAuthenticationFailed = errors.New("credentials_authentication_failed")
+	ErrorDatabaseUndefined               = errors.New("database_undefined")
 	ErrorDeleteFailed                    = errors.New("delete_failed")
 	ErrorDuplicateEntry                  = errors.New("duplicate_entry")
 	ErrorGenericDatabaseIssue            = errors.New("generic_database_issue")
+	ErrorIdRequired                      = errors.New("id_required")
 	ErrorInsertFailed                    = errors.New("insert_failed")
 	ErrorNotFound                        = errors.New("not_found")
 	ErrorQueryFailed                     = errors.New("query_failed")

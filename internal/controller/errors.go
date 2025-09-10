@@ -16,6 +16,7 @@ var (
 	ErrorInsufficientPermissions = errors.New("insufficient_permissions")
 	ErrorMfaRequired             = errors.New("mfa_required")
 	ErrorMfaTokenInvalid         = errors.New("mfa_token_invalid")
+	ErrorNotFound                = errors.New("not_found")
 	ErrorOrgExists               = errors.New("org_exists")
 	ErrorOrgRequiresOneAdmin     = errors.New("org_requires_one_admin")
 	ErrorUserExistsInOrg         = errors.New("user_exists_in_org")

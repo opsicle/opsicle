@@ -2,19 +2,16 @@ package models
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"opsicle/internal/automations"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 )
-
-type SubmitAutomationTemplateV1Opts struct {
-	Db       *sql.DB
-	Template automations.Template
-	UserId   string
-}
 
 type AutomationTemplate struct {
 	Id            *string
@@ -23,10 +20,11 @@ type AutomationTemplate struct {
 	Version       *int64
 	Content       []byte
 	Users         []AutomationTemplateUser
+	Versions      []TemplateVersion
 	CreatedAt     time.Time
 	CreatedBy     User
-	LastUpdatedAt time.Time
-	LastUpdatedBy User
+	LastUpdatedAt *time.Time
+	LastUpdatedBy *User
 }
 
 type AutomationTemplateUser struct {
@@ -37,6 +35,181 @@ type AutomationTemplateUser struct {
 	CanUpdate  bool
 	CanDelete  bool
 	CanInvite  bool
+}
+
+type TemplateVersion struct {
+	AutomationTemplateId string
+	Version              int64
+	Content              string
+	CreatedAt            time.Time
+	CreatedBy            User
+}
+
+func (t *AutomationTemplate) GetId() string {
+	return *t.Id
+}
+
+func (t *AutomationTemplate) LoadUsersV1(opts DatabaseConnection) error {
+	if t.Id == nil {
+		return fmt.Errorf("%w: template id not specified", ErrorInvalidInput)
+	}
+	users := []AutomationTemplateUser{}
+	if err := executeMysqlSelects(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+		  SELECT 
+				user_id,
+				can_view,
+				can_execute,
+				can_update,
+				can_delete,
+				can_invite
+			FROM
+				automation_template_users
+			WHERE
+				automation_template_id = ?
+		`,
+		Args: []any{
+			*t.Id,
+		},
+		FnSource: "models.AutomationTemplate.LoadV1",
+		ProcessRows: func(r *sql.Rows) error {
+			user := AutomationTemplateUser{TemplateId: t.GetId()}
+			if err := r.Scan(
+				&user.UserId,
+				&user.CanView,
+				&user.CanExecute,
+				&user.CanUpdate,
+				&user.CanDelete,
+				&user.CanInvite,
+			); err != nil {
+				return err
+			}
+			users = append(users, user)
+			return nil
+		},
+	}); err != nil {
+		return err
+	}
+	t.Users = users
+	return nil
+}
+
+func (t *AutomationTemplate) LoadV1(opts DatabaseConnection) error {
+	if t.Id == nil {
+		return fmt.Errorf("%w: template id not specified", ErrorInvalidInput)
+	}
+
+	t.CreatedBy = User{}
+	t.LastUpdatedBy = &User{}
+	if err := executeMysqlSelect(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+		  SELECT 
+				at.id,
+				at.name,
+				at.description,
+				at.created_at,
+				at.created_by,
+				at.last_updated_at,
+				at.last_updated_by,
+				atv.content,
+				atv.version
+				FROM automation_templates at
+				JOIN automation_template_versions atv ON
+					atv.automation_template_id = at.id
+					AND atv.version = at.version
+			WHERE
+				at.id = ?
+		`,
+		Args: []any{
+			*t.Id,
+		},
+		FnSource: "models.AutomationTemplate.LoadV1",
+		ProcessRow: func(r *sql.Row) error {
+			return r.Scan(
+				&t.Id,
+				&t.Name,
+				&t.Description,
+				&t.CreatedAt,
+				&t.CreatedBy.Id,
+				&t.LastUpdatedAt,
+				&t.LastUpdatedBy.Id,
+				&t.Content,
+				&t.Version,
+			)
+		},
+	}); err != nil {
+		return err
+	}
+	if t.CreatedBy.Id != nil {
+		if err := t.CreatedBy.LoadByIdV1(opts); err != nil {
+			return fmt.Errorf("failed to load createdBy: %w", err)
+		}
+	}
+	if t.LastUpdatedBy.Id != nil {
+		if err := t.LastUpdatedBy.LoadByIdV1(opts); err != nil {
+			return fmt.Errorf("failed to load createdBy: %w", err)
+		}
+	}
+	return nil
+}
+
+func (t *AutomationTemplate) UpdateFieldsV1(opts UpdateFieldsV1) error {
+	if err := t.validate(); err != nil {
+		return err
+	}
+	sqlArgs := []any{}
+	fieldNames := []string{}
+	fieldsToSet := []string{}
+	for field, value := range opts.FieldsToSet {
+		fieldNames = append(fieldNames, field)
+		switch v := value.(type) {
+		case string, int, int32, int64, float32, float64, bool:
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
+			sqlArgs = append(sqlArgs, v)
+		case []byte:
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
+			sqlArgs = append(sqlArgs, string(v))
+		case DatabaseFunction:
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = %s", field, v))
+		default:
+			valueType := reflect.TypeOf(v)
+			return fmt.Errorf("field[%s] has invalid type '%s'", field, valueType.String())
+		}
+	}
+	return executeMysqlUpdate(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: fmt.Sprintf(`
+			UPDATE automation_templates
+				SET %s
+				WHERE id = ?
+			`,
+			strings.Join(fieldsToSet, ", "),
+		),
+		Args: append(sqlArgs, t.GetId()),
+		FnSource: fmt.Sprintf(
+			"models.AutomationTemplate.UpdateFieldsV1['%s']",
+			strings.Join(fieldNames, "','"),
+		),
+	})
+}
+
+func (t *AutomationTemplate) validate() error {
+	errs := []error{}
+	if t.Id == nil || *t.Id == "" {
+		errs = append(errs, fmt.Errorf("%w: missing id", ErrorIdRequired))
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+type SubmitAutomationTemplateV1Opts struct {
+	Db       *sql.DB
+	Template automations.Template
+	UserId   string
 }
 
 func SubmitAutomationTemplateV1(opts SubmitAutomationTemplateV1Opts) (*AutomationTemplate, error) {
@@ -55,7 +228,7 @@ func SubmitAutomationTemplateV1(opts SubmitAutomationTemplateV1Opts) (*Automatio
 		}
 		return nil, err
 	}
-	return updateAutomationTemplateV1(updateAutomationTemplateV1Opts{
+	return submitAutomationTemplateV1(submitAutomationTemplateV1Opts{
 		Db:              opts.Db,
 		CurrentTemplate: automationTemplate,
 		UpdatedTemplate: opts.Template,
@@ -63,14 +236,14 @@ func SubmitAutomationTemplateV1(opts SubmitAutomationTemplateV1Opts) (*Automatio
 	})
 }
 
-type updateAutomationTemplateV1Opts struct {
+type submitAutomationTemplateV1Opts struct {
 	Db              *sql.DB
 	CurrentTemplate *AutomationTemplate
 	UpdatedTemplate automations.Template
 	UserId          string
 }
 
-func updateAutomationTemplateV1(opts updateAutomationTemplateV1Opts) (*AutomationTemplate, error) {
+func submitAutomationTemplateV1(opts submitAutomationTemplateV1Opts) (*AutomationTemplate, error) {
 	if opts.CurrentTemplate == nil {
 		return nil, fmt.Errorf("empty current template: %w", errorInputValidationFailed)
 	}
@@ -82,14 +255,15 @@ func updateAutomationTemplateV1(opts updateAutomationTemplateV1Opts) (*Automatio
 		return nil, fmt.Errorf("failed to marshal template: %w", err)
 	}
 
+	timeNow := time.Now()
 	output := AutomationTemplate{
 		Id:            opts.CurrentTemplate.Id,
 		Name:          opts.CurrentTemplate.Name,
 		Description:   &description,
 		Version:       &version,
 		Content:       updatedTemplateData,
-		LastUpdatedAt: time.Now(),
-		LastUpdatedBy: User{Id: &opts.UserId},
+		LastUpdatedAt: &timeNow,
+		LastUpdatedBy: &User{Id: &opts.UserId},
 	}
 
 	if err := executeMysqlInsert(mysqlQueryInput{
@@ -113,7 +287,7 @@ func updateAutomationTemplateV1(opts updateAutomationTemplateV1Opts) (*Automatio
 			string(output.Content),
 			opts.UserId,
 		},
-		FnSource:     "models.updateAutomationTemplateV1[automation_template_versions]",
+		FnSource:     "models.submitAutomationTemplateV1[automation_template_versions]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -136,7 +310,7 @@ func updateAutomationTemplateV1(opts updateAutomationTemplateV1Opts) (*Automatio
 			output.LastUpdatedBy.GetId(),
 			*output.Id,
 		},
-		FnSource:     "models.updateAutomationTemplateV1[automation_template_versions]",
+		FnSource:     "models.submitAutomationTemplateV1[automation_template_versions]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err

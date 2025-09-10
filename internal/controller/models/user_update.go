@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/google/uuid"
@@ -26,20 +27,17 @@ func (u *User) UpdateFieldsV1(opts UpdateUserFieldsV1) error {
 	for field, value := range opts.FieldsToSet {
 		fieldNames = append(fieldNames, field)
 		switch v := value.(type) {
-		case DatabaseFunction:
-			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = %s", field, v))
-		case string:
+		case string, int, int32, int64, float32, float64, bool:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, v)
 		case []byte:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, string(v))
-		case bool:
-			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
-			sqlArgs = append(sqlArgs, v)
+		case DatabaseFunction:
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = %s", field, v))
 		default:
-			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
-			sqlArgs = append(sqlArgs, fmt.Sprintf("%v", v))
+			valueType := reflect.TypeOf(v)
+			return fmt.Errorf("field[%s] has invalid type '%s'", field, valueType.String())
 		}
 	}
 	return executeMysqlUpdate(mysqlQueryInput{

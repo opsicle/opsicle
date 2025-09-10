@@ -1,18 +1,12 @@
 package models
 
 import (
-	"database/sql"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
-type UpdateOrgUserFieldsV1 struct {
-	Db *sql.DB
-
-	FieldsToSet map[string]any
-}
-
-func (ou *OrgUser) UpdateFieldsV1(opts UpdateOrgUserFieldsV1) error {
+func (ou *OrgUser) UpdateFieldsV1(opts UpdateFieldsV1) error {
 	if err := ou.validate(); err != nil {
 		return err
 	}
@@ -22,18 +16,17 @@ func (ou *OrgUser) UpdateFieldsV1(opts UpdateOrgUserFieldsV1) error {
 	for field, value := range opts.FieldsToSet {
 		fieldNames = append(fieldNames, field)
 		switch v := value.(type) {
-		case string:
+		case string, int, int32, int64, float32, float64, bool:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, v)
 		case []byte:
 			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
 			sqlArgs = append(sqlArgs, string(v))
-		case bool:
-			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
-			sqlArgs = append(sqlArgs, v)
+		case DatabaseFunction:
+			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = %s", field, v))
 		default:
-			fieldsToSet = append(fieldsToSet, fmt.Sprintf("`%s` = ?", field))
-			sqlArgs = append(sqlArgs, fmt.Sprintf("%v", v))
+			valueType := reflect.TypeOf(v)
+			return fmt.Errorf("field[%s] has invalid type '%s'", field, valueType.String())
 		}
 	}
 	return executeMysqlUpdate(mysqlQueryInput{
