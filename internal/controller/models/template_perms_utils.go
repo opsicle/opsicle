@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (t *AutomationTemplate) CanUserUpdateV1(opts DatabaseConnection, userId string) (bool, error) {
+func (t *Template) CanUserUpdateV1(opts DatabaseConnection, userId string) (bool, error) {
 	if t.Id == nil {
 		return false, fmt.Errorf("%w: template id not specified", ErrorInvalidInput)
 	}
@@ -26,7 +26,7 @@ func (t *AutomationTemplate) CanUserUpdateV1(opts DatabaseConnection, userId str
 			*t.Id,
 			userId,
 		},
-		FnSource: "models.AutomationTemplate.CanUserUpdate",
+		FnSource: "models.Template.CanUserUpdate",
 		ProcessRow: func(r *sql.Row) error {
 			return r.Scan(&canView, &canUpdate)
 		},

@@ -2,14 +2,14 @@ package models
 
 import "database/sql"
 
-type GetAutomationTemplateV1Opts struct {
+type GetTemplateV1Opts struct {
 	Db           *sql.DB
 	TemplateName string
 	UserId       string
 }
 
-func GetAutomationTemplateV1(opts GetAutomationTemplateV1Opts) (*AutomationTemplate, error) {
-	output := AutomationTemplate{}
+func GetTemplateV1(opts GetTemplateV1Opts) (*Template, error) {
+	output := Template{}
 	if err := executeMysqlSelect(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: `
@@ -31,6 +31,7 @@ func GetAutomationTemplateV1(opts GetAutomationTemplateV1Opts) (*AutomationTempl
 			opts.UserId,
 			opts.TemplateName,
 		},
+		FnSource: "models.GetTemplateV1",
 		ProcessRow: func(r *sql.Row) error {
 			return r.Scan(
 				&output.Id,

@@ -4,6 +4,7 @@ import (
 	"opsicle/cmd/opsicle/list/approval_request"
 	"opsicle/cmd/opsicle/list/audit_logs"
 	"opsicle/cmd/opsicle/list/orgs"
+	"opsicle/cmd/opsicle/list/templates"
 
 	"github.com/spf13/cobra"
 )
@@ -12,6 +13,7 @@ func init() {
 	Command.AddCommand(approval_request.Command)
 	Command.AddCommand(audit_logs.Command)
 	Command.AddCommand(orgs.Command)
+	Command.AddCommand(templates.Command)
 }
 
 var Command = &cobra.Command{

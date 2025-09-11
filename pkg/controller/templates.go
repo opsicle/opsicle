@@ -17,11 +17,20 @@ type ListTemplatesV1Output struct {
 type ListTemplatesV1OutputData []ListTemplatesV1OutputDataTemplate
 
 type ListTemplatesV1OutputDataTemplate struct {
-	Id          string `json:"id"`
-	Content     string `json:"content"`
-	Description string `json:"description"`
-	Name        string `json:"name"`
-	Version     int    `json:"version"`
+	Id            string                                 `json:"id"`
+	Content       string                                 `json:"content"`
+	Description   string                                 `json:"description"`
+	Name          string                                 `json:"name"`
+	Version       int                                    `json:"version"`
+	CreatedAt     time.Time                              `json:"createdAt"`
+	CreatedBy     *ListTemplatesV1OutputDataTemplateUser `json:"createdBy"`
+	LastUpdatedAt *time.Time                             `json:"lastUpdatedAt"`
+	LastUpdatedBy *ListTemplatesV1OutputDataTemplateUser `json:"lastUpdatedBy"`
+}
+
+type ListTemplatesV1OutputDataTemplateUser struct {
+	Id    string `json:"id"`
+	Email string `json:"email"`
 }
 
 type ListTemplatesV1Input struct {
@@ -113,33 +122,33 @@ func (c Client) ListTemplateVersionsV1(input ListTemplateVersionsV1Input) (*List
 	return output, err
 }
 
-type SubmitAutomationTemplateV1Output struct {
-	Data SubmitAutomationTemplateV1OutputData
+type SubmitTemplateV1Output struct {
+	Data SubmitTemplateV1OutputData
 
 	http.Response
 }
 
-type SubmitAutomationTemplateV1OutputData struct {
+type SubmitTemplateV1OutputData struct {
 	Id      string `json:"id"`
 	Name    string `json:"name"`
 	Version int64  `json:"version"`
 }
 
-type SubmitAutomationTemplateV1Input struct {
+type SubmitTemplateV1Input struct {
 	Data []byte `json:"data"`
 }
 
-func (c Client) SubmitAutomationTemplateV1(input SubmitAutomationTemplateV1Input) (*SubmitAutomationTemplateV1Output, error) {
-	var outputData SubmitAutomationTemplateV1OutputData
+func (c Client) SubmitTemplateV1(input SubmitTemplateV1Input) (*SubmitTemplateV1Output, error) {
+	var outputData SubmitTemplateV1OutputData
 	outputClient, err := c.do(request{
 		Method: http.MethodPost,
 		Path:   "/api/v1/template",
 		Data:   input,
 		Output: &outputData,
 	})
-	var output *SubmitAutomationTemplateV1Output = nil
+	var output *SubmitTemplateV1Output = nil
 	if !errors.Is(err, ErrorOutputNil) {
-		output = &SubmitAutomationTemplateV1Output{
+		output = &SubmitTemplateV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
 		}

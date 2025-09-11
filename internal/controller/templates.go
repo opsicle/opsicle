@@ -10,6 +10,7 @@ import (
 	"opsicle/internal/automations"
 	"opsicle/internal/common"
 	"opsicle/internal/controller/models"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,23 +27,23 @@ func registerAutomationTemplatesRoutes(opts RouteRegistrationOpts) {
 
 	v1 = opts.Router.PathPrefix("/v1/template").Subrouter()
 
-	v1.Handle("/{templateId}", requiresAuth(http.HandlerFunc(getAutomationTemplateHandlerV1))).Methods(http.MethodGet)
-	v1.Handle("", requiresAuth(http.HandlerFunc(handleSubmitAutomationTemplateV1))).Methods(http.MethodPost)
+	v1.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleGetTemplateV1))).Methods(http.MethodGet)
+	v1.Handle("", requiresAuth(http.HandlerFunc(handleSubmitTemplateV1))).Methods(http.MethodPost)
 	v1.Handle("/{templateId}/versions", requiresAuth(http.HandlerFunc(handleListTemplateVersionsV1))).Methods(http.MethodGet)
 	v1.Handle("/{templateId}/version", requiresAuth(http.HandlerFunc(handleUpdateTemplateVersionV1))).Methods(http.MethodPut)
 }
 
-type handleSubmitAutomationTemplateV1Output struct {
+type handleSubmitTemplateV1Output struct {
 	Id      string `json:"id"`
 	Name    string `json:"name"`
 	Version int64  `json:"version"`
 }
 
-type handleSubmitAutomationTemplateV1Input struct {
+type handleSubmitTemplateV1Input struct {
 	Data []byte `json:"data"`
 }
 
-func handleSubmitAutomationTemplateV1(w http.ResponseWriter, r *http.Request) {
+func handleSubmitTemplateV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	session := r.Context().Value(authRequestContext).(identity)
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is creating an automation template", session.UserId))
@@ -52,7 +53,7 @@ func handleSubmitAutomationTemplateV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
 		return
 	}
-	var input handleSubmitAutomationTemplateV1Input
+	var input handleSubmitTemplateV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
 		return
@@ -64,7 +65,7 @@ func handleSubmitAutomationTemplateV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	automationTemplateVersion, err := models.SubmitAutomationTemplateV1(models.SubmitAutomationTemplateV1Opts{
+	automationTemplateVersion, err := models.SubmitTemplateV1(models.SubmitTemplateV1Opts{
 		Db:       db,
 		Template: template,
 		UserId:   session.UserId,
@@ -74,7 +75,7 @@ func handleSubmitAutomationTemplateV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create automation tempalte", ErrorDatabaseIssue)
 		return
 	}
-	output := handleSubmitAutomationTemplateV1Output{
+	output := handleSubmitTemplateV1Output{
 		Id:      *automationTemplateVersion.Id,
 		Name:    *automationTemplateVersion.Name,
 		Version: *automationTemplateVersion.Version,
@@ -98,7 +99,7 @@ func handleSubmitAutomationTemplateV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
-func getAutomationTemplateHandlerV1(w http.ResponseWriter, r *http.Request) {
+func handleGetTemplateV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	vars := mux.Vars(r)
 	automationTemplateId := vars["templateId"]
@@ -114,11 +115,20 @@ func getAutomationTemplateHandlerV1(w http.ResponseWriter, r *http.Request) {
 type handleListTemplatesV1Output []handleListTemplatesV1OutputTemplate
 
 type handleListTemplatesV1OutputTemplate struct {
-	Id          string `json:"id"`
-	Content     []byte `json:"content"`
-	Description string `json:"description"`
-	Name        string `json:"name"`
-	Version     int64  `json:"version"`
+	Id            string                                   `json:"id"`
+	Content       []byte                                   `json:"content"`
+	Description   string                                   `json:"description"`
+	Name          string                                   `json:"name"`
+	Version       int64                                    `json:"version"`
+	CreatedAt     time.Time                                `json:"createdAt"`
+	CreatedBy     *handleListTemplatesV1OutputTemplateUser `json:"createdBy"`
+	LastUpdatedAt *time.Time                               `json:"lastUpdatedAt"`
+	LastUpdatedBy *handleListTemplatesV1OutputTemplateUser `json:"lastUpdatedBy"`
+}
+
+type handleListTemplatesV1OutputTemplateUser struct {
+	Id    string `json:"id"`
+	Email string `json:"email"`
 }
 
 type handleListTemplatesV1Input struct {
@@ -148,15 +158,41 @@ func handleListTemplatesV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list automation templates", ErrorDatabaseIssue)
 		return
 	}
+	sort.Slice(templates, func(i, j int) bool {
+		iTime := time.Time{}
+		if templates[i].LastUpdatedAt != nil {
+			iTime = *templates[i].LastUpdatedAt
+		}
+		jTime := time.Time{}
+		if templates[j].LastUpdatedAt != nil {
+			jTime = *templates[j].LastUpdatedAt
+		}
+		return iTime.After(jTime)
+	})
 	output := handleListTemplatesV1Output{}
 	for _, template := range templates {
-		output = append(output, handleListTemplatesV1OutputTemplate{
-			Id:          *template.Id,
-			Description: *template.Description,
-			Name:        *template.Name,
-			Content:     template.Content,
-			Version:     *template.Version,
-		})
+		outputItem := handleListTemplatesV1OutputTemplate{
+			Id:            *template.Id,
+			Description:   *template.Description,
+			Name:          *template.Name,
+			Content:       template.Content,
+			Version:       *template.Version,
+			CreatedAt:     template.CreatedAt,
+			LastUpdatedAt: template.LastUpdatedAt,
+		}
+		if template.CreatedBy != nil {
+			outputItem.CreatedBy = &handleListTemplatesV1OutputTemplateUser{
+				Id:    template.CreatedBy.GetId(),
+				Email: template.CreatedBy.Email,
+			}
+		}
+		if template.LastUpdatedBy != nil {
+			outputItem.LastUpdatedBy = &handleListTemplatesV1OutputTemplateUser{
+				Id:    template.LastUpdatedBy.GetId(),
+				Email: template.LastUpdatedBy.Email,
+			}
+		}
+		output = append(output, outputItem)
 	}
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
@@ -197,7 +233,7 @@ func handleListTemplateVersionsV1(w http.ResponseWriter, r *http.Request) {
 	templateId := vars["templateId"]
 	log(common.LogLevelInfo, fmt.Sprintf("listing versions of template[%s]", templateId))
 
-	template := &models.AutomationTemplate{Id: &templateId}
+	template := &models.Template{Id: &templateId}
 	canUpdate, err := template.CanUserUpdateV1(models.DatabaseConnection{Db: db}, session.UserId)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to check if user can perform update: %s", err))
@@ -290,7 +326,7 @@ func handleUpdateTemplateVersionV1(w http.ResponseWriter, r *http.Request) {
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("updating default version of template[%s] to version[%v]", templateId, input.Version))
 
-	template := models.AutomationTemplate{Id: &templateId}
+	template := models.Template{Id: &templateId}
 	userCanUpdate, err := template.CanUserUpdateV1(models.DatabaseConnection{Db: db}, session.UserId)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get permissions for user[%s] : %s", session.UserId, err))

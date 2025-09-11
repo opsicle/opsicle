@@ -82,7 +82,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
-		automationTemplate, err := client.SubmitAutomationTemplateV1(controller.SubmitAutomationTemplateV1Input{
+		automationTemplate, err := client.SubmitTemplateV1(controller.SubmitTemplateV1Input{
 			Data: automationTemplateData,
 		})
 		if err != nil {

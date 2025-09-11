@@ -13,21 +13,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type AutomationTemplate struct {
+type Template struct {
 	Id            *string
 	Description   *string
 	Name          *string
 	Version       *int64
 	Content       []byte
-	Users         []AutomationTemplateUser
+	Users         []TemplateUser
 	Versions      []TemplateVersion
 	CreatedAt     time.Time
-	CreatedBy     User
+	CreatedBy     *User
 	LastUpdatedAt *time.Time
 	LastUpdatedBy *User
 }
 
-type AutomationTemplateUser struct {
+type TemplateUser struct {
 	UserId     string
 	TemplateId string
 	CanView    bool
@@ -45,15 +45,15 @@ type TemplateVersion struct {
 	CreatedBy            User
 }
 
-func (t *AutomationTemplate) GetId() string {
+func (t *Template) GetId() string {
 	return *t.Id
 }
 
-func (t *AutomationTemplate) LoadUsersV1(opts DatabaseConnection) error {
+func (t *Template) LoadUsersV1(opts DatabaseConnection) error {
 	if t.Id == nil {
 		return fmt.Errorf("%w: template id not specified", ErrorInvalidInput)
 	}
-	users := []AutomationTemplateUser{}
+	users := []TemplateUser{}
 	if err := executeMysqlSelects(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: `
@@ -74,7 +74,7 @@ func (t *AutomationTemplate) LoadUsersV1(opts DatabaseConnection) error {
 		},
 		FnSource: "models.AutomationTemplate.LoadV1",
 		ProcessRows: func(r *sql.Rows) error {
-			user := AutomationTemplateUser{TemplateId: t.GetId()}
+			user := TemplateUser{TemplateId: t.GetId()}
 			if err := r.Scan(
 				&user.UserId,
 				&user.CanView,
@@ -95,12 +95,12 @@ func (t *AutomationTemplate) LoadUsersV1(opts DatabaseConnection) error {
 	return nil
 }
 
-func (t *AutomationTemplate) LoadV1(opts DatabaseConnection) error {
+func (t *Template) LoadV1(opts DatabaseConnection) error {
 	if t.Id == nil {
 		return fmt.Errorf("%w: template id not specified", ErrorInvalidInput)
 	}
 
-	t.CreatedBy = User{}
+	t.CreatedBy = &User{}
 	t.LastUpdatedBy = &User{}
 	if err := executeMysqlSelect(mysqlQueryInput{
 		Db: opts.Db,
@@ -155,7 +155,7 @@ func (t *AutomationTemplate) LoadV1(opts DatabaseConnection) error {
 	return nil
 }
 
-func (t *AutomationTemplate) UpdateFieldsV1(opts UpdateFieldsV1) error {
+func (t *Template) UpdateFieldsV1(opts UpdateFieldsV1) error {
 	if err := t.validate(); err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func (t *AutomationTemplate) UpdateFieldsV1(opts UpdateFieldsV1) error {
 	})
 }
 
-func (t *AutomationTemplate) validate() error {
+func (t *Template) validate() error {
 	errs := []error{}
 	if t.Id == nil || *t.Id == "" {
 		errs = append(errs, fmt.Errorf("%w: missing id", ErrorIdRequired))
@@ -206,14 +206,14 @@ func (t *AutomationTemplate) validate() error {
 	return nil
 }
 
-type SubmitAutomationTemplateV1Opts struct {
+type SubmitTemplateV1Opts struct {
 	Db       *sql.DB
 	Template automations.Template
 	UserId   string
 }
 
-func SubmitAutomationTemplateV1(opts SubmitAutomationTemplateV1Opts) (*AutomationTemplate, error) {
-	automationTemplate, err := GetAutomationTemplateV1(GetAutomationTemplateV1Opts{
+func SubmitTemplateV1(opts SubmitTemplateV1Opts) (*Template, error) {
+	automationTemplate, err := GetTemplateV1(GetTemplateV1Opts{
 		Db:           opts.Db,
 		TemplateName: opts.Template.GetName(),
 		UserId:       opts.UserId,
@@ -228,7 +228,7 @@ func SubmitAutomationTemplateV1(opts SubmitAutomationTemplateV1Opts) (*Automatio
 		}
 		return nil, err
 	}
-	return submitAutomationTemplateV1(submitAutomationTemplateV1Opts{
+	return submitTemplateV1(submitTemplateV1Opts{
 		Db:              opts.Db,
 		CurrentTemplate: automationTemplate,
 		UpdatedTemplate: opts.Template,
@@ -236,14 +236,14 @@ func SubmitAutomationTemplateV1(opts SubmitAutomationTemplateV1Opts) (*Automatio
 	})
 }
 
-type submitAutomationTemplateV1Opts struct {
+type submitTemplateV1Opts struct {
 	Db              *sql.DB
-	CurrentTemplate *AutomationTemplate
+	CurrentTemplate *Template
 	UpdatedTemplate automations.Template
 	UserId          string
 }
 
-func submitAutomationTemplateV1(opts submitAutomationTemplateV1Opts) (*AutomationTemplate, error) {
+func submitTemplateV1(opts submitTemplateV1Opts) (*Template, error) {
 	if opts.CurrentTemplate == nil {
 		return nil, fmt.Errorf("empty current template: %w", errorInputValidationFailed)
 	}
@@ -256,7 +256,7 @@ func submitAutomationTemplateV1(opts submitAutomationTemplateV1Opts) (*Automatio
 	}
 
 	timeNow := time.Now()
-	output := AutomationTemplate{
+	output := Template{
 		Id:            opts.CurrentTemplate.Id,
 		Name:          opts.CurrentTemplate.Name,
 		Description:   &description,
@@ -287,7 +287,7 @@ func submitAutomationTemplateV1(opts submitAutomationTemplateV1Opts) (*Automatio
 			string(output.Content),
 			opts.UserId,
 		},
-		FnSource:     "models.submitAutomationTemplateV1[automation_template_versions]",
+		FnSource:     "models.submitTemplateV1[automation_template_versions]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -310,7 +310,7 @@ func submitAutomationTemplateV1(opts submitAutomationTemplateV1Opts) (*Automatio
 			output.LastUpdatedBy.GetId(),
 			*output.Id,
 		},
-		FnSource:     "models.submitAutomationTemplateV1[automation_template_versions]",
+		FnSource:     "models.submitTemplateV1[automation_template_versions]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -325,7 +325,7 @@ type createAutomationTemplateV1Opts struct {
 	UserId   string
 }
 
-func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*AutomationTemplate, error) {
+func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template, error) {
 	automationTemplateUuid := uuid.NewString()
 
 	description := opts.Template.GetDescription()
@@ -336,13 +336,13 @@ func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Automatio
 		return nil, fmt.Errorf("failed to marshal template: %w", err)
 	}
 
-	output := AutomationTemplate{
+	output := Template{
 		Id:          &automationTemplateUuid,
 		Description: &description,
 		Name:        &name,
 		Version:     &version,
 		Content:     templateData,
-		Users: []AutomationTemplateUser{
+		Users: []TemplateUser{
 			{
 				UserId:     opts.UserId,
 				CanView:    true,

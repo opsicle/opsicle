@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (t *AutomationTemplate) LoadVersionsV1(opts DatabaseConnection) error {
+func (t *Template) LoadVersionsV1(opts DatabaseConnection) error {
 	if t.Id == nil {
 		return fmt.Errorf("%w: template id not specified", ErrorInvalidInput)
 	}
@@ -27,7 +27,7 @@ func (t *AutomationTemplate) LoadVersionsV1(opts DatabaseConnection) error {
 		Args: []any{
 			*t.Id,
 		},
-		FnSource: "models.AutomationTemplate.LoadVersionsV1",
+		FnSource: "models.Template.LoadVersionsV1",
 		ProcessRows: func(r *sql.Rows) error {
 			templateVersion := TemplateVersion{}
 			if err := r.Scan(
