@@ -122,8 +122,14 @@ CREATE TABLE IF NOT EXISTS `automation_template_users` (
     `can_update` BOOLEAN NOT NULL DEFAULT FALSE,
     `can_delete` BOOLEAN NOT NULL DEFAULT FALSE,
     `can_invite` BOOLEAN NOT NULL DEFAULT FALSE,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_by` VARCHAR(36),
+    `last_updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `last_updated_by` VARCHAR(36),
     PRIMARY KEY (automation_template_id, user_id),
     FOREIGN KEY (user_id) REFERENCES `users`(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (last_updated_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE,
     FOREIGN KEY (automation_template_id) REFERENCES `automation_templates`(id) ON DELETE CASCADE ON UPDATE CASCADE,
 );
 CREATE TABLE IF NOT EXISTS `automation_runs` (

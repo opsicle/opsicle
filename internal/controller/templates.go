@@ -27,6 +27,7 @@ func registerAutomationTemplatesRoutes(opts RouteRegistrationOpts) {
 
 	v1 = opts.Router.PathPrefix("/v1/template").Subrouter()
 
+	v1.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleDeleteTemplateV1))).Methods(http.MethodDelete)
 	v1.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleGetTemplateV1))).Methods(http.MethodGet)
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleSubmitTemplateV1))).Methods(http.MethodPost)
 	v1.Handle("/{templateId}/versions", requiresAuth(http.HandlerFunc(handleListTemplateVersionsV1))).Methods(http.MethodGet)
@@ -96,6 +97,59 @@ func handleSubmitTemplateV1(w http.ResponseWriter, r *http.Request) {
 		SrcUa:        &session.UserAgent,
 		DstHost:      &r.Host,
 	})
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleDeleteTemplateV1Output struct {
+	IsSuccessful bool   `json:"isSuccessful"`
+	TemplateId   string `json:"templateId"`
+	TemplateName string `json:"templateName"`
+}
+
+func handleDeleteTemplateV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	automationTemplateId := vars["templateId"]
+	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is deleting automationTemplate[%s]", session.UserId, automationTemplateId))
+
+	template := models.Template{Id: &automationTemplateId}
+	isUserAllowedToDoThis, err := template.CanUserDeleteV1(models.DatabaseConnection{Db: db}, session.UserId)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to load user[%s] of template[%s]: %w", session.UserId, template.GetId(), err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "not found", ErrorInsufficientPermissions)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed to delete template", ErrorDatabaseIssue)
+		return
+	}
+	if !isUserAllowedToDoThis {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] not authorized to delete template[%s]", session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "not allowed to delete template", ErrorInsufficientPermissions)
+		return
+	}
+	if err := template.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to load template[%s]: %s", template.GetId(), err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "template not found", ErrorNotFound)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "template could not be retrieved", ErrorDatabaseIssue)
+		return
+	}
+	if err := template.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to delete template[%s]: %s", template.GetId(), err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "template could not be retrieved", ErrorDatabaseIssue)
+		return
+	}
+
+	output := handleDeleteTemplateV1Output{
+		IsSuccessful: true,
+		TemplateId:   template.GetId(),
+		TemplateName: template.GetName(),
+	}
+	log(common.LogLevelInfo, fmt.Sprintf("user[%s] deleted template[%s]: %s", session.UserId, template.GetId(), err))
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 

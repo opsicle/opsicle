@@ -56,8 +56,10 @@ func (m *boxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case tea.WindowSizeMsg:
-		m.Width = msg.Width
-		m.Height = msg.Height
+		if m.IsFullScreen {
+			m.Width = msg.Width
+			m.Height = msg.Height
+		}
 	}
 	return m, nil
 }
@@ -67,8 +69,13 @@ func (m boxModel) View() string {
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.ThickBorder()).
 		BorderForeground(lipgloss.Color("9")). // red
-		Padding(1, 2).
-		Align(lipgloss.Center)
+		Padding(1, 2)
+
+	if m.IsFullScreen {
+		boxStyle = boxStyle.Width(m.Width - 2).Align(lipgloss.Center)
+	} else {
+		boxStyle = boxStyle.Width(m.Width)
+	}
 
 	btnStyle := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
@@ -100,11 +107,8 @@ func (m boxModel) View() string {
 		m.Message,
 	) + buttons)
 
-	if m.Width == 0 && m.Height == 0 {
-		_ = tea.WindowSize()
-	}
-
 	if m.IsFullScreen {
+		m.Width, m.Height, _ = term.GetSize(int(os.Stdout.Fd()))
 		return lipgloss.Place(
 			m.Width,
 			m.Height,
@@ -117,11 +121,21 @@ func (m boxModel) View() string {
 }
 
 func ShowWarningWithConfirmation(message string, isFullScreen bool) error {
+	var height, width int
+	if !isFullScreen {
+		width, height, _ = term.GetSize(int(os.Stdout.Fd()))
+		if width > 72 {
+			width = 72
+		}
+		if height > 50 {
+			height = 50
+		}
+	}
 	warningModel := boxModel{
 		IsFullScreen: isFullScreen,
 		Message:      message,
-		Width:        30,
-		Height:       50,
+		Width:        width,
+		Height:       height,
 		cursor:       1,
 	}
 	teaOpts := []tea.ProgramOption{}

@@ -9,6 +9,47 @@ import (
 	"github.com/google/uuid"
 )
 
+type DeleteTemplateV1Output struct {
+	Data DeleteTemplateV1OutputData
+	http.Response
+}
+
+type DeleteTemplateV1OutputData struct {
+	IsSuccessful bool   `json:"isSuccessful"`
+	TemplateId   string `json:"templateId"`
+	TemplateName string `json:"templateName"`
+}
+
+type DeleteTemplateV1Input struct {
+	TemplateId string `json:"-"`
+}
+
+func (c *Client) DeleteTemplateV1(input DeleteTemplateV1Input) (*DeleteTemplateV1Output, error) {
+	if _, err := uuid.Parse(input.TemplateId); err != nil {
+		return nil, fmt.Errorf("%w: template id not a uuid", ErrorInvalidInput)
+	}
+	var outputData DeleteTemplateV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodDelete,
+		Path:   fmt.Sprintf("/api/v1/template/%s", input.TemplateId),
+		Output: &outputData,
+	})
+	var output *DeleteTemplateV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &DeleteTemplateV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		}
+	}
+	return output, err
+}
+
 type ListTemplatesV1Output struct {
 	Data ListTemplatesV1OutputData
 	http.Response

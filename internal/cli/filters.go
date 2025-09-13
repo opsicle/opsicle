@@ -74,6 +74,13 @@ func (m *FilterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.isQuitting = true
 			m.exitCode = PromptCancelled
 			return m, tea.Quit
+		case "/":
+			if m.list.FilterState() != list.Filtering {
+				m.list.SetFilterState(list.Filtering)
+				m.list.SetShowFilter(true)
+				var cmd tea.Cmd
+				return m, cmd
+			}
 		case "down":
 			if m.list.FilterState() == list.Filtering {
 				m.list.SetFilterState(list.FilterApplied)

@@ -27,16 +27,6 @@ type Template struct {
 	LastUpdatedBy *User
 }
 
-type TemplateUser struct {
-	UserId     string
-	TemplateId string
-	CanView    bool
-	CanExecute bool
-	CanUpdate  bool
-	CanDelete  bool
-	CanInvite  bool
-}
-
 type TemplateVersion struct {
 	AutomationTemplateId string
 	Version              int64
@@ -45,19 +35,38 @@ type TemplateVersion struct {
 	CreatedBy            User
 }
 
+func (t *Template) validate() error {
+	errs := []error{}
+	if t.Id == nil {
+		return fmt.Errorf("%w: missing template id", ErrorIdRequired)
+	} else if _, err := uuid.Parse(*t.Id); err != nil {
+		return fmt.Errorf("%w: invalid template id", ErrorInvalidInput)
+	}
+	if len(errs) > 0 {
+		errs = append(errs, errorInputValidationFailed)
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
 func (t *Template) GetId() string {
 	return *t.Id
 }
 
+func (t *Template) GetName() string {
+	return *t.Name
+}
+
 func (t *Template) LoadUsersV1(opts DatabaseConnection) error {
-	if t.Id == nil {
-		return fmt.Errorf("%w: template id not specified", ErrorInvalidInput)
+	if err := t.validate(); err != nil {
+		return err
 	}
 	users := []TemplateUser{}
 	if err := executeMysqlSelects(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: `
 		  SELECT 
+				automation_template_id,
 				user_id,
 				can_view,
 				can_execute,
@@ -72,10 +81,11 @@ func (t *Template) LoadUsersV1(opts DatabaseConnection) error {
 		Args: []any{
 			*t.Id,
 		},
-		FnSource: "models.AutomationTemplate.LoadV1",
+		FnSource: "models.AutomationTemplate.LoadUsersV1",
 		ProcessRows: func(r *sql.Rows) error {
-			user := TemplateUser{TemplateId: t.GetId()}
+			user := TemplateUser{}
 			if err := r.Scan(
+				&user.TemplateId,
 				&user.UserId,
 				&user.CanView,
 				&user.CanExecute,
@@ -96,10 +106,9 @@ func (t *Template) LoadUsersV1(opts DatabaseConnection) error {
 }
 
 func (t *Template) LoadV1(opts DatabaseConnection) error {
-	if t.Id == nil {
-		return fmt.Errorf("%w: template id not specified", ErrorInvalidInput)
+	if err := t.validate(); err != nil {
+		return err
 	}
-
 	t.CreatedBy = &User{}
 	t.LastUpdatedBy = &User{}
 	if err := executeMysqlSelect(mysqlQueryInput{
@@ -193,17 +202,6 @@ func (t *Template) UpdateFieldsV1(opts UpdateFieldsV1) error {
 			strings.Join(fieldNames, "','"),
 		),
 	})
-}
-
-func (t *Template) validate() error {
-	errs := []error{}
-	if t.Id == nil || *t.Id == "" {
-		errs = append(errs, fmt.Errorf("%w: missing id", ErrorIdRequired))
-	}
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-	return nil
 }
 
 type SubmitTemplateV1Opts struct {
@@ -344,7 +342,7 @@ func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template,
 		Content:     templateData,
 		Users: []TemplateUser{
 			{
-				UserId:     opts.UserId,
+				UserId:     &opts.UserId,
 				CanView:    true,
 				CanExecute: true,
 				CanUpdate:  true,

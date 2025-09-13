@@ -1,40 +1,53 @@
 package models
 
 import (
-	"database/sql"
+	"errors"
 	"fmt"
 )
 
-func (t *Template) CanUserUpdateV1(opts DatabaseConnection, userId string) (bool, error) {
+type TemplateUserPerm int
+
+const (
+	CanDelete TemplateUserPerm = iota
+	CanExecute
+	CanInvite
+	CanUpdate
+	CanView
+)
+
+func (t *Template) canUserV1(opts DatabaseConnection, userId string, actions ...TemplateUserPerm) (bool, error) {
 	if t.Id == nil {
 		return false, fmt.Errorf("%w: template id not specified", ErrorInvalidInput)
 	}
-	var canView, canUpdate bool
-	if err := executeMysqlSelect(mysqlQueryInput{
-		Db: opts.Db,
-		Stmt: `
-			SELECT
-				can_view,
-				can_update
-			FROM
-				automation_template_users
-			WHERE
-				automation_template_id = ?
-				AND user_id = ?
-		`,
-		Args: []any{
-			*t.Id,
-			userId,
-		},
-		FnSource: "models.Template.CanUserUpdate",
-		ProcessRow: func(r *sql.Row) error {
-			return r.Scan(&canView, &canUpdate)
-		},
-	}); err != nil {
-		if isMysqlNotFoundError(err) {
-			return false, fmt.Errorf("%w: %w", ErrorNotFound, err)
+	templateUser := NewTemplateUser(userId, *t.Id)
+	if err := templateUser.LoadV1(opts); err != nil {
+		if errors.Is(err, ErrorNotFound) {
+			return false, fmt.Errorf("user not found: %w", err)
 		}
-		return false, fmt.Errorf("%w: %w", ErrorGenericDatabaseIssue, err)
+		return false, fmt.Errorf("failed to load template user: %w", err)
 	}
-	return canView && canUpdate, nil
+	output := true
+	for _, action := range actions {
+		switch action {
+		case CanDelete:
+			output = output && templateUser.CanDelete
+		case CanExecute:
+			output = output && templateUser.CanExecute
+		case CanInvite:
+			output = output && templateUser.CanInvite
+		case CanUpdate:
+			output = output && templateUser.CanUpdate
+		case CanView:
+			output = output && templateUser.CanView
+		}
+	}
+	return output, nil
+}
+
+func (t *Template) CanUserDeleteV1(opts DatabaseConnection, userId string) (bool, error) {
+	return t.canUserV1(opts, userId, CanDelete)
+}
+
+func (t *Template) CanUserUpdateV1(opts DatabaseConnection, userId string) (bool, error) {
+	return t.canUserV1(opts, userId, CanUpdate)
 }

@@ -2,12 +2,14 @@ package remove
 
 import (
 	"opsicle/cmd/opsicle/remove/org"
+	"opsicle/cmd/opsicle/remove/template"
 
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	Command.AddCommand(org.Command)
+	Command.AddCommand(template.Command)
 }
 
 var Command = &cobra.Command{
