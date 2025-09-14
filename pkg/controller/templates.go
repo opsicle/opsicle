@@ -9,6 +9,54 @@ import (
 	"github.com/google/uuid"
 )
 
+type CreateTemplateUserV1Output struct {
+	Data CreateTemplateUserV1OutputData
+	http.Response
+}
+
+type CreateTemplateUserV1OutputData struct {
+	Id             string `json:"id"`
+	JoinCode       string `json:"joinCode"`
+	IsExistingUser bool   `json:"isExistingUser"`
+}
+
+type CreateTemplateUserV1Input struct {
+	TemplateId string  `json:"-"`
+	UserId     *string `json:"userId"`
+	UserEmail  *string `json:"userEmail"`
+	CanView    bool    `json:"canView"`
+	CanExecute bool    `json:"canExecute"`
+	CanUpdate  bool    `json:"canUpdate"`
+	CanDelete  bool    `json:"canDelete"`
+	CanInvite  bool    `json:"canInvite"`
+}
+
+func (c Client) CreateTemplateUserV1(input CreateTemplateUserV1Input) (*CreateTemplateUserV1Output, error) {
+	var outputData CreateTemplateUserV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodPost,
+		Path:   fmt.Sprintf("/api/v1/template/%s/user", input.TemplateId),
+		Data:   input,
+		Output: &outputData,
+	})
+	var output *CreateTemplateUserV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &CreateTemplateUserV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		case ErrorInsufficientPermissions.Error():
+			err = ErrorInsufficientPermissions
+		}
+	}
+	return output, err
+}
+
 type DeleteTemplateV1Output struct {
 	Data DeleteTemplateV1OutputData
 	http.Response
@@ -102,6 +150,53 @@ func (c Client) ListTemplatesV1(input ListTemplatesV1Input) (*ListTemplatesV1Out
 	return output, err
 }
 
+type ListTemplateUsersV1Output struct {
+	Data ListTemplateUsersV1OutputData
+	http.Response
+}
+
+type ListTemplateUsersV1OutputData struct {
+	Users []ListTemplateUsersV1OutputDataUser `json:"users"`
+}
+
+type ListTemplateUsersV1OutputDataUser struct {
+	Id         string    `json:"id"`
+	Email      string    `json:"email"`
+	CanView    bool      `json:"canView"`
+	CanExecute bool      `json:"canExecute"`
+	CanUpdate  bool      `json:"canUpdate"`
+	CanDelete  bool      `json:"canDelete"`
+	CanInvite  bool      `json:"canInvite"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+type ListTemplateUsersV1Input struct {
+	TemplateId string `json:"-"`
+}
+
+func (c Client) ListTemplateUsersV1(input ListTemplateUsersV1Input) (*ListTemplateUsersV1Output, error) {
+	var outputData ListTemplateUsersV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/template/%s/users", input.TemplateId),
+		Output: &outputData,
+	})
+	var output *ListTemplateUsersV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &ListTemplateUsersV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		}
+	}
+	return output, err
+}
+
 type ListTemplateVersionsV1Output struct {
 	Data ListTemplateVersionsV1OutputData
 
@@ -163,9 +258,53 @@ func (c Client) ListTemplateVersionsV1(input ListTemplateVersionsV1Input) (*List
 	return output, err
 }
 
+type DeleteTemplateUserV1Output struct {
+	Data DeleteTemplateUserV1OutputData
+	http.Response
+}
+
+type DeleteTemplateUserV1OutputData struct {
+	IsSuccessful bool `json:"isSuccessful"`
+}
+
+type DeleteTemplateUserV1Input struct {
+	TemplateId string `json:"-"`
+	UserId     string `json:"-"`
+}
+
+func (c Client) DeleteTemplateUserV1(input DeleteTemplateUserV1Input) (*DeleteTemplateUserV1Output, error) {
+	var outputData DeleteTemplateUserV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodDelete,
+		Path:   fmt.Sprintf("/api/v1/template/%s/user/%s", input.TemplateId, input.UserId),
+		Output: &outputData,
+	})
+	var output *DeleteTemplateUserV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &DeleteTemplateUserV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorLastUserInResource.Error():
+			err = ErrorLastUserInResource
+		case ErrorLastManagerOfResource.Error():
+			err = ErrorLastManagerOfResource
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		case ErrorInsufficientPermissions.Error():
+			err = ErrorInsufficientPermissions
+		case ErrorNotFound.Error():
+			err = ErrorNotFound
+		}
+	}
+	return output, err
+}
+
 type SubmitTemplateV1Output struct {
 	Data SubmitTemplateV1OutputData
-
 	http.Response
 }
 

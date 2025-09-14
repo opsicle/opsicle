@@ -102,11 +102,13 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to read request body: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", err)
 		return
 	}
 	var input handleCreateUserV1Input
 	if err := json.Unmarshal(requestBody, &input); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to unmarshal request body: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", err)
 		return
 	}
@@ -114,10 +116,12 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, fmt.Sprintf("processing request to create user[%s]", input.Email))
 
 	if _, err := auth.IsEmailValid(input.Email); err != nil {
+		log(common.LogLevelError, "invalid email entered")
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid email address", err)
 		return
 	}
 	if _, err := auth.IsPasswordValid(input.Password); err != nil {
+		log(common.LogLevelError, "invalid password entered")
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid password", err)
 		return
 	}
@@ -129,6 +133,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 		Password: input.Password,
 		Type:     models.TypeUser,
 	}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to create user: %s", err))
 		if errors.Is(err, models.ErrorDuplicateEntry) {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user, email already exists", ErrorEmailExists)
 			return
@@ -139,15 +144,18 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 
 	user := models.User{Email: input.Email}
 	if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user via email: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", err)
 		return
 	}
 
+	log(common.LogLevelDebug, fmt.Sprintf("listing organisation invitations to user's email address[%s]...", input.Email))
 	listOrgInvitations, err := models.ListOrgInvitationsV1(models.ListOrgInvitationsV1Opts{
 		Db:        db,
 		UserEmail: &input.Email,
 	})
 	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to list user's org invitations: %s", err))
 		if !errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", err)
 			return
@@ -161,7 +169,32 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(orgInvitationReplacementErrs) > 0 {
 			log(common.LogLevelError, fmt.Sprintf("failed to process org invitations for user[%s]: %s", *user.Id, errors.Join(orgInvitationReplacementErrs...)))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to convert user's invitations", err)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to convert user's org invitations", err)
+			return
+		}
+	}
+
+	log(common.LogLevelDebug, fmt.Sprintf("listing template invitations to user's email address[%s]...", input.Email))
+	listTemplateInvitations, err := models.ListTemplateInvitationsV1(models.ListTemplateInvitationsV1Opts{
+		Db:        db,
+		UserEmail: &input.Email,
+	})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to list user's template invitations: %s", err))
+		if !errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", err)
+			return
+		}
+	}
+	for _, templateInvitation := range listTemplateInvitations {
+		var templateInvitationReplacementErrs []error
+		templateInvitation.AcceptorId = user.Id
+		if err := templateInvitation.ReplaceAcceptorEmailWithId(models.DatabaseConnection{Db: db}); err != nil {
+			templateInvitationReplacementErrs = append(templateInvitationReplacementErrs, err)
+		}
+		if len(templateInvitationReplacementErrs) > 0 {
+			log(common.LogLevelError, fmt.Sprintf("failed to process template invitations for user[%s]: %s", *user.Id, errors.Join(templateInvitationReplacementErrs...)))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to convert user's template invitations", err)
 			return
 		}
 	}

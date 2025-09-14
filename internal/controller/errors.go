@@ -14,6 +14,8 @@ var (
 	ErrorInvitationExists        = errors.New("invitation_exists")
 	ErrorInvitationInvalid       = errors.New("invitation_invalid")
 	ErrorInsufficientPermissions = errors.New("insufficient_permissions")
+	ErrorLastManagerOfResource   = errors.New("last_manager_of_resource")
+	ErrorLastUserInResource      = errors.New("last_user_in_resource")
 	ErrorMfaRequired             = errors.New("mfa_required")
 	ErrorMfaTokenInvalid         = errors.New("mfa_token_invalid")
 	ErrorNotFound                = errors.New("not_found")

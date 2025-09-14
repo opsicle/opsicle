@@ -57,6 +57,82 @@ func (t *Template) GetName() string {
 	return *t.Name
 }
 
+type InviteTemplateUserV1Opts struct {
+	Db *sql.DB
+
+	AcceptorId    *string
+	AcceptorEmail *string
+	InviterId     string
+	JoinCode      string
+	CanView       bool
+	CanExecute    bool
+	CanUpdate     bool
+	CanDelete     bool
+	CanInvite     bool
+}
+
+func (t *Template) InviteUserV1(opts InviteTemplateUserV1Opts) (*InviteUserV1Output, error) {
+	invitationId := uuid.NewString()
+
+	sqlInserts := []string{
+		"id",
+		"automation_template_id",
+		"inviter_id",
+		"join_code",
+		"can_view",
+		"can_execute",
+		"can_update",
+		"can_delete",
+		"can_invite",
+	}
+	sqlArgs := []any{
+		invitationId,
+		t.GetId(),
+		opts.InviterId,
+		opts.JoinCode,
+		opts.CanView,
+		opts.CanExecute,
+		opts.CanUpdate,
+		opts.CanDelete,
+		opts.CanInvite,
+	}
+	isExistingUser := false
+	if opts.AcceptorId != nil {
+		sqlInserts = append(sqlInserts, "acceptor_id")
+		sqlArgs = append(sqlArgs, *opts.AcceptorId)
+		isExistingUser = true
+	} else if opts.AcceptorEmail != nil {
+		sqlInserts = append(sqlInserts, "acceptor_email")
+		sqlArgs = append(sqlArgs, *opts.AcceptorEmail)
+	} else {
+		return nil, fmt.Errorf("failed to receive either acceptor email or id: %w", ErrorInvalidInput)
+	}
+	sqlPlaceholders := []string{}
+	for range len(sqlInserts) {
+		sqlPlaceholders = append(sqlPlaceholders, "?")
+	}
+	sqlStmt := fmt.Sprintf(
+		"INSERT INTO automation_template_user_invitations(%s) VALUES (%s) ON DUPLICATE KEY UPDATE last_updated_at = NOW()",
+		strings.Join(sqlInserts, ", "),
+		strings.Join(sqlPlaceholders, ", "),
+	)
+
+	if err := executeMysqlInsert(mysqlQueryInput{
+		Db:           opts.Db,
+		Stmt:         sqlStmt,
+		Args:         sqlArgs,
+		FnSource:     "models.Template.InviteUserV1",
+		RowsAffected: atMostNRowsAffected(2),
+	}); err != nil {
+		return nil, err
+	}
+
+	return &InviteUserV1Output{
+		InvitationId:   invitationId,
+		IsExistingUser: isExistingUser,
+	}, nil
+}
+
 func (t *Template) LoadUsersV1(opts DatabaseConnection) error {
 	if err := t.validate(); err != nil {
 		return err
@@ -66,17 +142,25 @@ func (t *Template) LoadUsersV1(opts DatabaseConnection) error {
 		Db: opts.Db,
 		Stmt: `
 		  SELECT 
-				automation_template_id,
-				user_id,
-				can_view,
-				can_execute,
-				can_update,
-				can_delete,
-				can_invite
+				t.id,
+				t.name,
+				u.id,
+				u.email,
+				atu.can_view,
+				atu.can_execute,
+				atu.can_update,
+				atu.can_delete,
+				atu.can_invite,
+				atu.created_at,
+				atu.created_by,
+				atu.last_updated_at,
+				atu.last_updated_by
 			FROM
-				automation_template_users
+				automation_template_users atu
+				JOIN users u ON u.id = atu.user_id
+				JOIN automation_templates t ON t.id = atu.automation_template_id
 			WHERE
-				automation_template_id = ?
+				atu.automation_template_id = ?
 		`,
 		Args: []any{
 			*t.Id,
@@ -86,12 +170,18 @@ func (t *Template) LoadUsersV1(opts DatabaseConnection) error {
 			user := TemplateUser{}
 			if err := r.Scan(
 				&user.TemplateId,
+				&user.TemplateName,
 				&user.UserId,
+				&user.UserEmail,
 				&user.CanView,
 				&user.CanExecute,
 				&user.CanUpdate,
 				&user.CanDelete,
 				&user.CanInvite,
+				&user.CreatedAt,
+				&user.CreatedBy,
+				&user.LastUpdatedAt,
+				&user.LastUpdatedBy,
 			); err != nil {
 				return err
 			}

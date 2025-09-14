@@ -91,6 +91,9 @@ func (m *FilterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "up":
 			if m.list.FilterState() != list.Filtering && m.list.Cursor() == 0 {
+				if m.list.FilterValue() == "" {
+					m.list.SetFilterText("")
+				}
 				m.list.SetFilterState(list.Filtering)
 				m.list.SetShowFilter(true)
 				var cmd tea.Cmd

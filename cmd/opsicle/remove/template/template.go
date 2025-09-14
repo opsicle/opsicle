@@ -2,6 +2,7 @@ package template
 
 import (
 	"fmt"
+	"opsicle/cmd/opsicle/remove/template/user"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
 
@@ -28,6 +29,7 @@ var flags cli.Flags = cli.Flags{
 }
 
 func init() {
+	Command.AddCommand(user.Command)
 	flags.AddToCommand(Command)
 }
 

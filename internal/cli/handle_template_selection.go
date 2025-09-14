@@ -26,6 +26,10 @@ type HandleTemplateSelectionOpts struct {
 	// Prompt is an optional string to use that tells the user what
 	// they are selecting
 	Prompt string
+
+	// StartWithoutFilter indicates whether the selection should be started
+	// without filter mode being turned on by default
+	StartWithoutFilter bool
 }
 
 type Template struct {
@@ -86,17 +90,21 @@ func HandleTemplateSelection(opts HandleTemplateSelectionOpts) (template *Templa
 			break
 		}
 	}
+	if len(templates.Data) == 0 {
+		return nil, controller.ErrorNotFound
+	}
 	if !isTemplateNameValid {
 		sort.Slice(filterItems, func(i, j int) bool {
 			return filterItems[i].Label < filterItems[j].Label
 		})
-		promptTitle := opts.Prompt
+		promptTitle := "💬 " + opts.Prompt
 		if promptTitle == "" {
 			promptTitle = "💬 Which template will it be?"
 		}
 		templateFiltering := CreateFilter(FilterOpts{
-			Items: filterItems,
-			Title: promptTitle,
+			Items:              filterItems,
+			Title:              promptTitle,
+			StartWithoutFilter: opts.StartWithoutFilter,
 		})
 		templateFilter := tea.NewProgram(templateFiltering)
 		if _, err := templateFilter.Run(); err != nil {

@@ -48,6 +48,10 @@ func (t *Template) CanUserDeleteV1(opts DatabaseConnection, userId string) (bool
 	return t.canUserV1(opts, userId, CanDelete)
 }
 
+func (t *Template) CanUserInviteV1(opts DatabaseConnection, userId string) (bool, error) {
+	return t.canUserV1(opts, userId, CanInvite)
+}
+
 func (t *Template) CanUserUpdateV1(opts DatabaseConnection, userId string) (bool, error) {
 	return t.canUserV1(opts, userId, CanUpdate)
 }

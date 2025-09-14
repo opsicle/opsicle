@@ -30,6 +30,9 @@ func registerAutomationTemplatesRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleDeleteTemplateV1))).Methods(http.MethodDelete)
 	v1.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleGetTemplateV1))).Methods(http.MethodGet)
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleSubmitTemplateV1))).Methods(http.MethodPost)
+	v1.Handle("/{templateId}/user", requiresAuth(http.HandlerFunc(handleCreateTemplateUserV1))).Methods(http.MethodPost)
+	v1.Handle("/{templateId}/users", requiresAuth(http.HandlerFunc(handleListTemplateUsersV1))).Methods(http.MethodGet)
+	v1.Handle("/{templateId}/user/{userId}", requiresAuth(http.HandlerFunc(handleDeleteTemplateUsersV1))).Methods(http.MethodDelete)
 	v1.Handle("/{templateId}/versions", requiresAuth(http.HandlerFunc(handleListTemplateVersionsV1))).Methods(http.MethodGet)
 	v1.Handle("/{templateId}/version", requiresAuth(http.HandlerFunc(handleUpdateTemplateVersionV1))).Methods(http.MethodPut)
 }
@@ -249,6 +252,240 @@ func handleListTemplatesV1(w http.ResponseWriter, r *http.Request) {
 		output = append(output, outputItem)
 	}
 
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleCreateTemplateUserV1Output struct {
+	Id             string `json:"id"`
+	JoinCode       string `json:"joinCode"`
+	IsExistingUser bool   `json:"isExistingUser"`
+}
+
+type handleCreateTemplateUserV1Input struct {
+	UserId     *string `json:"userId"`
+	UserEmail  *string `json:"userEmail"`
+	CanView    bool    `json:"canView"`
+	CanExecute bool    `json:"canExecute"`
+	CanUpdate  bool    `json:"canUpdate"`
+	CanDelete  bool    `json:"canDelete"`
+	CanInvite  bool    `json:"canInvite"`
+}
+
+func handleCreateTemplateUserV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	templateId := vars["templateId"]
+	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is listing template[%s] users", session.UserId, templateId))
+
+	if _, err := uuid.Parse(templateId); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid template id", ErrorInvalidInput)
+		return
+	}
+
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to read body: %s", err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get body data", ErrorInvalidInput)
+		return
+	}
+	var input handleCreateTemplateUserV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to marshal body: %s", err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		return
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("inviting user to join template[%s]", templateId))
+
+	isUserExists := false
+	isInputUuid := input.UserId != nil
+	isInputEmail := input.UserEmail != nil
+	var userInstance models.User
+	var userLoadError error
+	if isInputUuid {
+		userInstance.Id = input.UserId
+		userLoadError = userInstance.LoadByIdV1(models.DatabaseConnection{Db: db})
+	} else if isInputEmail {
+		userInstance.Email = *input.UserEmail
+		userLoadError = userInstance.LoadByEmailV1(models.DatabaseConnection{Db: db})
+	} else {
+		log(common.LogLevelError, "failed to receive either an id or email")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive either an id or email", ErrorInvalidInput)
+		return
+	}
+	if userLoadError == nil {
+		log(common.LogLevelInfo, fmt.Sprintf("inviting existing user[%s] to template[%s]", userInstance.GetId(), templateId))
+		isUserExists = true
+	} else if isInputUuid || !isInputEmail {
+		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user: %s", userLoadError))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to retrieve user", ErrorInvalidInput)
+		return
+	} else if isInputEmail {
+		log(common.LogLevelInfo, fmt.Sprintf("inviting future user[%s] to template[%s]", *input.UserEmail, templateId))
+	}
+
+	templateInstance := models.Template{Id: &templateId}
+	log(common.LogLevelDebug, fmt.Sprintf("verifying if user[%s] can invite other users", session.UserId))
+	canUserInvite, err := templateInstance.CanUserInviteV1(models.DatabaseConnection{Db: db}, session.UserId)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to get user[%s] permissions on template[%s]: %s", session.UserId, templateId, err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to check user permissions", ErrorNotFound)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to check user permissions", ErrorDatabaseIssue)
+		return
+	} else if !canUserInvite {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] cannot invite other users to template[%s]", session.UserId, templateId))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to check user permissions", ErrorInsufficientPermissions)
+		return
+	}
+
+	joinCode, err := common.GenerateRandomString(32)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to generate random string: %s", err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to generate join code", err)
+		return
+	}
+	inviteOpts := models.InviteTemplateUserV1Opts{
+		Db:         db,
+		InviterId:  session.UserId,
+		JoinCode:   joinCode,
+		CanView:    input.CanView,
+		CanUpdate:  input.CanUpdate,
+		CanExecute: input.CanExecute,
+		CanDelete:  input.CanDelete,
+		CanInvite:  input.CanInvite,
+	}
+	if isUserExists {
+		inviteOpts.AcceptorId = userInstance.Id
+	} else if isInputEmail {
+		inviteOpts.AcceptorEmail = input.UserEmail
+	}
+
+	log(common.LogLevelDebug, "creating template invitation...")
+	invitation, err := templateInstance.InviteUserV1(inviteOpts)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to invite user to template[%s]: %s", templateId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to invite user to template", err)
+		return
+	}
+
+	output := handleCreateTemplateUserV1Output{
+		Id:             invitation.InvitationId,
+		IsExistingUser: invitation.IsExistingUser,
+		JoinCode:       joinCode,
+	}
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleListTemplateUsersV1Output struct {
+	Users []handleListTemplateUsersV1OutputUser `json:"users"`
+}
+
+type handleListTemplateUsersV1OutputUser struct {
+	Id         string    `json:"id"`
+	Email      string    `json:"email"`
+	CanView    bool      `json:"canView"`
+	CanExecute bool      `json:"canExecute"`
+	CanUpdate  bool      `json:"canUpdate"`
+	CanDelete  bool      `json:"canDelete"`
+	CanInvite  bool      `json:"canInvite"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+func handleListTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	templateId := vars["templateId"]
+	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is listing template[%s] users", session.UserId, templateId))
+
+	template := models.Template{Id: &templateId}
+	if err := template.LoadUsersV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to list template users: %s", err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list template users", ErrorDatabaseIssue)
+		return
+	}
+	output := handleListTemplateUsersV1Output{}
+	for _, user := range template.Users {
+		output.Users = append(output.Users, handleListTemplateUsersV1OutputUser{
+			Id:         user.GetUserId(),
+			Email:      user.GetUserEmail(),
+			CanView:    user.CanView,
+			CanExecute: user.CanExecute,
+			CanUpdate:  user.CanUpdate,
+			CanDelete:  user.CanDelete,
+			CanInvite:  user.CanInvite,
+			CreatedAt:  user.CreatedAt,
+		})
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleDeleteTemplateUsersV1Output struct {
+	IsSuccessful bool `json:"isSuccessful"`
+}
+
+func handleDeleteTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	templateId := vars["templateId"]
+	userId := vars["userId"]
+	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is removing user[%s] from template[%s]", session.UserId, userId, templateId))
+
+	template := models.Template{Id: &templateId}
+	if err := template.LoadUsersV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to list template users: %s", err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list template users", ErrorDatabaseIssue)
+		return
+	}
+	if len(template.Users) <= 1 {
+		log(common.LogLevelError, "last user cannot be removed")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "last user cannot be removed", ErrorLastUserInResource)
+		return
+	}
+
+	var userToBeDeleted *models.TemplateUser = nil
+	managingUsers := []string{}
+	for _, templateUser := range template.Users {
+		if templateUser.GetUserId() == userId {
+			userToBeDeleted = &templateUser
+		}
+		if templateUser.CanInvite {
+			managingUsers = append(managingUsers, *templateUser.UserId)
+		}
+	}
+	if userToBeDeleted == nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] was not found", userId))
+		common.SendHttpFailResponse(w, r, http.StatusNotFound, "user not found", ErrorNotFound)
+		return
+	}
+	if len(managingUsers) == 1 && managingUsers[0] == userId {
+		log(common.LogLevelError, "last user with invite permissions cannot be removed")
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "last user with invite permissions cannot be removed", ErrorLastManagerOfResource)
+		return
+	}
+	canInvite, err := template.CanUserInviteV1(models.DatabaseConnection{Db: db}, session.UserId)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to check if user[%s] can invite other users: %s", session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "user cannot be removed", ErrorDatabaseIssue)
+		return
+	} else if !canInvite {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] not allowed to manage users of this template", session.UserId))
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "user cannot be removed", ErrorInsufficientPermissions)
+		return
+	}
+
+	if err := userToBeDeleted.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to remove user[%s]: %s", userId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove user", ErrorDatabaseIssue)
+		return
+	}
+
+	output := handleDeleteTemplateUsersV1Output{IsSuccessful: true}
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
