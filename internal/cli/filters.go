@@ -41,6 +41,8 @@ func CreateFilter(opts FilterOpts) *FilterModel {
 		listInstance.SetShowFilter(true)
 	}
 	listInstance.SetShowTitle(true)
+	listInstance.Styles.Title = lipgloss.NewStyle()
+	listInstance.Styles.FilterPrompt = lipgloss.NewStyle()
 	listInstance.SetStatusBarItemName("template", "templates")
 	listInstance.SetShowStatusBar(true)
 	listInstance.Title = opts.Title

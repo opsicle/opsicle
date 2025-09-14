@@ -8,6 +8,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const (
+	checkBoxInstructions = "Use up/down arrows to navigate, use space to toggle"
+)
+
 type CheckboxItem struct {
 	Id          string `json:"id" yaml:"id"`
 	Label       string `json:"label" yaml:"label"`
@@ -17,12 +21,12 @@ type CheckboxItem struct {
 }
 
 type CheckboxModel struct {
-	title       string `json:"title"`
+	title       string
+	itemMap     map[string]CheckboxItem
 	items       []CheckboxItem
-	cursor      int  `json:"cursor"`
-	isSubmitted bool `json:"submitted"`
-	isCancelled bool `json:"cancelled"`
-	err         error
+	cursor      int
+	isSubmitted bool
+	isCancelled bool
 }
 
 type CreateCheckboxesOpts struct {
@@ -31,14 +35,27 @@ type CreateCheckboxesOpts struct {
 }
 
 func CreateCheckboxes(opts CreateCheckboxesOpts) *CheckboxModel {
-	return &CheckboxModel{
-		title: opts.Title,
-		items: opts.Items,
+	checkboxModel := &CheckboxModel{
+		title:   opts.Title,
+		items:   opts.Items,
+		itemMap: map[string]CheckboxItem{},
 	}
+	for _, item := range opts.Items {
+		checkboxModel.itemMap[item.Id] = item
+	}
+	return checkboxModel
+}
+
+func (m CheckboxModel) GetItemStatus(id string) bool {
+	return m.itemMap[id].Checked
 }
 
 func (m CheckboxModel) GetItems() []CheckboxItem {
 	return m.items
+}
+
+func (m CheckboxModel) IsCancelled() bool {
+	return m.isCancelled
 }
 
 func (m CheckboxModel) Init() tea.Cmd { return nil }
@@ -50,24 +67,30 @@ func (m *CheckboxModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c", "ctrl+d":
 			m.isCancelled = true
 			return m, tea.Quit
-		case "up", "k":
+		case "up":
 			if m.cursor > 0 {
 				m.cursor--
+			} else {
+				m.cursor = len(m.items) - 1
 			}
-		case "down", "j":
+		case "down":
 			if m.cursor < len(m.items)-1 {
 				m.cursor++
+			} else {
+				m.cursor = 0
 			}
 		case " ":
 			if len(m.items) > 0 && !m.items[m.cursor].Disabled && !m.isSubmitted {
 				m.items[m.cursor].Checked = !m.items[m.cursor].Checked
 			}
-
 		case "enter":
 			m.isSubmitted = true
+			for _, item := range m.items {
+				m.itemMap[item.Id] = item
+			}
 			return m, tea.Quit
 		}
 	}
@@ -78,7 +101,7 @@ func (m CheckboxModel) View() string {
 	var b strings.Builder
 
 	// Title
-	fmt.Fprintf(&b, "💬 %s\n\n", m.title)
+	fmt.Fprintf(&b, "💬 %s\n  > %s\n\n", m.title, lipgloss.NewStyle().Faint(true).Render(checkBoxInstructions))
 
 	// Checkboxes
 	for i, it := range m.items {

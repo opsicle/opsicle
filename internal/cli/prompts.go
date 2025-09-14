@@ -18,6 +18,7 @@ var (
 )
 
 type PromptOpts struct {
+	Title   string
 	Buttons []PromptButton
 	Inputs  []PromptInput
 }
@@ -30,6 +31,9 @@ func CreatePrompt(opts PromptOpts) *PromptModel {
 		inputIndex:        map[string]int{},
 		inputReverseIndex: map[int]string{},
 		outputs:           map[string]string{},
+	}
+	if opts.Title != "" {
+		m.title = &opts.Title
 	}
 
 	inputLength := 0
@@ -96,6 +100,7 @@ type PromptModel struct {
 	inputIndex        map[string]int
 	isQuitting        bool
 	outputs           map[string]string
+	title             *string
 
 	exitCode PromptExitCode
 }
@@ -198,6 +203,10 @@ func (m *PromptModel) updateInputs(msg tea.Msg) tea.Cmd {
 
 func (m PromptModel) View() string {
 	var b strings.Builder
+
+	if m.title != nil {
+		fmt.Fprintf(&b, "%s\n\n", *m.title)
+	}
 
 	if len(m.inputs) > 0 {
 		for i := range m.inputs {

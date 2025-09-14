@@ -111,8 +111,17 @@ func (t *Template) InviteUserV1(opts InviteTemplateUserV1Opts) (*InviteUserV1Out
 	for range len(sqlInserts) {
 		sqlPlaceholders = append(sqlPlaceholders, "?")
 	}
-	sqlStmt := fmt.Sprintf(
-		"INSERT INTO automation_template_user_invitations(%s) VALUES (%s) ON DUPLICATE KEY UPDATE last_updated_at = NOW()",
+	sqlStmt := fmt.Sprintf(`
+		INSERT INTO automation_template_user_invitations(%s)
+			VALUES (%s)
+			ON DUPLICATE KEY UPDATE
+				can_view = VALUES(can_view),
+				can_delete = VALUES(can_delete),
+				can_update = VALUES(can_update),
+				can_execute = VALUES(can_execute),
+				can_invite = VALUES(can_invite),
+				last_updated_at = NOW()
+	`,
 		strings.Join(sqlInserts, ", "),
 		strings.Join(sqlPlaceholders, ", "),
 	)

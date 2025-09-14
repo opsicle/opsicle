@@ -8,6 +8,7 @@ import (
 	"opsicle/pkg/controller"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -120,17 +121,18 @@ var Command = &cobra.Command{
 				Inputs: []cli.PromptInput{
 					{
 						Id:          "email",
-						Placeholder: "User's email address",
+						Placeholder: "User-to-add's email address",
 						Type:        cli.PromptString,
 					},
 				},
+				Title: "💬 What's the user's email address?",
 			})
 			userEmailPrompt := tea.NewProgram(userEmailInput)
 			if _, err := userEmailPrompt.Run(); err != nil {
 				return fmt.Errorf("failed to get user input: %w", err)
 			}
 			if userEmailInput.GetExitCode() == cli.PromptCancelled {
-				fmt.Println("😥 We couldn't get an email")
+				fmt.Println("💬 Alrights, tell me again if you want to add a user")
 				return errors.New("user cancelled action")
 			}
 			userId = userEmailInput.GetValue("email")
@@ -161,57 +163,60 @@ var Command = &cobra.Command{
 		templateId = selectedTemplate.Id
 		templateName := selectedTemplate.Name
 
-		checkboxModel := cli.CreateCheckboxes(cli.CreateCheckboxesOpts{
-			Title: fmt.Sprintf("What permissions should user <%s> have on template <%s>?", userId, templateName),
+		permissionsSelection := cli.CreateCheckboxes(cli.CreateCheckboxesOpts{
+			Title: fmt.Sprintf(
+				"What permissions should user %s have on template <%s>?",
+				lipgloss.NewStyle().Bold(true).Render("<"+userId+">"),
+				lipgloss.NewStyle().Bold(true).Render("<"+templateName+">"),
+			),
 			Items: []cli.CheckboxItem{
 				{
 					Id:          "can_view",
-					Label:       "Can View",
+					Label:       "👀 Can View",
 					Description: "User will be able to view details about this template",
 				},
 				{
 					Id:          "can_update",
-					Label:       "Can Update",
+					Label:       "➕ Can Update",
 					Description: "User will be able to update this template",
 				},
 				{
 					Id:          "can_delete",
-					Label:       "Can Delete",
+					Label:       "💥 Can Delete",
 					Description: "User will be able to delete assets/versions in this template",
 				},
 				{
 					Id:          "can_execute",
-					Label:       "Can Execute",
+					Label:       "▶️  Can Execute",
 					Description: "User will be able to execute this template",
 				},
 				{
 					Id:          "can_invite",
-					Label:       "Can Invite",
+					Label:       "👥 Can Invite",
 					Description: "User will be able to invite/remove users from the template",
 				},
 			},
 		})
-		program := tea.NewProgram(checkboxModel)
-		checkboxModelOutput, err := program.Run()
+		permissionsSelector := tea.NewProgram(permissionsSelection)
+		checkboxModelOutput, err := permissionsSelector.Run()
 		if err != nil {
-			return fmt.Errorf("ss")
+			return fmt.Errorf("failed to execute selection of permissions: %w", err)
 		}
-		checkboxModel = checkboxModelOutput.(*cli.CheckboxModel)
-		items := checkboxModel.GetItems()
-		itemMap := map[string]bool{}
-		for _, item := range items {
-			itemMap[item.Id] = item.Checked
+		permissionsSelection = checkboxModelOutput.(*cli.CheckboxModel)
+		if permissionsSelection.IsCancelled() {
+			fmt.Println("💬 Alrights, tell me again if you want to add a user")
+			return errors.New("user cancelled action")
 		}
 
-		fmt.Printf("Inviting user[%s] to template <%s>\n", userId, templateName)
+		fmt.Printf("⏳ Inviting user[%s] to template <%s>...\n", userId, templateName)
 
 		addTemplateUserOpts := controller.CreateTemplateUserV1Input{
 			TemplateId: templateId,
-			CanView:    itemMap["can_view"],
-			CanExecute: itemMap["can_execute"],
-			CanInvite:  itemMap["can_invite"],
-			CanUpdate:  itemMap["can_update"],
-			CanDelete:  itemMap["can_delete"],
+			CanView:    permissionsSelection.GetItemStatus("can_view"),
+			CanExecute: permissionsSelection.GetItemStatus("can_execute"),
+			CanInvite:  permissionsSelection.GetItemStatus("can_invite"),
+			CanUpdate:  permissionsSelection.GetItemStatus("can_update"),
+			CanDelete:  permissionsSelection.GetItemStatus("can_delete"),
 		}
 		if isUserIdEmail {
 			addTemplateUserOpts.UserEmail = &userId
