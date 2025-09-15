@@ -171,9 +171,9 @@ func ShowConfirmation(opts ShowConfirmationOpts) error {
 		initialCursorPosition = 0
 	}
 	model := boxModel{
-		CancelLabel:     opts.CancelLabel,
+		CancelLabel:     cancelLabel,
 		Color:           accentColor,
-		ConfirmLabel:    opts.ConfirmLabel,
+		ConfirmLabel:    confirmLabel,
 		ForegroundColor: foregroundColor,
 		Height:          height,
 		IsFullScreen:    opts.IsFullScreen,

@@ -73,6 +73,7 @@ func (t *Template) AddUserV1(opts AddUserToTemplateV1) error {
 		"can_update":             opts.CanUpdate,
 		"can_delete":             opts.CanDelete,
 		"can_invite":             opts.CanInvite,
+		"created_by":             opts.CreatedBy,
 	}
 	var insertFields, insertPlaceholders []string
 	var insertValues []any
@@ -189,7 +190,7 @@ func (t *Template) InviteUserV1(opts InviteTemplateUserV1Opts) (*InviteUserV1Out
 	}, nil
 }
 
-func (t *Template) LoadUsersV1(opts DatabaseConnection) error {
+func (t *Template) ListUsersV1(opts DatabaseConnection) error {
 	if err := t.validate(); err != nil {
 		return err
 	}
@@ -221,9 +222,12 @@ func (t *Template) LoadUsersV1(opts DatabaseConnection) error {
 		Args: []any{
 			*t.Id,
 		},
-		FnSource: "models.AutomationTemplate.LoadUsersV1",
+		FnSource: "models.AutomationTemplate.ListUsersV1",
 		ProcessRows: func(r *sql.Rows) error {
-			user := TemplateUser{}
+			user := TemplateUser{
+				CreatedBy:     &User{},
+				LastUpdatedBy: &User{},
+			}
 			if err := r.Scan(
 				&user.TemplateId,
 				&user.TemplateName,
@@ -235,11 +239,21 @@ func (t *Template) LoadUsersV1(opts DatabaseConnection) error {
 				&user.CanDelete,
 				&user.CanInvite,
 				&user.CreatedAt,
-				&user.CreatedBy,
+				&user.CreatedBy.Id,
 				&user.LastUpdatedAt,
-				&user.LastUpdatedBy,
+				&user.LastUpdatedBy.Id,
 			); err != nil {
 				return err
+			}
+			if user.CreatedBy.Id != nil {
+				if err := user.CreatedBy.LoadByIdV1(opts); err != nil {
+					return fmt.Errorf("failed to load createdBy: %w", err)
+				}
+			}
+			if user.LastUpdatedBy.Id != nil {
+				if err := user.LastUpdatedBy.LoadByIdV1(opts); err != nil {
+					return fmt.Errorf("failed to load lastUpdatedBy: %w", err)
+				}
 			}
 			users = append(users, user)
 			return nil

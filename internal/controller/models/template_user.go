@@ -27,9 +27,9 @@ type TemplateUser struct {
 	CanDelete     bool      `json:"canDelete"`
 	CanInvite     bool      `json:"canInvite"`
 	CreatedAt     time.Time `json:"createdAt"`
-	CreatedBy     *string   `json:"createdBy"`
+	CreatedBy     *User     `json:"createdBy"`
 	LastUpdatedAt time.Time `json:"lastUpdatedAt"`
-	LastUpdatedBy *string   `json:"lastUpdatedBy"`
+	LastUpdatedBy *User     `json:"lastUpdatedBy"`
 }
 
 func (tu *TemplateUser) validate() error {
@@ -84,7 +84,7 @@ func (tu *TemplateUser) LoadV1(opts DatabaseConnection) error {
 	if err := tu.validate(); err != nil {
 		return fmt.Errorf("failed to validate TemplateUser: %w", err)
 	}
-	return executeMysqlSelect(mysqlQueryInput{
+	if err := executeMysqlSelect(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: `
 		  SELECT 
@@ -115,6 +115,8 @@ func (tu *TemplateUser) LoadV1(opts DatabaseConnection) error {
 		},
 		FnSource: "models.TemplateUser.LoadV1",
 		ProcessRow: func(r *sql.Row) error {
+			tu.CreatedBy = &User{}
+			tu.LastUpdatedBy = &User{}
 			return r.Scan(
 				&tu.TemplateId,
 				&tu.TemplateName,
@@ -126,10 +128,23 @@ func (tu *TemplateUser) LoadV1(opts DatabaseConnection) error {
 				&tu.CanDelete,
 				&tu.CanInvite,
 				&tu.CreatedAt,
-				&tu.CreatedBy,
+				&tu.CreatedBy.Id,
 				&tu.LastUpdatedAt,
-				&tu.LastUpdatedBy,
+				&tu.LastUpdatedBy.Id,
 			)
 		},
-	})
+	}); err != nil {
+		return err
+	}
+	if tu.CreatedBy.Id != nil {
+		if err := tu.CreatedBy.LoadByIdV1(opts); err != nil {
+			return fmt.Errorf("failed to load createdBy: %w", err)
+		}
+	}
+	if tu.LastUpdatedBy.Id != nil {
+		if err := tu.LastUpdatedBy.LoadByIdV1(opts); err != nil {
+			return fmt.Errorf("failed to load lastUpdatedBy: %w", err)
+		}
+	}
+	return nil
 }

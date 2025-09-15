@@ -318,10 +318,6 @@ func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO - remove
-	o, _ := json.MarshalIndent(templateUserInvitation, "", "  ")
-	fmt.Println(string(o))
-
 	if input.IsAcceptance {
 		template := models.Template{Id: &templateUserInvitation.TemplateId}
 		if err := template.AddUserV1(models.AddUserToTemplateV1{
@@ -359,7 +355,7 @@ func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
 				CanDelete:    templateUser.CanDelete,
 				CanUpdate:    templateUser.CanUpdate,
 				CanInvite:    templateUser.CanInvite,
-				CreatedBy:    templateUser.CreatedBy,
+				CreatedBy:    templateUser.CreatedBy.Id,
 			},
 		}
 		audit.Log(audit.LogEntry{
@@ -591,14 +587,17 @@ type handleListTemplateUsersV1Output struct {
 }
 
 type handleListTemplateUsersV1OutputUser struct {
-	Id         string    `json:"id"`
-	Email      string    `json:"email"`
-	CanView    bool      `json:"canView"`
-	CanExecute bool      `json:"canExecute"`
-	CanUpdate  bool      `json:"canUpdate"`
-	CanDelete  bool      `json:"canDelete"`
-	CanInvite  bool      `json:"canInvite"`
-	CreatedAt  time.Time `json:"createdAt"`
+	Id            string    `json:"id"`
+	Email         string    `json:"email"`
+	CanView       bool      `json:"canView"`
+	CanExecute    bool      `json:"canExecute"`
+	CanUpdate     bool      `json:"canUpdate"`
+	CanDelete     bool      `json:"canDelete"`
+	CanInvite     bool      `json:"canInvite"`
+	CreatedBy     string    `json:"createdBy"`
+	CreatedAt     time.Time `json:"createdAt"`
+	LastUpdatedBy string    `json:"lastUpdatedBy`
+	LastUpdatedAt time.Time `json:"lastUpdatedAt"`
 }
 
 func handleListTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
@@ -609,22 +608,33 @@ func handleListTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is listing template[%s] users", session.UserId, templateId))
 
 	template := models.Template{Id: &templateId}
-	if err := template.LoadUsersV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := template.ListUsersV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list template users: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list template users", ErrorDatabaseIssue)
 		return
 	}
 	output := handleListTemplateUsersV1Output{}
 	for _, user := range template.Users {
+		createdBy := ""
+		if user.CreatedBy.Id != nil {
+			createdBy = user.CreatedBy.Email
+		}
+		lastUpdatedBy := ""
+		if user.LastUpdatedBy.Id != nil {
+			lastUpdatedBy = user.LastUpdatedBy.Email
+		}
 		output.Users = append(output.Users, handleListTemplateUsersV1OutputUser{
-			Id:         user.GetUserId(),
-			Email:      user.GetUserEmail(),
-			CanView:    user.CanView,
-			CanExecute: user.CanExecute,
-			CanUpdate:  user.CanUpdate,
-			CanDelete:  user.CanDelete,
-			CanInvite:  user.CanInvite,
-			CreatedAt:  user.CreatedAt,
+			Id:            user.GetUserId(),
+			Email:         user.GetUserEmail(),
+			CanView:       user.CanView,
+			CanExecute:    user.CanExecute,
+			CanUpdate:     user.CanUpdate,
+			CanDelete:     user.CanDelete,
+			CanInvite:     user.CanInvite,
+			CreatedAt:     user.CreatedAt,
+			CreatedBy:     createdBy,
+			LastUpdatedAt: user.LastUpdatedAt,
+			LastUpdatedBy: lastUpdatedBy,
 		})
 	}
 
@@ -644,7 +654,7 @@ func handleDeleteTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is removing user[%s] from template[%s]", session.UserId, userId, templateId))
 
 	template := models.Template{Id: &templateId}
-	if err := template.LoadUsersV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := template.ListUsersV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list template users: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list template users", ErrorDatabaseIssue)
 		return

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"opsicle/cmd/opsicle/list/templates/users"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
 	"os"
@@ -39,12 +40,13 @@ var flags cli.Flags = cli.Flags{
 }
 
 func init() {
+	Command.AddCommand(users.Command)
 	flags.AddToCommand(Command)
 }
 
 var Command = &cobra.Command{
 	Use:     "templates",
-	Aliases: []string{"tmpl", "t"},
+	Aliases: []string{"template", "tmpl", "t"},
 	Short:   "Lists templates",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)

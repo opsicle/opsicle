@@ -202,14 +202,17 @@ type ListTemplateUsersV1OutputData struct {
 }
 
 type ListTemplateUsersV1OutputDataUser struct {
-	Id         string    `json:"id"`
-	Email      string    `json:"email"`
-	CanView    bool      `json:"canView"`
-	CanExecute bool      `json:"canExecute"`
-	CanUpdate  bool      `json:"canUpdate"`
-	CanDelete  bool      `json:"canDelete"`
-	CanInvite  bool      `json:"canInvite"`
-	CreatedAt  time.Time `json:"createdAt"`
+	Id            string    `json:"id"`
+	Email         string    `json:"email"`
+	CanView       bool      `json:"canView"`
+	CanExecute    bool      `json:"canExecute"`
+	CanUpdate     bool      `json:"canUpdate"`
+	CanDelete     bool      `json:"canDelete"`
+	CanInvite     bool      `json:"canInvite"`
+	CreatedAt     time.Time `json:"createdAt"`
+	CreatedBy     string    `json:"createdBy"`
+	LastUpdatedAt time.Time `json:"lastUpdatedAt"`
+	LastUpdatedBy string    `json:"lastUpdatedBy"`
 }
 type ListTemplateUsersV1Input struct {
 	TemplateId string `json:"-"`
