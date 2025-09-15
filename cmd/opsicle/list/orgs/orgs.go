@@ -82,7 +82,7 @@ var Command = &cobra.Command{
 			table := tablewriter.NewWriter(&displayOut)
 			table.Header([]any{"code", "member type", "joined at"}...)
 			for _, org := range listOrgsOutput.Data {
-				table.Append([]string{org.Code, org.MemberType, org.JoinedAt.Local().Format("Jan 2 2006 03:04:05 PM")})
+				table.Append([]string{org.Code, org.MemberType, org.JoinedAt.Local().Format(cli.TimestampHuman)})
 			}
 			table.Render()
 			fmt.Println(displayOut.String())

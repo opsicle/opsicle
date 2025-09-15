@@ -165,7 +165,7 @@ func runAutomation(spec automationSpec, opts runAutomationOpts) error {
 				spec.AutomationLogs <- containerLog
 				phaseLogsMutex.Lock()
 				phase.Logs = append(phase.Logs, automations.PhaseLog{
-					Timestamp: time.Now().Format("2006-01-02 15:04:05"),
+					Timestamp: time.Now().Format("2006-01-02T15:04:05"),
 					Message:   containerLog,
 				})
 				phaseLogsMutex.Unlock()

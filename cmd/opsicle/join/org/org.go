@@ -27,14 +27,14 @@ func init() {
 
 var Command = &cobra.Command{
 	Use:     "org",
-	Aliases: []string{"j"},
-	Short:   "Join an organisation",
+	Aliases: []string{"o"},
+	Short:   "Accept invitations to join an organisation",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		controllerUrl := viper.GetString("controller-url")
-		methodId := "opsicle/create/org/user"
+		methodId := "opsicle/join/org"
 		sessionToken, err := cli.RequireAuth(controllerUrl, methodId)
 		if err != nil {
 			fmt.Println("⚠️  You must be logged-in to run this command")
@@ -58,7 +58,7 @@ var Command = &cobra.Command{
 		}
 
 		if len(listedOrgInvitations.Data.Invitations) > 0 {
-			fmt.Printf("🔔 You have %v pending invitation(s) to organisations:\n\n", len(listedOrgInvitations.Data.Invitations))
+			fmt.Printf("🔔 You have %v pending invitation(s) to join organisations:\n\n", len(listedOrgInvitations.Data.Invitations))
 		} else {
 			fmt.Println("✅ You have no pending organisation invites")
 			return nil

@@ -17,19 +17,19 @@ func NewTemplateUser(userId, templateId string) TemplateUser {
 }
 
 type TemplateUser struct {
-	UserId        *string
-	UserEmail     *string
-	TemplateId    *string
-	TemplateName  *string
-	CanView       bool
-	CanExecute    bool
-	CanUpdate     bool
-	CanDelete     bool
-	CanInvite     bool
-	CreatedAt     time.Time
-	CreatedBy     *string
-	LastUpdatedAt time.Time
-	LastUpdatedBy *string
+	UserId        *string   `json:"userId"`
+	UserEmail     *string   `json:"userEmail"`
+	TemplateId    *string   `json:"templateId"`
+	TemplateName  *string   `json:"templateName"`
+	CanView       bool      `json:"canView"`
+	CanExecute    bool      `json:"canExecute"`
+	CanUpdate     bool      `json:"canUpdate"`
+	CanDelete     bool      `json:"canDelete"`
+	CanInvite     bool      `json:"canInvite"`
+	CreatedAt     time.Time `json:"createdAt"`
+	CreatedBy     *string   `json:"createdBy"`
+	LastUpdatedAt time.Time `json:"lastUpdatedAt"`
+	LastUpdatedBy *string   `json:"lastUpdatedBy"`
 }
 
 func (tu *TemplateUser) validate() error {

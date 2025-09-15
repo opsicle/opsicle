@@ -41,7 +41,7 @@ func (oui OrgUserInvitation) assertIdDefined() error {
 	return nil
 }
 
-func (oui *OrgUserInvitation) DeleteById(opts DatabaseConnection) error {
+func (oui *OrgUserInvitation) DeleteByIdV1(opts DatabaseConnection) error {
 	if err := oui.assertIdDefined(); err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (oui *OrgUserInvitation) DeleteById(opts DatabaseConnection) error {
 		Stmt:         "DELETE FROM org_user_invitations WHERE id = ?",
 		Args:         []any{oui.Id},
 		RowsAffected: oneRowAffected,
-		FnSource:     "models.OrgUserInvitation.DeleteById",
+		FnSource:     "models.OrgUserInvitation.DeleteByIdV1",
 	}); err != nil {
 		return err
 	}

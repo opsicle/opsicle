@@ -12,22 +12,24 @@ var (
 type Verb string
 
 const (
+	Accept       Verb = "accept"
+	Connect      Verb = "connect"
 	Create       Verb = "create"
 	Delete       Verb = "delete"
+	Execute      Verb = "execute"
 	ForcedLogout Verb = "forced_logout"
-	Update       Verb = "update"
 	Get          Verb = "get"
 	List         Verb = "list"
 	Login        Verb = "login"
 	LoginWithMfa Verb = "login_with_mfa"
 	Logout       Verb = "logout"
-	Execute      Verb = "execute"
-	VerifyEmail  Verb = "verify_email"
-	Verify       Verb = "verify"
-	Terminate    Verb = "terminate"
-	Connect      Verb = "connect"
+	Reject       Verb = "reject"
 	Start        Verb = "start"
 	Stop         Verb = "stop"
+	Terminate    Verb = "terminate"
+	Update       Verb = "update"
+	Verify       Verb = "verify"
+	VerifyEmail  Verb = "verify_email"
 )
 
 type EntityType string
@@ -44,21 +46,22 @@ type ResourceType string
 const (
 	AutomationTemplateResource        ResourceType = "autotmpl"
 	AutomationResource                ResourceType = "automation"
-	UserResource                      ResourceType = "user"
-	UserConfigResource                ResourceType = "user_config"
-	UserEmailVerificationCodeResource ResourceType = "user_email_verification_code"
-	UserMfaResource                   ResourceType = "user_mfa"
-	UserPasswordResource              ResourceType = "user_password"
-	SessionResource                   ResourceType = "session"
+	CacheResource                     ResourceType = "cache"
+	ConfigResource                    ResourceType = "config"
+	DbResource                        ResourceType = "db"
 	OrgResource                       ResourceType = "org"
 	OrgConfigResource                 ResourceType = "org_config"
 	OrgMemberTypesResource            ResourceType = "org_member_types"
 	OrgUserResource                   ResourceType = "org_user"
 	OrgUserInvitationResource         ResourceType = "org_user_invitation"
-	ConfigResource                    ResourceType = "config"
-	CacheResource                     ResourceType = "cache"
-	DbResource                        ResourceType = "db"
 	QueueResource                     ResourceType = "queue"
+	SessionResource                   ResourceType = "session"
+	TemplateUserInvitationResource    ResourceType = "template_user_invitation"
+	UserResource                      ResourceType = "user"
+	UserConfigResource                ResourceType = "user_config"
+	UserEmailVerificationCodeResource ResourceType = "user_email_verification_code"
+	UserMfaResource                   ResourceType = "user_mfa"
+	UserPasswordResource              ResourceType = "user_password"
 )
 
 type FieldType string

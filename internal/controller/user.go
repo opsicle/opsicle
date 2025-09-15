@@ -34,6 +34,7 @@ func registerUserRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/mfas", requiresAuth(http.HandlerFunc(handleListUserMfasV1))).Methods(http.MethodGet)
 	v1.HandleFunc("/mfas", handleListUserMfaTypesV1).Methods(http.MethodOptions)
 	v1.Handle("/org-invitations", requiresAuth(http.HandlerFunc(handleListUserOrgInvitationsV1))).Methods(http.MethodGet)
+	v1.Handle("/template-invitations", requiresAuth(http.HandlerFunc(handleListUserTemplateInvitationsV1))).Methods(http.MethodGet)
 	v1.HandleFunc("/password", handleUpdateUserPasswordV1).Methods(http.MethodPatch)
 
 	v1 = opts.Router.PathPrefix("/v1/verification").Subrouter()
@@ -489,6 +490,63 @@ func handleListUserOrgInvitationsV1(w http.ResponseWriter, r *http.Request) {
 		EntityType:   audit.UserEntity,
 		Verb:         audit.List,
 		ResourceType: audit.OrgUserInvitationResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleListUserTemplateInvitationsV1Output struct {
+	Invitations []handleListUserTemplateInvitationsV1OutputTemplateInvite
+}
+
+type handleListUserTemplateInvitationsV1OutputTemplateInvite struct {
+	Id           string    `json:"id"`
+	InvitedAt    time.Time `json:"invitedAt"`
+	InviterId    string    `json:"inviterId"`
+	InviterEmail string    `json:"inviterEmail"`
+	JoinCode     string    `json:"joinCode"`
+	TemplateId   string    `json:"templateId"`
+	TemplateName string    `json:"templateName"`
+}
+
+func handleListUserTemplateInvitationsV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	log(common.LogLevelDebug, fmt.Sprintf("retrieving org invitations for user[%s]", session.UserId))
+
+	listTemplateInvitationsOutput, err := models.ListTemplateInvitationsV1(models.ListTemplateInvitationsV1Opts{
+		Db:     db,
+		UserId: &session.UserId,
+	})
+	if err != nil {
+		if !errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", err)
+			return
+		}
+	}
+	output := handleListUserTemplateInvitationsV1Output{Invitations: []handleListUserTemplateInvitationsV1OutputTemplateInvite{}}
+	for _, templateInvitation := range listTemplateInvitationsOutput {
+		output.Invitations = append(
+			output.Invitations,
+			handleListUserTemplateInvitationsV1OutputTemplateInvite{
+				Id:           templateInvitation.Id,
+				InvitedAt:    templateInvitation.CreatedAt,
+				InviterId:    templateInvitation.InviterId,
+				InviterEmail: *templateInvitation.InviterEmail,
+				JoinCode:     templateInvitation.JoinCode,
+				TemplateId:   templateInvitation.TemplateId,
+				TemplateName: *templateInvitation.TemplateName,
+			},
+		)
+	}
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.List,
+		ResourceType: audit.TemplateUserInvitationResource,
 		Status:       audit.Success,
 		SrcIp:        &session.SourceIp,
 		SrcUa:        &session.UserAgent,

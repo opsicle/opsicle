@@ -2,12 +2,14 @@ package join
 
 import (
 	"opsicle/cmd/opsicle/join/org"
+	"opsicle/cmd/opsicle/join/template"
 
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	Command.AddCommand(org.Command)
+	Command.AddCommand(template.Command)
 }
 
 var Command = &cobra.Command{

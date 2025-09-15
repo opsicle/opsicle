@@ -85,7 +85,7 @@ var Command = &cobra.Command{
 			fmt.Printf("Id: %s\n", org.Data.Id)
 			fmt.Printf("Name: %s\n", org.Data.Name)
 			fmt.Printf("Code: %s\n", org.Data.Code)
-			fmt.Printf("CreatedAt: %s\n", org.Data.CreatedAt.Local().Format("Jan 2 2006 03:04:05 PM"))
+			fmt.Printf("CreatedAt: %s\n", org.Data.CreatedAt.Local().Format(cli.TimestampHuman))
 		}
 
 		return nil

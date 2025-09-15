@@ -11,6 +11,7 @@ import (
 	"opsicle/internal/common"
 	"opsicle/internal/controller/models"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,6 +31,7 @@ func registerAutomationTemplatesRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleDeleteTemplateV1))).Methods(http.MethodDelete)
 	v1.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleGetTemplateV1))).Methods(http.MethodGet)
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleSubmitTemplateV1))).Methods(http.MethodPost)
+	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateTemplateInvitationV1))).Methods(http.MethodPatch)
 	v1.Handle("/{templateId}/user", requiresAuth(http.HandlerFunc(handleCreateTemplateUserV1))).Methods(http.MethodPost)
 	v1.Handle("/{templateId}/users", requiresAuth(http.HandlerFunc(handleListTemplateUsersV1))).Methods(http.MethodGet)
 	v1.Handle("/{templateId}/user/{userId}", requiresAuth(http.HandlerFunc(handleDeleteTemplateUsersV1))).Methods(http.MethodDelete)
@@ -253,6 +255,211 @@ func handleListTemplatesV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleUpdateTemplateInvitationV1Output struct {
+	IsSuccessful bool                                        `json:"isSuccessful"`
+	TemplateUser *handleUpdateTemplateInvitationV1OutputUser `json:"templateUser,omitempty"`
+}
+
+type handleUpdateTemplateInvitationV1OutputUser struct {
+	UserId       *string `json:"userId"`
+	UserEmail    *string `json:"userEmail"`
+	TemplateId   *string `json:"templateId"`
+	TemplateName *string `json:"templateName"`
+	CanView      bool    `json:"canView"`
+	CanExecute   bool    `json:"canExecute"`
+	CanUpdate    bool    `json:"canUpdate"`
+	CanDelete    bool    `json:"canDelete"`
+	CanInvite    bool    `json:"canInvite"`
+	CreatedBy    *string `json:"createdBy"`
+}
+
+type handleUpdateTemplateInvitationV1Input struct {
+	IsAcceptance bool   `json:"isAcceptance"`
+	JoinCode     string `json:"joinCode"`
+}
+
+func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	invitationId := vars["invitationId"]
+	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is updating templateInvitation[%s]", session.UserId, invitationId))
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		return
+	}
+
+	var input handleUpdateTemplateInvitationV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		return
+	}
+
+	templateUserInvitation := models.TemplateUserInvitation{Id: invitationId}
+	if err := templateUserInvitation.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed find invitation", ErrorInvitationInvalid)
+			return
+		}
+		log(common.LogLevelError, fmt.Sprintf("failed to load invitation: %s", err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to load", ErrorInvalidInput)
+		return
+	}
+
+	if !strings.EqualFold(*templateUserInvitation.AcceptorId, session.UserId) {
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "user not allowed", ErrorInvitationInvalid)
+		return
+	}
+	if strings.Compare(templateUserInvitation.JoinCode, input.JoinCode) != 0 {
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "invalid join code", ErrorInvitationInvalid)
+		return
+	}
+
+	// TODO - remove
+	o, _ := json.MarshalIndent(templateUserInvitation, "", "  ")
+	fmt.Println(string(o))
+
+	if input.IsAcceptance {
+		template := models.Template{Id: &templateUserInvitation.TemplateId}
+		if err := template.AddUserV1(models.AddUserToTemplateV1{
+			Db:         db,
+			UserId:     session.UserId,
+			CanView:    templateUserInvitation.CanView,
+			CanExecute: templateUserInvitation.CanExecute,
+			CanUpdate:  templateUserInvitation.CanUpdate,
+			CanDelete:  templateUserInvitation.CanDelete,
+			CanInvite:  templateUserInvitation.CanInvite,
+			CreatedBy:  templateUserInvitation.InviterId,
+		}); err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to add user[%s] to template[%s]: %s", *templateUserInvitation.AcceptorId, templateUserInvitation.TemplateId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add user", ErrorDatabaseIssue)
+			return
+		}
+
+		templateUser := models.TemplateUser{
+			TemplateId: &templateUserInvitation.TemplateId,
+			UserId:     &session.UserId,
+		}
+		if err := templateUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s] of template[%s]: %s", session.UserId, templateUserInvitation.TemplateId, err))
+		}
+
+		output := handleUpdateTemplateInvitationV1Output{
+			IsSuccessful: true,
+			TemplateUser: &handleUpdateTemplateInvitationV1OutputUser{
+				UserId:       templateUser.UserId,
+				UserEmail:    templateUser.UserEmail,
+				TemplateId:   templateUser.TemplateId,
+				TemplateName: templateUser.TemplateName,
+				CanView:      templateUser.CanView,
+				CanExecute:   templateUser.CanExecute,
+				CanDelete:    templateUser.CanDelete,
+				CanUpdate:    templateUser.CanUpdate,
+				CanInvite:    templateUser.CanInvite,
+				CreatedBy:    templateUser.CreatedBy,
+			},
+		}
+		audit.Log(audit.LogEntry{
+			EntityId:     session.UserId,
+			EntityType:   audit.UserEntity,
+			Verb:         audit.Accept,
+			ResourceId:   templateUserInvitation.Id,
+			ResourceType: audit.TemplateUserInvitationResource,
+			Status:       audit.Success,
+			SrcIp:        &session.SourceIp,
+			SrcUa:        &session.UserAgent,
+			DstHost:      &r.Host,
+		})
+		if err := templateUserInvitation.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
+			return
+		}
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+		return
+	} else {
+		if err := templateUserInvitation.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
+			return
+		}
+		audit.Log(audit.LogEntry{
+			EntityId:     session.UserId,
+			EntityType:   audit.UserEntity,
+			Verb:         audit.Reject,
+			ResourceId:   templateUserInvitation.Id,
+			ResourceType: audit.TemplateUserInvitationResource,
+			Status:       audit.Success,
+			SrcIp:        &session.SourceIp,
+			SrcUa:        &session.UserAgent,
+			DstHost:      &r.Host,
+		})
+		output := handleUpdateTemplateInvitationV1Output{
+			IsSuccessful: true,
+		}
+		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+		return
+	}
+
+	if err := templateUserInvitation.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
+		return
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "tmp ok", nil)
+
+	// 	orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{
+	// 		Db:     db,
+	// 		UserId: session.UserId,
+	// 	})
+	// 	if err != nil {
+	// 		if errors.Is(err, models.ErrorNotFound) {
+	// 			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org user", ErrorDatabaseIssue)
+	// 			return
+	// 		}
+	// 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user", ErrorDatabaseIssue)
+	// 		return
+	// 	}
+
+	// 	output := handleUpdateOrgInvitationV1Output{
+	// 		JoinedAt:       orgUser.JoinedAt,
+	// 		MembershipType: orgUser.MemberType,
+	// 		OrgId:          orgUser.OrgId,
+	// 		OrgCode:        orgUser.OrgCode,
+	// 		OrgName:        orgUser.OrgName,
+	// 		UserId:         orgUser.UserId,
+	// 	}
+	// 	audit.Log(audit.LogEntry{
+	// 		EntityId:     session.UserId,
+	// 		EntityType:   audit.UserEntity,
+	// 		Verb:         audit.Update,
+	// 		ResourceId:   orgInvite.Id,
+	// 		ResourceType: audit.OrgUserInvitationResource,
+	// 		Status:       audit.Success,
+	// 		SrcIp:        &session.SourceIp,
+	// 		SrcUa:        &session.UserAgent,
+	// 		DstHost:      &r.Host,
+	// 	})
+	// 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+	// } else {
+	// 	if err := orgInvite.DeleteById(models.DatabaseConnection{Db: db}); err != nil {
+	// 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
+	// 		return
+	// 	}
+	// 	audit.Log(audit.LogEntry{
+	// 		EntityId:     session.UserId,
+	// 		EntityType:   audit.UserEntity,
+	// 		Verb:         audit.Delete,
+	// 		ResourceId:   orgInvite.Id,
+	// 		ResourceType: audit.OrgUserInvitationResource,
+	// 		Status:       audit.Success,
+	// 		SrcIp:        &session.SourceIp,
+	// 		SrcUa:        &session.UserAgent,
+	// 		DstHost:      &r.Host,
+	// 	})
+	// 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", nil)
+	// }
 }
 
 type handleCreateTemplateUserV1Output struct {

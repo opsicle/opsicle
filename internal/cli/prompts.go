@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(AsciiBlue))
-	blurredStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(AsciiGray))
+	focusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(AnsiBlue))
+	blurredStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(AnsiGray))
 	cursorStyle  = focusedStyle
 	noStyle      = lipgloss.NewStyle()
 )

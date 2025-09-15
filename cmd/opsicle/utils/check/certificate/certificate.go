@@ -83,8 +83,8 @@ var Command = &cobra.Command{
 			}
 			table.Append([]string{"ip(s)", fmt.Sprintf(sprintfFormat, strings.Join(ips, `", "`))})
 			table.Append([]string{"valid", fmt.Sprintf("%v", cert.X509Certificate.BasicConstraintsValid)})
-			table.Append([]string{"not before", cert.X509Certificate.NotBefore.Format("2006-01-02T15:04:05-0700")})
-			table.Append([]string{"not after", cert.X509Certificate.NotAfter.Format("2006-01-02T15:04:05-0700")})
+			table.Append([]string{"not before", cert.X509Certificate.NotBefore.Format(cli.TimestampCertificate)})
+			table.Append([]string{"not after", cert.X509Certificate.NotAfter.Format(cli.TimestampCertificate)})
 			certSha1 := sha1.Sum(cert.X509Certificate.Raw)
 			table.Append([]string{"sha1 fingerprint", strings.ToUpper(hex.EncodeToString(certSha1[:]))})
 			certSha256 := sha256.Sum256(cert.X509Certificate.Raw)

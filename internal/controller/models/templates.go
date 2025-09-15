@@ -49,6 +49,53 @@ func (t *Template) validate() error {
 	return nil
 }
 
+type AddUserToTemplateV1 struct {
+	Db *sql.DB
+
+	UserId     string
+	CanView    bool
+	CanExecute bool
+	CanUpdate  bool
+	CanDelete  bool
+	CanInvite  bool
+	CreatedBy  string
+}
+
+func (t *Template) AddUserV1(opts AddUserToTemplateV1) error {
+	if err := t.validate(); err != nil {
+		return err
+	}
+	inserts := map[string]any{
+		"automation_template_id": t.GetId(),
+		"user_id":                opts.UserId,
+		"can_view":               opts.CanView,
+		"can_execute":            opts.CanExecute,
+		"can_update":             opts.CanUpdate,
+		"can_delete":             opts.CanDelete,
+		"can_invite":             opts.CanInvite,
+	}
+	var insertFields, insertPlaceholders []string
+	var insertValues []any
+	for field, value := range inserts {
+		insertFields = append(insertFields, field)
+		insertPlaceholders = append(insertPlaceholders, "?")
+		insertValues = append(insertValues, value)
+	}
+	if err := executeMysqlInsert(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: fmt.Sprintf(`INSERT INTO automation_template_users(%s) VALUES (%s)`,
+			strings.Join(insertFields, ","),
+			strings.Join(insertPlaceholders, ","),
+		),
+		Args:         insertValues,
+		FnSource:     "models.Template.AddUserV1",
+		RowsAffected: oneRowAffected,
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (t *Template) GetId() string {
 	return *t.Id
 }

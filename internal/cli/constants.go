@@ -3,12 +3,12 @@ package cli
 import "fmt"
 
 const (
-	AsciiBlue   string = "33"
-	AsciiRed    string = "9"
-	AsciiYellow string = "11"
-	AsciiGreen  string = "2"
-	AsciiGray   string = "239"
+	TimestampHuman       string = "Jan 2 2006 03:04:05 PM"
+	TimestampSystem      string = "2006-01-02T15:04:05"
+	TimestampCertificate string = "2006-01-02T15:04:05-0700"
+)
 
+const (
 	FlagTypeBool        FlagType = "bool"
 	FlagTypeDuration    FlagType = "duration"
 	FlagTypeFloat       FlagType = "float"

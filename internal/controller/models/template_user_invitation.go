@@ -1,6 +1,7 @@
 package models
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -37,6 +38,66 @@ func (tui TemplateUserInvitation) assertIdDefined() error {
 		return fmt.Errorf("invitation id invalid: %w", ErrorInvalidInput)
 	}
 	return nil
+}
+
+func (tui *TemplateUserInvitation) DeleteByIdV1(opts DatabaseConnection) error {
+	if err := tui.assertIdDefined(); err != nil {
+		return err
+	}
+	if err := executeMysqlDelete(mysqlQueryInput{
+		Db:           opts.Db,
+		Stmt:         "DELETE FROM automation_template_user_invitations WHERE id = ?",
+		Args:         []any{tui.Id},
+		RowsAffected: oneRowAffected,
+		FnSource:     "models.TemplateUserInvitation.DeleteByIdV1",
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (tui *TemplateUserInvitation) LoadV1(opts DatabaseConnection) error {
+	if err := tui.assertIdDefined(); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
+	return executeMysqlSelect(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			SELECT 
+				tui.inviter_id,
+				tui.acceptor_id,
+				tui.acceptor_email,
+				tui.automation_template_id,
+				tui.join_code,
+				tui.can_view,
+				tui.can_execute,
+				tui.can_update,
+				tui.can_delete,
+				tui.can_invite,
+				tui.created_at,
+				tui.last_updated_at
+				FROM automation_template_user_invitations tui
+				WHERE id = ?
+		`,
+		Args:     []any{tui.Id},
+		FnSource: "models.TemplateUserInvitation.LoadV1",
+		ProcessRow: func(r *sql.Row) error {
+			return r.Scan(
+				&tui.InviterId,
+				&tui.AcceptorId,
+				&tui.AcceptorEmail,
+				&tui.TemplateId,
+				&tui.JoinCode,
+				&tui.CanView,
+				&tui.CanExecute,
+				&tui.CanUpdate,
+				&tui.CanDelete,
+				&tui.CanInvite,
+				&tui.CreatedAt,
+				&tui.LastUpdatedAt,
+			)
+		},
+	})
 }
 
 func (tui *TemplateUserInvitation) ReplaceAcceptorEmailWithId(opts DatabaseConnection) error {

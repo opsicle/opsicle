@@ -384,7 +384,6 @@ func (c Client) ListOrgMemberTypesV1() (*ListOrgMemberTypesV1Output, error) {
 
 type UpdateOrgInvitationV1Output struct {
 	Data UpdateOrgInvitationV1OutputData
-
 	http.Response
 }
 

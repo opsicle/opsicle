@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
+	"os"
 	"strconv"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 )
 
 var flags cli.Flags = cli.Flags{
@@ -74,6 +76,13 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to list templates: %w", err)
 		}
 
+		if len(templates.Data) == 0 {
+			cli.PrintBoxedInfoMessage(
+				"You don't have any templates, submit one using `opsicle submit template` and check back here",
+			)
+			return nil
+		}
+
 		switch viper.GetString("output") {
 		case "json":
 			o, _ := json.MarshalIndent(templates.Data, "", "  ")
@@ -82,37 +91,41 @@ var Command = &cobra.Command{
 
 			var displayOut bytes.Buffer
 			table := tablewriter.NewWriter(&displayOut)
+			table.Configure(func(cfg *tablewriter.Config) {
+				width, _, _ := term.GetSize(int(os.Stdout.Fd()))
+				cfg.MaxWidth = width
+			})
 			var tableHeaders []any
 			if viper.GetBool("wide") {
-				tableHeaders = []any{"name", "description", "version", "created by", "created at", "last updated by", "last updated at"}
+				tableHeaders = []any{"id", "name", "description", "version", "created by", "created at", "last updated by", "last updated at"}
 			} else {
-				tableHeaders = []any{"name", "description", "version", "last updated at"}
+				tableHeaders = []any{"id", "name", "description", "version", "last updated at"}
 			}
 			table.Header(tableHeaders...)
 			for _, template := range templates.Data {
 				var tableRow []string
 				if viper.GetBool("wide") {
-					tableRow = []string{template.Name, template.Description, strconv.Itoa(template.Version)}
+					tableRow = []string{template.Id, template.Name, template.Description, strconv.Itoa(template.Version)}
 					if template.CreatedBy != nil {
 						tableRow = append(tableRow, template.CreatedBy.Email)
 					} else {
 						tableRow = append(tableRow, "-")
 					}
-					tableRow = append(tableRow, template.CreatedAt.Local().Format("Jan 2 2006 03:04:05 PM"))
+					tableRow = append(tableRow, template.CreatedAt.Local().Format(cli.TimestampHuman))
 					if template.LastUpdatedBy != nil {
 						tableRow = append(tableRow, template.LastUpdatedBy.Email)
 					} else {
 						tableRow = append(tableRow, "-")
 					}
 					if template.LastUpdatedAt != nil {
-						tableRow = append(tableRow, template.LastUpdatedAt.Local().Format("Jan 2 2006 03:04:05 PM"))
+						tableRow = append(tableRow, template.LastUpdatedAt.Local().Format(cli.TimestampHuman))
 					} else {
 						tableRow = append(tableRow, "-")
 					}
 				} else {
-					tableRow = []string{template.Name, template.Description, strconv.Itoa(template.Version)}
+					tableRow = []string{template.Id, template.Name, template.Description, strconv.Itoa(template.Version)}
 					if template.LastUpdatedAt != nil {
-						tableRow = append(tableRow, template.LastUpdatedAt.Local().Format("Jan 2 2006 03:04:05 PM"))
+						tableRow = append(tableRow, template.LastUpdatedAt.Local().Format(cli.TimestampHuman))
 					} else {
 						tableRow = append(tableRow, "-")
 					}

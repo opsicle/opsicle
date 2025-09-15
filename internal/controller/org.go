@@ -604,7 +604,6 @@ type handleUpdateOrgInvitationV1Input struct {
 func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	session := r.Context().Value(authRequestContext).(identity)
-
 	vars := mux.Vars(r)
 	invitationId := vars["invitationId"]
 
@@ -654,7 +653,7 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := orgInvite.DeleteById(models.DatabaseConnection{Db: db}); err != nil {
+		if err := orgInvite.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
 			return
 		}
@@ -693,7 +692,7 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 		})
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 	} else {
-		if err := orgInvite.DeleteById(models.DatabaseConnection{Db: db}); err != nil {
+		if err := orgInvite.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
 			return
 		}

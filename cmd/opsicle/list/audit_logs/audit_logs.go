@@ -30,7 +30,7 @@ var flags cli.Flags = cli.Flags{
 	},
 	{
 		Name:         "till",
-		DefaultValue: time.Now().Local().Format("2006-01-02T15:03:04"),
+		DefaultValue: time.Now().Local().Format(cli.TimestampSystem),
 		Usage:        "Timestamp of the latest log entry to return, if --utc is not specified, this is in local time; Format it as {YYYY}-{MM}-{DD}T{HH}:{mm}:{ss}",
 		Type:         cli.FlagTypeString,
 	},
@@ -74,7 +74,7 @@ var Command = &cobra.Command{
 			return err
 		}
 
-		cursor, err := time.Parse("2006-01-02T15:04:05", viper.GetString("till"))
+		cursor, err := time.Parse(cli.TimestampSystem, viper.GetString("till"))
 		if err != nil {
 			return fmt.Errorf("date format invalid")
 		}
@@ -128,7 +128,7 @@ var Command = &cobra.Command{
 				if viper.GetBool("utc") {
 					timestamp = timestamp.UTC()
 				}
-				row := []string{timestamp.Format("2006-01-02T15:04:05")}
+				row := []string{timestamp.Format(cli.TimestampSystem)}
 				if viper.GetBool("more") {
 					srcIp := "-"
 					if auditLog.SrcIp != nil {

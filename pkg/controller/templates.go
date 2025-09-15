@@ -150,6 +150,48 @@ func (c Client) ListTemplatesV1(input ListTemplatesV1Input) (*ListTemplatesV1Out
 	return output, err
 }
 
+type ListUserTemplateInvitationsV1Output struct {
+	Data ListUserTemplateInvitationsV1OutputData
+	http.Response
+}
+
+type ListUserTemplateInvitationsV1OutputData struct {
+	Invitations []ListUserTemplateInvitationsV1OutputDataInvitation `json:"invitations"`
+}
+
+type ListUserTemplateInvitationsV1OutputDataInvitation struct {
+	Id           string    `json:"id"`
+	InvitedAt    time.Time `json:"invitedAt"`
+	InviterId    string    `json:"inviterId"`
+	InviterEmail string    `json:"inviterEmail"`
+	JoinCode     string    `json:"joinCode"`
+	TemplateId   string    `json:"templateId"`
+	TemplateName string    `json:"templateName"`
+}
+
+func (c Client) ListUserTemplateInvitationsV1() (*ListUserTemplateInvitationsV1Output, error) {
+	var outputData ListUserTemplateInvitationsV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   "/api/v1/user/template-invitations",
+		Output: &outputData,
+	})
+	var output *ListUserTemplateInvitationsV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &ListUserTemplateInvitationsV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		}
+	}
+	return output, err
+}
+
 type ListTemplateUsersV1Output struct {
 	Data ListTemplateUsersV1OutputData
 	http.Response
@@ -169,7 +211,6 @@ type ListTemplateUsersV1OutputDataUser struct {
 	CanInvite  bool      `json:"canInvite"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
-
 type ListTemplateUsersV1Input struct {
 	TemplateId string `json:"-"`
 }
@@ -199,7 +240,6 @@ func (c Client) ListTemplateUsersV1(input ListTemplateUsersV1Input) (*ListTempla
 
 type ListTemplateVersionsV1Output struct {
 	Data ListTemplateVersionsV1OutputData
-
 	http.Response
 }
 
@@ -371,6 +411,61 @@ func (c Client) UpdateTemplateDefaultVersionV1(input UpdateTemplateDefaultVersio
 	var output *UpdateTemplateDefaultVersionV1Output = nil
 	if !errors.Is(err, ErrorOutputNil) {
 		output = &UpdateTemplateDefaultVersionV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		case ErrorNotFound.Error():
+			err = ErrorNotFound
+		}
+	}
+	return output, err
+}
+
+type UpdateTemplateInvitationV1Output struct {
+	Data UpdateTemplateInvitationV1OutputData
+	http.Response
+}
+
+type UpdateTemplateInvitationV1OutputData struct {
+	IsSuccessful bool                                      `json:"isSuccessful"`
+	TemplateUser *UpdateTemplateInvitationV1OutputDataUser `json:"templateUser,omitempty"`
+}
+
+type UpdateTemplateInvitationV1OutputDataUser struct {
+	UserId       string `json:"userId"`
+	UserEmail    string `json:"userEmail"`
+	TemplateId   string `json:"templateId"`
+	TemplateName string `json:"templateName"`
+	CanView      bool   `json:"canView"`
+	CanExecute   bool   `json:"canExecute"`
+	CanUpdate    bool   `json:"canUpdate"`
+	CanDelete    bool   `json:"canDelete"`
+	CanInvite    bool   `json:"canInvite"`
+	CreatedBy    string `json:"createdBy"`
+}
+
+type UpdateTemplateInvitationV1Input struct {
+	Id           string `json:"-"`
+	IsAcceptance bool   `json:"isAcceptance"`
+	JoinCode     string `json:"joinCode"`
+}
+
+func (c Client) UpdateTemplateInvitationV1(input UpdateTemplateInvitationV1Input) (*UpdateTemplateInvitationV1Output, error) {
+	var outputData UpdateTemplateInvitationV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodPatch,
+		Path:   fmt.Sprintf("/api/v1/template/invitation/%s", input.Id),
+		Data:   input,
+		Output: &outputData,
+	})
+	var output *UpdateTemplateInvitationV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &UpdateTemplateInvitationV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
 		}
