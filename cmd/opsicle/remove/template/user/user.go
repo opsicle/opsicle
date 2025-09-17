@@ -65,7 +65,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
-		inputTemplateName := viper.GetString("template-name")
+		inputTemplateName := viper.GetString("template-id")
 		templateInstance, err := cli.HandleTemplateSelection(cli.HandleTemplateSelectionOpts{
 			Client:    client,
 			UserInput: inputTemplateName,

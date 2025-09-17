@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"opsicle/internal/common"
 	"opsicle/pkg/controller"
@@ -17,7 +16,8 @@ type HandleTemplateSelectionOpts struct {
 	// and passed into this function for us
 	Client *controller.Client
 
-	// UserInput is what a user has input as the template name
+	// UserInput is what a user has input as the template name or the
+	// template Id
 	UserInput string
 
 	// ServiceLog is used for streaming logs
@@ -61,12 +61,14 @@ func HandleTemplateSelection(opts HandleTemplateSelectionOpts) (template *Templa
 		return nil, fmt.Errorf("failed to list templates: %w", err)
 	}
 	isTemplateNameValid := false
+	isConflictingTemplateReference := false
+	matchedTemplates := []Template{}
 	templateMap := map[string]Template{}
 	filterItems := []FilterItem{}
 	for _, t := range templates.Data {
 		filterItems = append(filterItems, FilterItem{
-			Description: fmt.Sprintf("v%v -- %s", t.Version, t.Description),
-			Label:       t.Name,
+			Description: fmt.Sprintf("  %s", t.Description),
+			Label:       fmt.Sprintf("[ %s ] @ v%v by <%s>", t.Name, t.Version, t.CreatedBy.Email),
 			Value:       strings.Join([]string{t.Name, t.Id}, ":"),
 		})
 		templateInstance := Template{
@@ -84,22 +86,32 @@ func HandleTemplateSelection(opts HandleTemplateSelectionOpts) (template *Templa
 			templateInstance.LastUpdatedAt = t.LastUpdatedAt
 		}
 		templateMap[t.Id] = templateInstance
-		if t.Name == opts.UserInput {
+		if t.Name == opts.UserInput || t.Id == opts.UserInput {
 			isTemplateNameValid = true
 			template = &templateInstance
+			matchedTemplates = append(matchedTemplates, templateInstance)
 			break
 		}
 	}
 	if len(templates.Data) == 0 {
 		return nil, controller.ErrorNotFound
 	}
-	if !isTemplateNameValid {
+	if len(matchedTemplates) >= 2 {
+		isConflictingTemplateReference = true
+	}
+	if !isTemplateNameValid || isConflictingTemplateReference {
 		sort.Slice(filterItems, func(i, j int) bool {
 			return filterItems[i].Label < filterItems[j].Label
 		})
 		promptTitle := "💬 " + opts.Prompt
-		if promptTitle == "" {
+		if opts.Prompt == "" {
 			promptTitle = "💬 Which template will it be?"
+		}
+		if isConflictingTemplateReference {
+			ShowAlert(ShowAlertOpts{
+				Title:   "OOPS",
+				Message: fmt.Sprintf("It looks like we have conflicting template name '%s', we'll need you to select the exact intended template", opts.UserInput),
+			})
 		}
 		templateFiltering := CreateFilter(FilterOpts{
 			Items:              filterItems,
@@ -111,7 +123,7 @@ func HandleTemplateSelection(opts HandleTemplateSelectionOpts) (template *Templa
 			return nil, fmt.Errorf("failed to get user input: %w", err)
 		}
 		if templateFiltering.GetExitCode() == PromptCancelled {
-			return nil, errors.New("user cancelled")
+			return nil, ErrorUserCancelled
 		}
 		selectedTemplate := templateFiltering.GetSelectedItem()
 		templateValues := strings.Split(selectedTemplate.Value, ":")

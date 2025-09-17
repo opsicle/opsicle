@@ -1,18 +1,13 @@
 package cli
 
 import (
-	"errors"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/term"
 )
 
-var (
-	ErrorUserCancelled = errors.New("user_cancelled")
-)
-
-type ShowConfirmationOpts struct {
+type ShowAlertOpts struct {
 	ColorForeground AnsiColor
 	ColorAccent     AnsiColor
 
@@ -25,7 +20,7 @@ type ShowConfirmationOpts struct {
 	IsConfirmDefault bool
 }
 
-func ShowConfirmation(opts ShowConfirmationOpts) error {
+func ShowAlert(opts ShowAlertOpts) error {
 	var height, width int
 	if !opts.IsFullScreen {
 		width, height, _ = term.GetSize(int(os.Stdout.Fd()))
@@ -35,15 +30,11 @@ func ShowConfirmation(opts ShowConfirmationOpts) error {
 	}
 	accentColor := opts.ColorAccent
 	if accentColor == "" {
-		accentColor = AnsiBlue
+		accentColor = AnsiOrange
 	}
 	foregroundColor := opts.ColorForeground
 	if foregroundColor == "" {
 		foregroundColor = AnsiWhite
-	}
-	cancelLabel := opts.CancelLabel
-	if cancelLabel == "" {
-		cancelLabel = "Cancel"
 	}
 	confirmLabel := opts.ConfirmLabel
 	if confirmLabel == "" {
@@ -54,7 +45,6 @@ func ShowConfirmation(opts ShowConfirmationOpts) error {
 		initialCursorPosition = 0
 	}
 	model := boxModel{
-		CancelLabel:     cancelLabel,
 		Color:           accentColor,
 		ConfirmLabel:    confirmLabel,
 		ForegroundColor: foregroundColor,
@@ -63,6 +53,7 @@ func ShowConfirmation(opts ShowConfirmationOpts) error {
 		Message:         opts.Message,
 		Title:           opts.Title,
 		Width:           width,
+		OnlyOk:          true,
 
 		cursor: initialCursorPosition,
 	}
@@ -79,16 +70,4 @@ func ShowConfirmation(opts ShowConfirmationOpts) error {
 		return ErrorUserCancelled
 	}
 	return nil
-}
-
-func ShowWarningWithConfirmation(message string, isFullScreen bool) error {
-	return ShowConfirmation(ShowConfirmationOpts{
-		ColorAccent:     AnsiRed,
-		ColorForeground: AnsiWhite,
-		Title:           "🔴🔴🔴 WARNING 🔴🔴🔴",
-		Message:         message,
-		IsFullScreen:    isFullScreen,
-		ConfirmLabel:    "OK",
-		CancelLabel:     "Cancel",
-	})
 }
