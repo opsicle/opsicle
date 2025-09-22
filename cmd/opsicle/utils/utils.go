@@ -6,6 +6,7 @@ import (
 	"opsicle/cmd/opsicle/utils/get"
 	"opsicle/cmd/opsicle/utils/print"
 	"opsicle/cmd/opsicle/utils/send"
+	"opsicle/cmd/opsicle/utils/show"
 	"opsicle/cmd/opsicle/utils/start"
 
 	"github.com/spf13/cobra"
@@ -17,6 +18,7 @@ func init() {
 	Command.AddCommand(get.Command)
 	Command.AddCommand(print.Command)
 	Command.AddCommand(send.Command)
+	Command.AddCommand(show.Command)
 	Command.AddCommand(start.Command)
 }
 

@@ -9,7 +9,6 @@ import (
 	"opsicle/pkg/controller"
 	"os"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
@@ -63,7 +62,7 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to get absolute path of file: %w", err)
 		}
-		logrus.Debugf("loading automation template from path[%s]", absolutePathToAutomationTemplate)
+		fmt.Printf("⏳ Loading template from path[%s]\n", absolutePathToAutomationTemplate)
 		automationTemplateData, err := os.ReadFile(absolutePathToAutomationTemplate)
 		if err != nil {
 			return fmt.Errorf("failed to load automation template from path[%s]: %w", absolutePathToAutomationTemplate, err)
@@ -84,6 +83,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
+		fmt.Printf("⏳ Submitting template with name[%s]...\n", automationTemplateInstance.GetName())
 		automationTemplate, err := client.SubmitTemplateV1(controller.SubmitTemplateV1Input{
 			Data: automationTemplateData,
 		})

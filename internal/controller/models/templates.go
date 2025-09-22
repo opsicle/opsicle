@@ -35,6 +35,13 @@ type TemplateVersion struct {
 	CreatedBy            User
 }
 
+func (t *Template) assertVersion() error {
+	if t.Version == nil {
+		return fmt.Errorf("%w: missing version", ErrorVersionRequired)
+	}
+	return nil
+}
+
 func (t *Template) validate() error {
 	errs := []error{}
 	if t.Id == nil {
@@ -103,6 +110,10 @@ func (t *Template) GetId() string {
 
 func (t *Template) GetName() string {
 	return *t.Name
+}
+
+func (t *Template) GetVersion() int64 {
+	return *t.Version
 }
 
 type InviteTemplateUserV1Opts struct {
@@ -371,9 +382,10 @@ type SubmitTemplateV1Opts struct {
 }
 
 func SubmitTemplateV1(opts SubmitTemplateV1Opts) (*Template, error) {
+	templateName := opts.Template.GetName()
 	automationTemplate, err := GetTemplateV1(GetTemplateV1Opts{
 		Db:           opts.Db,
-		TemplateName: opts.Template.GetName(),
+		TemplateName: &templateName,
 		UserId:       opts.UserId,
 	})
 	if err != nil {

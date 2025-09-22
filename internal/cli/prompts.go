@@ -18,9 +18,10 @@ var (
 )
 
 type PromptOpts struct {
-	Title   string
-	Buttons []PromptButton
-	Inputs  []PromptInput
+	Title                string
+	Buttons              []PromptButton
+	Inputs               []PromptInput
+	IsDescriptionEnabled bool
 }
 
 func CreatePrompt(opts PromptOpts) *PromptModel {
@@ -31,6 +32,7 @@ func CreatePrompt(opts PromptOpts) *PromptModel {
 		inputIndex:        map[string]int{},
 		inputReverseIndex: map[int]string{},
 		outputs:           map[string]string{},
+		showDescriptions:  opts.IsDescriptionEnabled,
 	}
 	if opts.Title != "" {
 		m.title = &opts.Title
@@ -76,6 +78,7 @@ func CreatePrompt(opts PromptOpts) *PromptModel {
 			t.TextStyle = focusedStyle
 		}
 		m.inputPrompts[i].Render(&t)
+		t.PlaceholderStyle = lipgloss.NewStyle().Faint(true)
 		m.inputs[i] = t
 	}
 
@@ -90,8 +93,9 @@ const (
 )
 
 type PromptModel struct {
-	cursorMode cursor.Mode
-	focusIndex int
+	cursorMode       cursor.Mode
+	focusIndex       int
+	showDescriptions bool
 
 	buttons           []PromptButton
 	inputs            []textinput.Model
@@ -142,6 +146,9 @@ func (m *PromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// fmt.Printf("focusIndex[%v], len(m.inputs)[%v]\n", m.focusIndex, len(m.inputs))
 				m.buttons[m.focusIndex-len(m.inputs)].Handle(m)
 				// fmt.Printf("exit code: %v\n", m.exitCode)
+				for i, input := range m.inputs {
+					m.inputPrompts[i].Value = input.Value()
+				}
 				m.isQuitting = true
 				return m, tea.Quit
 			}
@@ -205,7 +212,7 @@ func (m PromptModel) View() string {
 	var b strings.Builder
 
 	if m.title != nil {
-		fmt.Fprintf(&b, "%s\n\n", *m.title)
+		fmt.Fprintf(&b, "📝 %s\n\n", *m.title)
 	}
 
 	if len(m.inputs) > 0 {
@@ -217,8 +224,19 @@ func (m PromptModel) View() string {
 		}
 
 		if !m.isQuitting {
+			if m.showDescriptions {
+				suggestion := "No field selected"
+				if m.focusIndex < len(m.inputs) {
+					if m.inputPrompts[m.focusIndex].GetDescription() != "" {
+						suggestion = m.inputPrompts[m.focusIndex].GetDescription()
+					}
+				}
+				fmt.Fprintf(&b, "\n\n💬: %s\n", lipgloss.NewStyle().Faint(true).Render(suggestion))
+			} else {
+				fmt.Fprintf(&b, "\n")
+			}
 			if len(m.buttons) > 0 {
-				fmt.Fprintf(&b, "\n\n")
+				fmt.Fprintf(&b, "\n")
 				for i := range m.buttons {
 					fmt.Fprintf(&b, "%s\t", m.buttons[i].Render(m.focusIndex == len(m.inputs)+i))
 				}
@@ -274,10 +292,13 @@ const (
 )
 
 type PromptInput struct {
-	Id          string
-	Type        PromptInputType
-	Placeholder string
-	Value       any
+	Id           string
+	Label        string
+	Type         PromptInputType
+	Placeholder  string
+	Description  string
+	Value        any
+	DefaultValue any
 }
 
 func (pi *PromptInput) Render(t *textinput.Model) {
@@ -286,11 +307,24 @@ func (pi *PromptInput) Render(t *textinput.Model) {
 		fallthrough
 	case PromptString:
 		t.CharLimit = 256
+		if pi.Label != "" {
+			t.Prompt = pi.Label + ": "
+		}
 		t.Placeholder = pi.Placeholder
+		if pi.DefaultValue != nil {
+			t.SetValue(fmt.Sprintf("%v", pi.DefaultValue))
+		}
 	case PromptPassword:
 		t.CharLimit = 256
+		if pi.Label != "" {
+			t.Prompt = pi.Label + ": "
+		}
 		t.Placeholder = pi.Placeholder
 		t.EchoMode = textinput.EchoPassword
 		t.EchoCharacter = '*'
 	}
+}
+
+func (pi *PromptInput) GetDescription() string {
+	return pi.Description
 }

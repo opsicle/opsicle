@@ -10,6 +10,7 @@ var (
 	ErrorGeneric                 = errors.New("generic_error")
 	ErrorInvalidCredentials      = errors.New("invalid_credentials")
 	ErrorInvalidInput            = errors.New("invalid_input")
+	ErrorInvalidTemplate         = errors.New("invalid_template")
 	ErrorInvalidVerificationCode = errors.New("invalid_verification_code")
 	ErrorInvitationExists        = errors.New("invitation_exists")
 	ErrorInvitationInvalid       = errors.New("invitation_invalid")

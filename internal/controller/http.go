@@ -106,6 +106,7 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 		ServiceLogs: opts.ServiceLogs,
 	}
 
+	registerAutomationRoutes(apiOpts)
 	registerAutomationTemplatesRoutes(apiOpts)
 	registerOrgRoutes(apiOpts)
 	registerSessionRoutes(apiOpts)

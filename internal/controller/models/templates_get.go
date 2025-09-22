@@ -1,18 +1,30 @@
 package models
 
-import "database/sql"
+import (
+	"database/sql"
+	"fmt"
+)
 
 type GetTemplateV1Opts struct {
 	Db           *sql.DB
-	TemplateName string
+	TemplateId   *string
+	TemplateName *string
 	UserId       string
 }
 
 func GetTemplateV1(opts GetTemplateV1Opts) (*Template, error) {
+	fieldSelector := "at.id"
+	selectorValue := ""
+	if opts.TemplateName != nil {
+		fieldSelector = "at.name"
+		selectorValue = *opts.TemplateName
+	} else if opts.TemplateId != nil {
+		selectorValue = *opts.TemplateId
+	}
 	output := Template{}
 	if err := executeMysqlSelect(mysqlQueryInput{
 		Db: opts.Db,
-		Stmt: `
+		Stmt: fmt.Sprintf(`
 		  SELECT 
 				at.id,
 				at.name,
@@ -24,12 +36,12 @@ func GetTemplateV1(opts GetTemplateV1Opts) (*Template, error) {
 				JOIN automation_template_users atu ON atu.automation_template_id = at.id
 			WHERE
 				atu.user_id = ?
-				AND at.name = ?
+				AND %s = ?
 			ORDER BY atv.version DESC
-		`,
+		`, fieldSelector),
 		Args: []any{
 			opts.UserId,
-			opts.TemplateName,
+			selectorValue,
 		},
 		FnSource: "models.GetTemplateV1",
 		ProcessRow: func(r *sql.Row) error {

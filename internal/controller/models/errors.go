@@ -23,6 +23,7 @@ var (
 	ErrorUserDeleted                     = errors.New("user_deleted")
 	ErrorUserDisabled                    = errors.New("user_disabled")
 	ErrorUserEmailNotVerified            = errors.New("email_not_verified")
+	ErrorVersionRequired                 = errors.New("version_required")
 
 	ErrorInvalidInput = errors.New("invalid_input")
 

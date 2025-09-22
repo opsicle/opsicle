@@ -15,6 +15,8 @@ const (
 	CanView
 )
 
+// canUserV1 is the base function for the series of convenience functions
+// that look like `CanUser*V1`
 func (t *Template) canUserV1(opts DatabaseConnection, userId string, actions ...TemplateUserPerm) (bool, error) {
 	if t.Id == nil {
 		return false, fmt.Errorf("%w: template id not specified", ErrorInvalidInput)
@@ -44,14 +46,40 @@ func (t *Template) canUserV1(opts DatabaseConnection, userId string, actions ...
 	return output, nil
 }
 
+// CanUserDeleteV1 returns truthy if a user identified by `userId`
+// is allowed to delete the template. An error is returned if the
+// `Template` instance is invalid or if the database operation failed`
 func (t *Template) CanUserDeleteV1(opts DatabaseConnection, userId string) (bool, error) {
 	return t.canUserV1(opts, userId, CanDelete)
 }
 
+// CanUserExecuteV1 returns truthy if a user identified by `userId`
+// is allowed to create an automation based on the template. An
+// error is returned if the `Template` instance is invalid or if
+// the database operation failed`
+func (t *Template) CanUserExecuteV1(opts DatabaseConnection, userId string) (bool, error) {
+	return t.canUserV1(opts, userId, CanExecute)
+}
+
+// CanUserInviteV1 returns truthy if a user identified by `userId`
+// is allowed to invite another user to collaborate on the template.
+// An error is returned if the `Template` instance is invalid or if
+// the database operation failed`
 func (t *Template) CanUserInviteV1(opts DatabaseConnection, userId string) (bool, error) {
 	return t.canUserV1(opts, userId, CanInvite)
 }
 
+// CanUserUpdateV1 returns truthy if a user identified by `userId`
+// is allowed to update the template. An error is returned if the
+// `Template` instance is invalid or if the database operation failed`
 func (t *Template) CanUserUpdateV1(opts DatabaseConnection, userId string) (bool, error) {
 	return t.canUserV1(opts, userId, CanUpdate)
+}
+
+// CanUserViewV1 returns truthy if a user identified by `userId`
+// is allowed to view details about the template. An error is
+// returned if the `Template` instance is invalid or if the
+// database operation failed`
+func (t *Template) CanUserViewV1(opts DatabaseConnection, userId string) (bool, error) {
+	return t.canUserV1(opts, userId, CanView)
 }

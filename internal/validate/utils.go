@@ -22,6 +22,8 @@ var (
 	ErrorPrefixedWithNonUnicodeAlnum   = errors.New("cannot_start_with_non_unicode_alphanumeric")
 	ErrorStringTooShort                = errors.New("string_too_short")
 	ErrorStringTooLong                 = errors.New("string_too_long")
+
+	ErrorInvalidUuid = errors.New("invalid_uuid")
 )
 
 func hasDigit() StringRule {

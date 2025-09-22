@@ -42,6 +42,8 @@ type Template struct {
 	LastUpdatedByEmail *string
 }
 
+// HandleTemplateSelection is a convenience function that handles the
+// selection of a template and returns the selected template
 func HandleTemplateSelection(opts HandleTemplateSelectionOpts) (template *Template, err error) {
 	template = &Template{}
 	var logs chan<- common.ServiceLog

@@ -155,18 +155,27 @@ CREATE TABLE IF NOT EXISTS `automation_template_user_invitations` (
     UNIQUE KEY `uk_automation_template_user_invitations_email_org` (`acceptor_email`, `automation_template_id`),
     UNIQUE KEY `uk_automation_template_user_invitations_user_org` (`acceptor_id`, `automation_template_id`)
 );
-CREATE TABLE IF NOT EXISTS `automation_runs` (
+CREATE TABLE IF NOT EXISTS `automations` (
     id VARCHAR(36) PRIMARY KEY,
     template_id VARCHAR(36),
-    org_id VARCHAR(36) NOT NULL,
+    template_content TEXT,
+    template_version BIGINT,
+    org_id VARCHAR(36),
     triggered_by VARCHAR(36),
-    input JSON,
+    triggered_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    triggerer_comment TEXT,
+    FOREIGN KEY (template_id) REFERENCES `automation_templates`(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (triggered_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE TABLE IF NOT EXISTS `automation_runs` (
+    automation_id VARCHAR(36) NOT NULL,
+    input_vars JSON,
     last_known_status VARCHAR(20),
     logs TEXT,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (template_id) REFERENCES `automation_templates`(id) ON DELETE SET NULL ON UPDATE CASCADE,
-    FOREIGN KEY (org_id) REFERENCES `orgs`(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (triggered_by) REFERENCES `users`(id) ON DELETE SET NULL ON UPDATE CASCADE
+    last_updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (automation_id) REFERENCES `automations`(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE TABLE IF NOT EXISTS `groups_users` (
     group_id VARCHAR(36) NOT NULL,

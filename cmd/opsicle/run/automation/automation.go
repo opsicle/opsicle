@@ -9,8 +9,10 @@ import (
 	"opsicle/internal/common"
 	"opsicle/internal/worker"
 	"opsicle/pkg/controller"
+	"strconv"
 	"sync"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -70,11 +72,14 @@ var Command = &cobra.Command{
 			},
 			Id: methodId,
 		})
+		if err != nil {
+			return fmt.Errorf("failed to create controller client: %w", err)
+		}
 
-		inputTemplateName := viper.GetString("template-id")
+		inputTemplateReference := viper.GetString("template-id")
 		templateInstance, err := cli.HandleTemplateSelection(cli.HandleTemplateSelectionOpts{
 			Client:    client,
-			UserInput: inputTemplateName,
+			UserInput: inputTemplateReference,
 			// ServiceLog: servicesLogs,
 		})
 		if err != nil {
@@ -84,22 +89,104 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to select a template: %w", err)
 		}
 
-		o, _ := json.MarshalIndent(templateInstance, "", "  ")
-		fmt.Println(string(o))
-
 		// 1. trigger the POST /api/v1/automation endpoint
 
-		// 2. a) endpoint returns a ${PENDING_AUTOMATION_ID} + list of variables and types
+		automationOutput, err := client.CreateAutomationV1(controller.CreateAutomationV1Input{
+			TemplateId: templateInstance.Id,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to trigger automation: %w", err)
+		}
 
-		// 2. a) 1) for each variable, ask user for it
+		pendingAutomationId := automationOutput.Data.AutomationId
+		logrus.Debugf("received pending automation with id '%s'", pendingAutomationId)
+		o, _ := json.MarshalIndent(automationOutput.Data, "", "  ")
+		logrus.Debugf("received pending automation data:\n%s\n", string(o))
 
-		// 2. a) 2) run validations based on the type
+		if automationOutput.Data.VariableMap != nil { // 2. a) endpoint returns a ${PENDING_AUTOMATION_ID} + list of variables and types
+			promptInputs := []cli.PromptInput{}
+			variableMap := automationOutput.Data.VariableMap
+			for id, variable := range *variableMap {
+				var defaultValue *string
+				if variable.Default != nil {
+					val := fmt.Sprintf("%v", variable.Default)
+					defaultValue = &val
+				}
+				promptType := cli.PromptString
+				switch variable.Type {
+				case "bool":
+					fallthrough
+				case "float":
+					fallthrough
+				case "string":
+					fallthrough
+				case "number":
+					promptType = cli.PromptString
+				}
+				input := cli.PromptInput{
+					Id:          id,
+					Label:       variable.Id,
+					Placeholder: variable.Label,
+					Description: variable.Description,
+					Type:        promptType,
+				}
+				if defaultValue != nil {
+					input.DefaultValue = *defaultValue
+				}
+				promptInputs = append(promptInputs, input)
+			}
+		getVariables:
+			variableInput := cli.CreatePrompt(cli.PromptOpts{
+				Title:  fmt.Sprintf("Variables for template[%s]", automationOutput.Data.TemplateName),
+				Inputs: promptInputs,
+				Buttons: []cli.PromptButton{
+					{
+						Label: "Submit",
+						Type:  cli.PromptButtonSubmit,
+					},
+					{
+						Label: "Cancel / Ctrl + C",
+						Type:  cli.PromptButtonCancel,
+					},
+				},
+				IsDescriptionEnabled: true,
+			})
+			variablePrompt := tea.NewProgram(variableInput)
+			if _, err := variablePrompt.Run(); err != nil {
+				return fmt.Errorf("failed to get user input: %w", err)
+			}
+			if variableInput.GetExitCode() == cli.PromptCancelled {
+				fmt.Println("💬 Alrights, tell me again if you want to add a user")
+				return errors.New("user cancelled action")
+			}
+			isValid := false
+			for i, promptInput := range promptInputs {
+				currentValue := variableInput.GetValue(promptInput.Id)
+				vm := *variableMap
+				switch vm[promptInput.Id].Type {
+				case "bool":
+					if _, err := strconv.ParseBool(currentValue); err != nil {
+						promptInputs[i].DefaultValue = currentValue
+					}
+				case "string":
 
-		// 2. a) 3) trigger POST /api/v1/automation/${PENDING_AUTOMATION_ID} with variables
+				}
 
-		// 2. b) 1) endpoint returns a ${PENDING_AUTOMATION_ID} and no variables
+				promptInputs[i].Value = currentValue
+			}
+			if !isValid {
+				goto getVariables
+			}
 
-		// 2. b) 2) trigger POST /api/v1/automation/${PENDING_AUTOMATION_ID}
+			// 2. a) 1) for each variable, ask user for it
+
+			// 2. a) 2) run validations based on the type
+
+			// 2. a) 3) trigger POST /api/v1/automation/${PENDING_AUTOMATION_ID} with variables
+		} else { // 2. b) 1) endpoint returns a ${PENDING_AUTOMATION_ID} and no variables
+
+			// 2. b) 2) trigger POST /api/v1/automation/${PENDING_AUTOMATION_ID}
+		}
 
 		// 3. display "successfully triggered message" to user along with instructions
 		//    on how to view the status of the automation

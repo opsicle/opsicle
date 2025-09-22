@@ -1,0 +1,87 @@
+apiVersion: v1
+type: AutomationTemplate
+metadata:
+  name: vars
+  labels:
+    opsicle.io/description: "this is a template resource"
+spec:
+  approvalPolicy:
+    policyRef: tg-one
+  metadata:
+    displayName: Basic Automation
+    owners:
+    - name: Bjarne
+      email: stroustrup@opsicle.io
+    - name: Dennis
+      email: ritchie@opsicle.io
+  template:
+    volumeMounts:
+    - host: ./tmp
+      container: /tmp
+    phases:
+    - name: initialisation
+      image: alpine:latest
+      commands:
+        - echo "initialisation"
+    - name: information-gathering
+      image: alpine:latest
+      commands:
+        - nslookup google.com
+    - name: execution
+      image: alpine:latest
+      commands:
+        - mkdir -p /tmp
+        - wget -qO - google.com > /tmp/google.com.txt
+    - name: clean-up
+      image: alpine:latest
+      commands:
+        - cat /tmp/google.com.txt
+        - echo "cleanup done"
+  variables:
+    - id: string-w-default-value
+      default: "string_w_default_value"
+      description: a string w a default value
+      label: string w default value
+      type: string
+      isRequired: true
+    - id: string-wo-default-value
+      description: a string w/o a default value
+      label: string w/o default value
+      type: string
+      isRequired: true
+
+    - id: bool-w-default-value
+      default: true
+      description: a bool w a default value
+      label: bool w default value
+      type: bool
+      isRequired: true
+    - id: bool-wo-default-value
+      description: a bool w/o a default value
+      label: bool w/o default value
+      type: bool
+      isRequired: true
+
+    - id: number-w-default-value
+      default: 3
+      description: a number w a default value
+      label: number w default value
+      type: number
+      isRequired: true
+    - id: number-wo-default-value
+      description: a number w/o a default value
+      label: number w/o default value
+      type: number
+      isRequired: true
+    
+    - id: float-w-default-value
+      default: 3.142
+      description: a float w a default value
+      label: float w default value
+      type: float
+      isRequired: true
+    - id: float-wo-default-value
+      description: a float wo a default value
+      label: float w/o default value
+      type: float
+      isRequired: true

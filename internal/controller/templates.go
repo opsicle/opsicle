@@ -121,7 +121,7 @@ func handleDeleteTemplateV1(w http.ResponseWriter, r *http.Request) {
 	template := models.Template{Id: &automationTemplateId}
 	isUserAllowedToDoThis, err := template.CanUserDeleteV1(models.DatabaseConnection{Db: db}, session.UserId)
 	if err != nil {
-		log(common.LogLevelError, fmt.Sprintf("failed to load user[%s] of template[%s]: %w", session.UserId, template.GetId(), err))
+		log(common.LogLevelError, fmt.Sprintf("failed to load user[%s] of template[%s]: %s", session.UserId, template.GetId(), err))
 		if errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusForbidden, "not found", ErrorInsufficientPermissions)
 			return
