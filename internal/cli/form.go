@@ -2,164 +2,147 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/sirupsen/logrus"
-)
-
-func getFormButtons() FormButtons {
-	return FormButtons{
-		{
-			Label: "Submit",
-			Type:  FormButtonSubmit,
-		},
-		{
-			Label: "Cancel",
-			Type:  FormButtonCancel,
-		},
-	}
-}
-
-const (
-	FormFieldBoolean = "boolean"
-	FormFieldFloat   = "float"
-	FormFieldInteger = "integer"
-	FormFieldString  = "string"
-
-	FormButtonCancel FormButtonType = "cancel"
-	FormButtonSubmit FormButtonType = "submit"
 )
 
 type FormOpts struct {
+	// Description is an optional description to add to the form
+	// which will be displayed below the title
 	Description string
-	Fields      FormFields
-	Title       string
+
+	// Fields is a slice of `FormField` instances that will be
+	// displayed as fields for a user to input data into
+	Fields FormFields
+
+	// InitialFocus is an optional configuration that when set,
+	// sets the first focused item
+	InitialFocus int
+
+	// Title is the title of the form to be displayed at the top
+	// of the form
+	Title string
 }
 
 func CreateForm(opts FormOpts) *FormModel {
-	logrus.Infof("createform started")
-	var inputs FormFields
-	for i, field := range opts.Fields {
-		inputModel := textinput.New()
-		inputModel.Width = 64
-		if i == 0 {
-			inputModel.Focus()
-		}
-		if field.DefaultValue != nil {
-			inputModel.SetValue(fmt.Sprintf("%v", field.DefaultValue))
-			switch field.Type {
-			case FormFieldBoolean:
-				inputModel.Validate = func(s string) error {
-					if field.IsRequired && s == "" {
-						return fmt.Errorf("this field is required")
-					}
-					val := strings.ToLower(s)
-					switch val {
-					case "1", "true", "0", "false":
-						return nil
-					}
-					return fmt.Errorf("this field should be a boolean")
-				}
-			case FormFieldInteger:
-				inputModel.Validate = func(s string) error {
-					if field.IsRequired && s == "" {
-						return fmt.Errorf("this field is required")
-					} else if _, err := strconv.Atoi(s); err != nil {
-						return fmt.Errorf("this field should be an integer: %w", err)
-					}
-					return nil
-				}
-			case FormFieldFloat:
-				inputModel.Validate = func(s string) error {
-					if field.IsRequired && s == "" {
-						return fmt.Errorf("this field is required")
-					} else if _, err := strconv.ParseFloat(s, 64); err != nil {
-						return fmt.Errorf("this field should be a floating point number: %w", err)
-					}
-					return nil
-				}
-			case FormFieldString:
-				fallthrough
-			default:
-				inputModel.Validate = func(s string) error {
-					if field.IsRequired && s == "" {
-						return fmt.Errorf("this field is required")
-					}
-					return nil
-				}
-			}
-		}
-		inputModel.PlaceholderStyle = lipgloss.NewStyle().Faint(true)
-		inputs = append(inputs, FormField{
-			Id:           field.Id,
-			Description:  field.Description,
-			Label:        field.Label,
-			DefaultValue: field.DefaultValue,
-			Value:        field.Value,
-			Model:        inputModel,
-		})
-	}
-	return &FormModel{
+
+	// initialise the form model
+
+	initWarnings := []error{}
+	formModel := &FormModel{
 		description: opts.Description,
-		inputs:      inputs,
 		title:       opts.Title,
 		buttons:     getFormButtons(),
 	}
+
+	// process the form fields
+
+	var inputs FormFields
+	fieldIds := map[string]struct{}{}
+	for _, field := range opts.Fields {
+		if _, ok := fieldIds[field.Id]; ok {
+			initWarnings = append(initWarnings, fmt.Errorf("id '%s' is duplicated", field.Id))
+		}
+		inputModel := textinput.New()
+		inputModel.Width = 64
+		if field.DefaultValue != nil {
+			inputModel.SetValue(fmt.Sprintf("%v", field.DefaultValue))
+		}
+		var validator textinput.ValidateFunc = nil
+		switch field.Type {
+		case FormFieldBoolean:
+			validator = getBooleanValidator(formValidatorOpts{IsRequired: true})
+		case FormFieldInteger:
+			validator = getIntegerValidator(formValidatorOpts{IsRequired: true})
+		case FormFieldFloat:
+			validator = getFloatValidator(formValidatorOpts{IsRequired: true})
+		case FormFieldEmail:
+			validator = getEmailValidator(formValidatorOpts{IsRequired: true})
+		case FormFieldSecret:
+			inputModel.EchoMode = textinput.EchoPassword
+			inputModel.EchoCharacter = '*'
+			fallthrough
+		case FormFieldString:
+			fallthrough
+		default:
+			validator = getStringValidator(formValidatorOpts{IsRequired: true})
+		}
+		inputModel.Validate = validator
+		inputModel.PlaceholderStyle = formStylePlaceholder
+		inputs = append(inputs, FormField{
+			DefaultValue: field.DefaultValue,
+			Description:  field.Description,
+			Id:           field.Id,
+			IsRequired:   field.IsRequired,
+			Model:        inputModel,
+			Label:        field.Label,
+			Type:         field.Type,
+		})
+	}
+	formModel.inputs = inputs
+
+	// set the initial focused item
+
+	initialFocus := 0
+	if opts.InitialFocus < len(inputs) {
+		initialFocus = opts.InitialFocus
+	} else if opts.InitialFocus >= len(inputs) {
+		initWarnings = append(initWarnings, fmt.Errorf("initial focus of %v is greater than the number of fields", opts.InitialFocus))
+	}
+	inputs[initialFocus].Focus()
+	formModel.focused = initialFocus
+
+	// insert any warnings
+
+	if len(initWarnings) > 0 {
+		formModel.initWarnings = errors.Join(initWarnings...)
+	}
+
+	return formModel
 }
 
 type FormModel struct {
-	buttons     []FormButton
-	description string
-	err         error
-	exitCode    error
-	focused     int
-	inputs      []FormField
-	isExitting  bool
-	title       string
+	buttons      []FormButton
+	description  string
+	err          error
+	errTriggered time.Time
+	initWarnings error
+	exitCode     error
+	focused      int
+	inputs       []FormField
+	isExitting   bool
+	title        string
 }
 
-type FormButtons []FormButton
-
-type FormButton struct {
-	Label string
-	Type  FormButtonType
-}
-
-type FormButtonType string
-
-func (fb *FormButton) Render(isSelected bool) string {
-	if isSelected {
-		return focusedStyle.Render(fmt.Sprintf("[ %s ]", fb.Label))
-	}
-	return fmt.Sprintf("[ %s ]", blurredStyle.Render(fb.Label))
-}
-
-type FormFields []FormField
-
-type FormFieldType string
-
-type FormField struct {
-	Id           string
-	Label        string
-	Description  string
-	Value        any
-	DefaultValue any
-	Type         FormFieldType
-	IsRequired   bool
-	textinput.Model
-}
-
-func (m *FormModel) GetData() map[string]any {
+// GetValueMap returns a map of the field ID to it's value
+func (m *FormModel) GetValueMap() map[string]any {
 	output := map[string]any{}
 	for _, input := range m.inputs {
-		output[input.Id] = input.Value
+		switch input.Type {
+		case FormFieldBoolean:
+			val, _ := strconv.ParseBool(input.Value())
+			output[input.Id] = val
+		case FormFieldInteger:
+			val, _ := strconv.ParseInt(input.Value(), 10, 64)
+			output[input.Id] = val
+		case FormFieldFloat:
+			val, _ := strconv.ParseFloat(input.Value(), 64)
+			output[input.Id] = val
+		default:
+			output[input.Id] = input.Value()
+		}
 	}
 	return output
+}
+
+func (m *FormModel) GetInitWarnings() error {
+	return m.initWarnings
 }
 
 func (m FormModel) Init() tea.Cmd {
@@ -174,34 +157,35 @@ func (m *FormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			if m.focused < len(m.inputs) {
 				m.nextInput()
-			} else {
-				switch m.buttons[m.focused-len(m.inputs)].Type {
-				case FormButtonCancel:
-					m.isExitting = true
-					m.exitCode = ErrorUserCancelled
-					return m, tea.Quit
-				case FormButtonSubmit:
-					hasErrors := false
-					firstErrorIndex := len(m.inputs)
-					for i, input := range m.inputs {
-						if err := input.Validate(input.Model.Value()); err != nil {
-							if i < firstErrorIndex {
-								firstErrorIndex = i
-							}
-							m.inputs[i].Err = err
-							hasErrors = true
+				break
+			}
+			switch m.buttons[m.focused-len(m.inputs)].Type {
+			case FormButtonCancel:
+				m.isExitting = true
+				m.exitCode = ErrorUserCancelled
+				return m, tea.Quit
+			case FormButtonSubmit:
+				hasErrors := false
+				firstErrorIndex := len(m.inputs)
+				for i, input := range m.inputs {
+					m.inputs[i].isTouched = true
+					if err := input.Validate(input.Model.Value()); err != nil {
+						if i < firstErrorIndex {
+							firstErrorIndex = i
 						}
-						m.inputs[i].Value = input.Model.Value()
+						m.inputs[i].Err = err
+						hasErrors = true
 					}
-					if !hasErrors {
-						m.err = nil
-						m.exitCode = nil
-						m.isExitting = true
-						return m, tea.Quit
-					} else {
-						m.focused = firstErrorIndex
-						m.err = fmt.Errorf("validation errors")
-					}
+				}
+				if !hasErrors {
+					m.err = nil
+					m.exitCode = nil
+					m.isExitting = true
+					return m, tea.Quit
+				} else {
+					m.focused = firstErrorIndex
+					m.err = fmt.Errorf("validation errors")
+					m.errTriggered = time.Now()
 				}
 			}
 		case tea.KeyCtrlC, tea.KeyCtrlD, tea.KeyEsc:
@@ -211,6 +195,8 @@ func (m *FormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.prevInput()
 		case tea.KeyTab, tea.KeyCtrlN, tea.KeyDown, tea.KeyRight:
 			m.nextInput()
+		default:
+			m.inputs[m.focused].Touch()
 		}
 		for i := range m.inputs {
 			m.inputs[i].Blur()
@@ -223,6 +209,7 @@ func (m *FormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case error:
 		fmt.Printf("error: %s\n", msg)
 		m.err = msg
+		m.errTriggered = time.Now()
 		return m, nil
 	}
 
@@ -251,7 +238,7 @@ func (m *FormModel) prevInput() {
 
 func (m FormModel) View() string {
 	var message bytes.Buffer
-	fmt.Fprintf(&message, "📝 %s\n\n", lipgloss.NewStyle().Bold(true).Render(m.title))
+	fmt.Fprintf(&message, "📝 %s\n\n", formStyleTitle.Render(m.title))
 	if m.description != "" {
 		fmt.Fprintf(&message, "%s\n\n", m.description)
 	}
@@ -259,35 +246,38 @@ func (m FormModel) View() string {
 		if i == m.focused {
 			input.Focus()
 		}
-		inputDisplay := lipgloss.NewStyle().Render(input.View())
+		inputDisplay := formStyleInput.Render(input.View())
 		if m.focused == i {
-			inputDisplay = lipgloss.NewStyle().Foreground(lipgloss.Color(AnsiBlue)).Render(inputDisplay)
+			inputDisplay = formStyleInputFocused.Render(inputDisplay)
+		}
+		isRequired := ""
+		if input.IsRequired {
+			isRequired = " (*)"
 		}
 		fmt.Fprintf(
 			&message,
-			"%s: %s\n%s\n",
-			input.Id,
+			"%s%s: %s\n%s\n",
+			formStyleInputLabel.Render(fmt.Sprintf("%s [%s]", input.Label, input.Id)),
+			isRequired,
 			inputDisplay,
-			lipgloss.NewStyle().Faint(true).Render(input.Description),
+			formStyleFaded.Render(input.Description),
 		)
 
-		if input.Value != nil {
-			if input.Validate != nil {
-				input.Err = input.Validate(input.Value.(string))
-				if input.Err != nil {
-					fmt.Fprintf(&message, "%s", lipgloss.NewStyle().Foreground(lipgloss.Color(AnsiRed)).Render(fmt.Sprintf("❗️ %s\n", input.Err)))
-				}
-			}
+		if input.Validate != nil {
+			input.Err = input.Validate(input.Model.Value())
+		}
+		if input.isTouched && input.Err != nil {
+			fmt.Fprintf(&message, "%s", formStyleInputError.Render(fmt.Sprintf("❗️ %s\n", input.Err)))
 		}
 		fmt.Fprintf(&message, "\n")
 	}
 	if !m.isExitting {
 		if m.err != nil {
-			fmt.Fprintf(&message, "💡 %s\n\n", lipgloss.NewStyle().Foreground(lipgloss.Color(AnsiYellow)).Render("There are issues with the fields indicated above"))
+			fmt.Fprintf(&message, "💡 %s\n\n", formStyleError.Render("There are issues with the fields indicated above"))
 		}
 		buttons := []string{}
 		for i, button := range m.buttons {
-			buttons = append(buttons, button.Render(m.focused-len(m.inputs) == i))
+			buttons = append(buttons, button.View(m.focused-len(m.inputs) == i))
 		}
 		fmt.Fprintf(&message, "%s\n", strings.Join(buttons, "\t"))
 	}
