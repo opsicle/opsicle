@@ -20,6 +20,7 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logrus.Infof("show a form")
 		form := cli.CreateForm(cli.FormOpts{
+			Description: "This is a sample form",
 			Fields: cli.FormFields{
 				{
 					Id:           "string_with_default_value",
@@ -31,7 +32,7 @@ var Command = &cobra.Command{
 				{
 					Id:          "string_with_default_value",
 					Label:       "B",
-					Description: "this is a string field without a default value",
+					Description: "this is a string field without a default value and a really really really really really really really really really long description to verify that line breaks don't break the cursor focus",
 					Type:        cli.FormFieldString,
 					IsRequired:  true,
 				},

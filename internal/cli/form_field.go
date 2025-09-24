@@ -72,7 +72,7 @@ func (f *FormField) View() string {
 
 func (f *FormField) Update(msg tea.Msg) (textinput.Model, tea.Cmd) {
 	if !f.Focused() {
-		return f.Model, nil
+		return f.Model.Update(nil)
 	}
 	switch f.Type {
 	case FormFieldBoolean:
@@ -80,11 +80,10 @@ func (f *FormField) Update(msg tea.Msg) (textinput.Model, tea.Cmd) {
 		case tea.KeyMsg:
 			switch msg.Type {
 			case tea.KeySpace:
-				f.Touch()
 				val, _ := strconv.ParseBool(f.Model.Value())
 				newVal := strconv.FormatBool(!val)
 				f.Model.SetValue(newVal)
-				return f.Model, nil
+				return f.Model.Update(nil)
 			}
 		}
 	}

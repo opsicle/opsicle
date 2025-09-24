@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"golang.org/x/term"
 )
 
 type FormOpts struct {
@@ -28,6 +31,9 @@ type FormOpts struct {
 	// Title is the title of the form to be displayed at the top
 	// of the form
 	Title string
+
+	MaxHeight int
+	MaxWidth  int
 }
 
 func CreateForm(opts FormOpts) *FormModel {
@@ -36,16 +42,29 @@ func CreateForm(opts FormOpts) *FormModel {
 
 	initWarnings := []error{}
 	formModel := &FormModel{
-		description: opts.Description,
-		title:       opts.Title,
-		buttons:     getFormButtons(),
+		description:    opts.Description,
+		inputLineIndex: []int{},
+		title:          opts.Title,
+		buttons:        getFormButtons(),
+	}
+
+	formModel.terminalDimensions.width, formModel.terminalDimensions.height, _ = term.GetSize(int(os.Stdout.Fd()))
+	formModel.dimensions.height = formModel.terminalDimensions.height
+	formModel.dimensions.width = formModel.terminalDimensions.width
+	if opts.MaxHeight != 0 && formModel.terminalDimensions.height > opts.MaxHeight {
+		formModel.dimensions.height = opts.MaxHeight
+	}
+	if opts.MaxWidth != 0 && formModel.terminalDimensions.width > opts.MaxWidth {
+		formModel.dimensions.width = opts.MaxWidth
 	}
 
 	// process the form fields
 
 	var inputs FormFields
 	fieldIds := map[string]struct{}{}
-	for _, field := range opts.Fields {
+	currentLineIndex := 0
+	formModel.inputsRaw = opts.Fields
+	for _, field := range formModel.inputsRaw {
 		if _, ok := fieldIds[field.Id]; ok {
 			initWarnings = append(initWarnings, fmt.Errorf("id '%s' is duplicated", field.Id))
 		}
@@ -75,9 +94,12 @@ func CreateForm(opts FormOpts) *FormModel {
 		}
 		inputModel.Validate = validator
 		inputModel.PlaceholderStyle = formStylePlaceholder
+		description := wrapString(field.Description, formModel.dimensions.width)
+		formModel.inputLineIndex = append(formModel.inputLineIndex, currentLineIndex)
+		currentLineIndex += countLines(description) + 1
 		inputs = append(inputs, FormField{
 			DefaultValue: field.DefaultValue,
-			Description:  field.Description,
+			Description:  description,
 			Id:           field.Id,
 			IsRequired:   field.IsRequired,
 			Model:        inputModel,
@@ -86,6 +108,14 @@ func CreateForm(opts FormOpts) *FormModel {
 		})
 	}
 	formModel.inputs = inputs
+
+	formModel.getViewContent()
+	contentHeight := formModel.lastKnownHeight
+	if contentHeight > formModel.dimensions.height {
+		headerHeight := countLines(fmt.Sprintf("%s\n%s", formModel.getTitle(), formModel.getDescription()))
+		viewportInstance := viewport.New(formModel.dimensions.width, formModel.dimensions.height-headerHeight)
+		formModel.viewport = &viewportInstance
+	}
 
 	// set the initial focused item
 
@@ -107,17 +137,48 @@ func CreateForm(opts FormOpts) *FormModel {
 	return formModel
 }
 
+type FormModelDimensions struct {
+	height int
+	width  int
+}
+
 type FormModel struct {
-	buttons      []FormButton
-	description  string
-	err          error
-	errTriggered time.Time
-	initWarnings error
-	exitCode     error
-	focused      int
-	inputs       []FormField
-	isExitting   bool
-	title        string
+	buttons     []FormButton
+	description string
+
+	// dimensions is the most updated dimensions for this model
+	dimensions     FormModelDimensions
+	err            error
+	errTriggered   time.Time
+	initWarnings   error
+	exitCode       error
+	focused        int
+	inputLineIndex []int
+	inputs         []FormField
+	inputsRaw      []FormField
+
+	// isExitting is internally used to indicate that user has
+	// either submitted or cancelled the form
+	isExitting bool
+
+	lastKnownHeight int
+
+	// terminalDimensions contains the most updated dimensions
+	// for the terminal this model is running in
+	terminalDimensions FormModelDimensions
+
+	// userDimensions contains the dimensions intended by the
+	// user, if the `terminalDimensions` are more constrained
+	// than these dimensions, the `terminalDimensions` are used,
+	// otherwise, these will be used
+	userDimensions FormModelDimensions
+
+	// title is a bolded text displayed at the top of the form
+	title string
+
+	// viewport is a viewport that becomes non-nil when the
+	// height of the form exceeds that of
+	viewport *viewport.Model
 }
 
 // GetValueMap returns a map of the field ID to it's value
@@ -150,8 +211,14 @@ func (m FormModel) Init() tea.Cmd {
 }
 
 func (m *FormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd = make([]tea.Cmd, len(m.inputs))
+	viewportCount := 0
+	if m.viewport != nil {
+		viewportCount++
+	}
+	var cmds []tea.Cmd = make([]tea.Cmd, len(m.inputs)+viewportCount)
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.terminalDimensions.width, m.terminalDimensions.height, _ = term.GetSize(int(os.Stdout.Fd()))
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter:
@@ -191,10 +258,21 @@ func (m *FormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyCtrlD, tea.KeyEsc:
 			m.isExitting = true
 			return m, tea.Quit
-		case tea.KeyShiftTab, tea.KeyCtrlP, tea.KeyUp, tea.KeyLeft:
+		case tea.KeyLeft:
+			if m.focused < len(m.inputs) {
+				break
+			}
+			fallthrough
+		case tea.KeyShiftTab, tea.KeyCtrlP, tea.KeyUp:
 			m.prevInput()
-		case tea.KeyTab, tea.KeyCtrlN, tea.KeyDown, tea.KeyRight:
+		case tea.KeyRight:
+			if m.focused < len(m.inputs) {
+				break
+			}
+			fallthrough
+		case tea.KeyTab, tea.KeyCtrlN, tea.KeyDown:
 			m.nextInput()
+
 		default:
 			m.inputs[m.focused].Touch()
 		}
@@ -216,6 +294,22 @@ func (m *FormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	for i := range m.inputs {
 		m.inputs[i].Model, cmds[i] = m.inputs[i].Update(msg)
 	}
+
+	if m.viewport != nil {
+		m.viewport.SetContent(m.getViewContent())
+		if m.focused == 0 {
+			m.viewport.GotoTop()
+		} else if m.focused < len(m.inputs) {
+			m.viewport.SetYOffset(m.inputLineIndex[m.focused])
+		} else {
+			m.viewport.GotoBottom()
+		}
+		// issue is here, this update here is processing the down/up but not left/right
+		updatedViewport, cmd := m.viewport.Update(nil)
+		m.viewport = &updatedViewport
+		cmds = append(cmds, cmd)
+	}
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -230,17 +324,43 @@ func (m *FormModel) nextInput() {
 // prevInput focuses the previous input field
 func (m *FormModel) prevInput() {
 	m.focused--
-	// Wrap around
 	if m.focused < 0 {
 		m.focused = (len(m.inputs) + len(m.buttons) - 1)
 	}
 }
 
-func (m FormModel) View() string {
-	var message bytes.Buffer
-	fmt.Fprintf(&message, "📝 %s\n\n", formStyleTitle.Render(m.title))
+func (m *FormModel) getDescription() string {
 	if m.description != "" {
-		fmt.Fprintf(&message, "%s\n\n", m.description)
+		return fmt.Sprintf("%s\n", wrapString(m.description, m.dimensions.width))
+	}
+	return ""
+}
+
+func (m *FormModel) getHeader() string {
+	title := m.getTitle()
+	description := m.getDescription()
+	if description != "" {
+		title += "\n"
+	}
+	return title + description
+}
+
+func (m *FormModel) getTitle() string {
+	yOffset := 0
+	supposedYOffset := 0
+	if m.viewport != nil {
+		yOffset = m.viewport.YOffset
+		if m.focused < len(m.inputs) {
+			supposedYOffset = m.inputLineIndex[m.focused]
+		}
+	}
+	return fmt.Sprintf("📝 %v:%v:%v %s\n", m.focused, yOffset, supposedYOffset, wrapString(formStyleTitle.Render(m.title), m.dimensions.width))
+}
+
+func (m *FormModel) getViewContent() string {
+	var message bytes.Buffer
+	if m.viewport == nil {
+		fmt.Fprint(&message, m.getHeader()+"\n")
 	}
 	for i, input := range m.inputs {
 		if i == m.focused {
@@ -267,7 +387,7 @@ func (m FormModel) View() string {
 			input.Err = input.Validate(input.Model.Value())
 		}
 		if input.isTouched && input.Err != nil {
-			fmt.Fprintf(&message, "%s", formStyleInputError.Render(fmt.Sprintf("❗️ %s\n", input.Err)))
+			fmt.Fprintf(&message, "%s\n", formStyleInputError.Render(wrapString(fmt.Sprintf("❗️ %s", input.Err), m.dimensions.width)))
 		}
 		fmt.Fprintf(&message, "\n")
 	}
@@ -281,5 +401,15 @@ func (m FormModel) View() string {
 		}
 		fmt.Fprintf(&message, "%s\n", strings.Join(buttons, "\t"))
 	}
+	m.lastKnownHeight = countLines(message.String())
 	return message.String()
+}
+
+func (m FormModel) View() string {
+	if m.viewport != nil {
+		var header bytes.Buffer
+		fmt.Fprint(&header, m.getHeader())
+		return fmt.Sprintf("%s\n%s", header.String(), m.viewport.View())
+	}
+	return m.getViewContent()
 }
