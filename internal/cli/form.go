@@ -219,6 +219,15 @@ func (m *FormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.terminalDimensions.width, m.terminalDimensions.height, _ = term.GetSize(int(os.Stdout.Fd()))
+		currentLineIndex := 0
+		for i, input := range m.inputsRaw {
+			m.inputs[i].Description = wrapString(input.Description, m.terminalDimensions.width)
+			m.inputLineIndex[i] = currentLineIndex
+			currentLineIndex += countLines(m.inputs[i].Description) + 1
+		}
+		if m.viewport != nil {
+			m.viewport.Width = m.terminalDimensions.width
+		}
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter:
