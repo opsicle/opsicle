@@ -227,7 +227,17 @@ func (m *FormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.viewport != nil {
 			m.viewport.Width = m.terminalDimensions.width
+			if m.lastKnownHeight < m.terminalDimensions.height {
+				m.viewport = nil
+			}
+		} else {
+			if m.lastKnownHeight > m.terminalDimensions.height {
+				headerHeight := countLines(fmt.Sprintf("%s\n%s", m.getTitle(), m.getDescription()))
+				viewportInstance := viewport.New(m.dimensions.width, m.dimensions.height-headerHeight)
+				m.viewport = &viewportInstance
+			}
 		}
+
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter:
@@ -355,15 +365,7 @@ func (m *FormModel) getHeader() string {
 }
 
 func (m *FormModel) getTitle() string {
-	yOffset := 0
-	supposedYOffset := 0
-	if m.viewport != nil {
-		yOffset = m.viewport.YOffset
-		if m.focused < len(m.inputs) {
-			supposedYOffset = m.inputLineIndex[m.focused]
-		}
-	}
-	return fmt.Sprintf("📝 %v:%v:%v %s\n", m.focused, yOffset, supposedYOffset, wrapString(formStyleTitle.Render(m.title), m.dimensions.width))
+	return fmt.Sprintf("📝 %s\n", wrapString(formStyleTitle.Render(m.title), m.dimensions.width))
 }
 
 func (m *FormModel) getViewContent() string {
