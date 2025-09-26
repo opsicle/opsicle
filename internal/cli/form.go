@@ -51,11 +51,13 @@ func CreateForm(opts FormOpts) *FormModel {
 	formModel.terminalDimensions.width, formModel.terminalDimensions.height, _ = term.GetSize(int(os.Stdout.Fd()))
 	formModel.dimensions.height = formModel.terminalDimensions.height
 	formModel.dimensions.width = formModel.terminalDimensions.width
-	if opts.MaxHeight != 0 && formModel.terminalDimensions.height > opts.MaxHeight {
-		formModel.dimensions.height = opts.MaxHeight
+	formModel.userDimensions.height = opts.MaxHeight
+	formModel.userDimensions.width = opts.MaxWidth
+	if formModel.userDimensions.height != 0 && formModel.terminalDimensions.height > formModel.userDimensions.height {
+		formModel.dimensions.height = formModel.userDimensions.height
 	}
-	if opts.MaxWidth != 0 && formModel.terminalDimensions.width > opts.MaxWidth {
-		formModel.dimensions.width = opts.MaxWidth
+	if formModel.userDimensions.width != 0 && formModel.terminalDimensions.width > formModel.userDimensions.width {
+		formModel.dimensions.width = formModel.userDimensions.width
 	}
 
 	// process the form fields
@@ -68,6 +70,8 @@ func CreateForm(opts FormOpts) *FormModel {
 		if _, ok := fieldIds[field.Id]; ok {
 			initWarnings = append(initWarnings, fmt.Errorf("id '%s' is duplicated", field.Id))
 		}
+		fieldIds[field.Id] = struct{}{}
+		formModel.inputLineIndex = append(formModel.inputLineIndex, currentLineIndex)
 		inputModel := textinput.New()
 		inputModel.Width = 64
 		if field.DefaultValue != nil {
@@ -76,13 +80,13 @@ func CreateForm(opts FormOpts) *FormModel {
 		var validator textinput.ValidateFunc = nil
 		switch field.Type {
 		case FormFieldBoolean:
-			validator = getBooleanValidator(formValidatorOpts{IsRequired: true})
+			validator = getBooleanValidator(formValidatorOpts{IsRequired: field.IsRequired})
 		case FormFieldInteger:
-			validator = getIntegerValidator(formValidatorOpts{IsRequired: true})
+			validator = getIntegerValidator(formValidatorOpts{IsRequired: field.IsRequired})
 		case FormFieldFloat:
-			validator = getFloatValidator(formValidatorOpts{IsRequired: true})
+			validator = getFloatValidator(formValidatorOpts{IsRequired: field.IsRequired})
 		case FormFieldEmail:
-			validator = getEmailValidator(formValidatorOpts{IsRequired: true})
+			validator = getEmailValidator(formValidatorOpts{IsRequired: field.IsRequired})
 		case FormFieldSecret:
 			inputModel.EchoMode = textinput.EchoPassword
 			inputModel.EchoCharacter = '*'
@@ -94,18 +98,19 @@ func CreateForm(opts FormOpts) *FormModel {
 		}
 		inputModel.Validate = validator
 		inputModel.PlaceholderStyle = formStylePlaceholder
-		description := wrapString(field.Description, formModel.dimensions.width)
-		formModel.inputLineIndex = append(formModel.inputLineIndex, currentLineIndex)
-		currentLineIndex += countLines(description) + 1
-		inputs = append(inputs, FormField{
+		formField := FormField{
 			DefaultValue: field.DefaultValue,
-			Description:  description,
+			Description:  field.Description,
 			Id:           field.Id,
 			IsRequired:   field.IsRequired,
 			Model:        inputModel,
 			Label:        field.Label,
 			Type:         field.Type,
-		})
+		}
+		display := formField.getDisplay(true, formModel.dimensions.width)
+		displayHeight := countLines(display)
+		currentLineIndex += displayHeight
+		inputs = append(inputs, formField)
 	}
 	formModel.inputs = inputs
 
@@ -181,6 +186,10 @@ type FormModel struct {
 	viewport *viewport.Model
 }
 
+func (m *FormModel) GetExitCode() error {
+	return m.exitCode
+}
+
 // GetValueMap returns a map of the field ID to it's value
 func (m *FormModel) GetValueMap() map[string]any {
 	output := map[string]any{}
@@ -219,20 +228,29 @@ func (m *FormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.terminalDimensions.width, m.terminalDimensions.height, _ = term.GetSize(int(os.Stdout.Fd()))
+		m.dimensions.height = m.terminalDimensions.height
+		m.dimensions.width = m.terminalDimensions.width
+		if m.userDimensions.height != 0 && m.terminalDimensions.height > m.userDimensions.height {
+			m.dimensions.height = m.userDimensions.height
+		}
+		if m.userDimensions.width != 0 && m.terminalDimensions.width > m.userDimensions.width {
+			m.dimensions.width = m.userDimensions.width
+		}
 		currentLineIndex := 0
 		for i, input := range m.inputsRaw {
 			m.inputs[i].Description = wrapString(input.Description, m.terminalDimensions.width)
 			m.inputLineIndex[i] = currentLineIndex
-			currentLineIndex += countLines(m.inputs[i].Description) + 1
+			currentLineIndex += countLines(m.inputs[i].getDisplay(false, m.dimensions.width))
 		}
+		headerHeight := countLines(fmt.Sprintf("%s\n%s", m.getTitle(), m.getDescription()))
 		if m.viewport != nil {
 			m.viewport.Width = m.terminalDimensions.width
-			if m.lastKnownHeight < m.terminalDimensions.height {
+			m.viewport.Height = m.terminalDimensions.height - headerHeight
+			if m.lastKnownHeight < m.viewport.Height {
 				m.viewport = nil
 			}
 		} else {
 			if m.lastKnownHeight > m.terminalDimensions.height {
-				headerHeight := countLines(fmt.Sprintf("%s\n%s", m.getTitle(), m.getDescription()))
 				viewportInstance := viewport.New(m.dimensions.width, m.dimensions.height-headerHeight)
 				m.viewport = &viewportInstance
 			}
@@ -374,33 +392,13 @@ func (m *FormModel) getViewContent() string {
 		fmt.Fprint(&message, m.getHeader()+"\n")
 	}
 	for i, input := range m.inputs {
-		if i == m.focused {
+		if m.focused == i {
 			input.Focus()
 		}
-		inputDisplay := formStyleInput.Render(input.View())
-		if m.focused == i {
-			inputDisplay = formStyleInputFocused.Render(inputDisplay)
-		}
-		isRequired := ""
-		if input.IsRequired {
-			isRequired = " (*)"
-		}
-		fmt.Fprintf(
-			&message,
-			"%s%s: %s\n%s\n",
-			formStyleInputLabel.Render(fmt.Sprintf("%s [%s]", input.Label, input.Id)),
-			isRequired,
-			inputDisplay,
-			formStyleFaded.Render(input.Description),
-		)
-
 		if input.Validate != nil {
 			input.Err = input.Validate(input.Model.Value())
 		}
-		if input.isTouched && input.Err != nil {
-			fmt.Fprintf(&message, "%s\n", formStyleInputError.Render(wrapString(fmt.Sprintf("❗️ %s", input.Err), m.dimensions.width)))
-		}
-		fmt.Fprintf(&message, "\n")
+		fmt.Fprintf(&message, "%s\n", input.getDisplay(m.focused == i, m.dimensions.width))
 	}
 	if !m.isExitting {
 		if m.err != nil {
@@ -417,6 +415,9 @@ func (m *FormModel) getViewContent() string {
 }
 
 func (m FormModel) View() string {
+	if m.isExitting {
+		return "\n"
+	}
 	if m.viewport != nil {
 		var header bytes.Buffer
 		fmt.Fprint(&header, m.getHeader())

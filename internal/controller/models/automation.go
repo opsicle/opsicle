@@ -1,6 +1,7 @@
 package models
 
 import (
+	"database/sql"
 	"fmt"
 	"opsicle/internal/automations"
 	"opsicle/internal/validate"
@@ -79,4 +80,43 @@ func (a *Automation) assertId() error {
 
 func (a *Automation) GetTemplate() (*automations.Template, error) {
 	return automations.LoadAutomationTemplate(a.TemplateContent)
+}
+
+func (a *Automation) Load(opts DatabaseConnection) error {
+	if a.TriggeredBy == nil {
+		a.TriggeredBy = &User{}
+	}
+	if err := executeMysqlSelect(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			SELECT
+				id,
+				org_id,
+				template_content,
+				template_id,
+				template_version,
+				triggered_at,
+				triggered_by,
+				triggerer_comment
+				FROM automations
+					WHERE id = ?
+		`,
+		Args:     []any{*a.Id},
+		FnSource: fmt.Sprintf("models.Automation.Load[%s]", *a.Id),
+		ProcessRow: func(r *sql.Row) error {
+			return r.Scan(
+				&a.Id,
+				&a.OrgId,
+				&a.TemplateContent,
+				&a.TemplateId,
+				&a.TemplateVersion,
+				&a.TriggeredAt,
+				&a.TriggeredBy.Id,
+				&a.TriggererComment,
+			)
+		},
+	}); err != nil {
+		return err
+	}
+	return nil
 }

@@ -30,7 +30,7 @@ var Command = &cobra.Command{
 					Type:         cli.FormFieldString,
 				},
 				{
-					Id:          "string_with_default_value",
+					Id:          "string_without_default_value",
 					Label:       "B",
 					Description: "this is a string field without a default value and a really really really really really really really really really long description to verify that line breaks don't break the cursor focus",
 					Type:        cli.FormFieldString,
@@ -110,7 +110,7 @@ var Command = &cobra.Command{
 			Title: "hey",
 		})
 		if err := form.GetInitWarnings(); err != nil {
-			return fmt.Errorf("failed to create form as expected: %s", err)
+			return fmt.Errorf("failed to create form as expected: %w", err)
 		}
 		p := tea.NewProgram(form)
 		if _, err := p.Run(); err != nil {

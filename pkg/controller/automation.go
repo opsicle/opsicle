@@ -39,32 +39,14 @@ func (c Client) CreateAutomationV1(input CreateAutomationV1Input) (*CreateAutoma
 }
 
 type RunAutomationV1Output struct {
-	Data RunAutomationV1OutputData
+	Data controller.RunAutomationV1Output
 	http.Response
 }
 
-type RunAutomationV1OutputData struct {
-	AutomationId string `json:"automationId"`
-
-	// QueueNumber indicates how many items are in the queue that the
-	// automation was inserted into
-	QueueNumber int `json:"queueNumber"`
-}
-
-type RunAutomationV1Input struct {
-	AutomationId string                          `json:"-"`
-	VariableMap  RunAutomationV1InputVariableMap `json:"variableMap"`
-}
-
-type RunAutomationV1InputVariableMap map[string]RunAutomationV1InputVariable
-
-type RunAutomationV1InputVariable struct {
-	Id    string `json:"id"`
-	Value any    `json:"value"`
-}
+type RunAutomationV1Input controller.RunAutomationV1Input
 
 func (c Client) RunAutomationV1(input RunAutomationV1Input) (*RunAutomationV1Output, error) {
-	var outputData RunAutomationV1OutputData
+	var outputData controller.RunAutomationV1Output
 	outputClient, err := c.do(request{
 		Method: http.MethodPost,
 		Path:   fmt.Sprintf("/api/v1/automation/%s", input.AutomationId),

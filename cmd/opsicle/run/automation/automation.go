@@ -9,7 +9,8 @@ import (
 	"opsicle/internal/common"
 	"opsicle/internal/worker"
 	"opsicle/pkg/controller"
-	"strconv"
+	"sort"
+	"strings"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -58,11 +59,17 @@ var Command = &cobra.Command{
 			return handleLocalExecution(cmd, automationPath)
 		}
 		controllerUrl := viper.GetString("controller-url")
-		methodId := "opsicle/join/org"
+		methodId := "opsicle/run/automation"
+	enforceAuth:
 		sessionToken, err := cli.RequireAuth(controllerUrl, methodId)
 		if err != nil {
-			fmt.Println("⚠️  You must be logged-in to run this command")
-			return err
+			rootCmd := cmd.Root()
+			rootCmd.SetArgs([]string{"login"})
+			_, err := rootCmd.ExecuteC()
+			if err != nil {
+				return err
+			}
+			goto enforceAuth
 		}
 
 		client, err := controller.NewClient(controller.NewClientOpts{
@@ -104,7 +111,9 @@ var Command = &cobra.Command{
 		logrus.Debugf("received pending automation data:\n%s\n", string(o))
 
 		if automationOutput.Data.VariableMap != nil { // 2. a) endpoint returns a ${PENDING_AUTOMATION_ID} + list of variables and types
-			promptInputs := []cli.PromptInput{}
+			formFields := cli.FormFields{}
+			// 2. a) 1) for each variable, ask user for it
+			// 2. a) 2) run validations based on the type
 			variableMap := automationOutput.Data.VariableMap
 			for id, variable := range *variableMap {
 				var defaultValue *string
@@ -112,76 +121,80 @@ var Command = &cobra.Command{
 					val := fmt.Sprintf("%v", variable.Default)
 					defaultValue = &val
 				}
-				promptType := cli.PromptString
+				fieldType := cli.FormFieldString
 				switch variable.Type {
 				case "bool":
-					fallthrough
+					fieldType = cli.FormFieldBoolean
 				case "float":
-					fallthrough
+					fieldType = cli.FormFieldFloat
 				case "string":
-					fallthrough
+					fieldType = cli.FormFieldString
 				case "number":
-					promptType = cli.PromptString
+					fieldType = cli.FormFieldInteger
 				}
-				input := cli.PromptInput{
+				input := cli.FormField{
 					Id:          id,
-					Label:       variable.Id,
-					Placeholder: variable.Label,
+					Label:       variable.Label,
 					Description: variable.Description,
-					Type:        promptType,
+					Type:        fieldType,
 				}
 				if defaultValue != nil {
 					input.DefaultValue = *defaultValue
 				}
-				promptInputs = append(promptInputs, input)
+				formFields = append(formFields, input)
 			}
-		getVariables:
-			variableInput := cli.CreatePrompt(cli.PromptOpts{
-				Title:  fmt.Sprintf("Variables for template[%s]", automationOutput.Data.TemplateName),
-				Inputs: promptInputs,
-				Buttons: []cli.PromptButton{
-					{
-						Label: "Submit",
-						Type:  cli.PromptButtonSubmit,
-					},
-					{
-						Label: "Cancel / Ctrl + C",
-						Type:  cli.PromptButtonCancel,
-					},
-				},
-				IsDescriptionEnabled: true,
+			sort.Slice(formFields, func(i, j int) bool {
+				return strings.Compare(formFields[i].Label, formFields[j].Label) < 0
 			})
-			variablePrompt := tea.NewProgram(variableInput)
-			if _, err := variablePrompt.Run(); err != nil {
+			variableInputForm := cli.CreateForm(cli.FormOpts{
+				Title:       fmt.Sprintf("Executing template[%s]", automationOutput.Data.TemplateName),
+				Description: "Please enter/confirm values for the following variables",
+				Fields:      formFields,
+			})
+			if err := variableInputForm.GetInitWarnings(); err != nil {
+				return fmt.Errorf("failed to create form as expected: %w", err)
+			}
+			formProgram := tea.NewProgram(variableInputForm)
+			formOutput, err := formProgram.Run()
+			if err != nil {
 				return fmt.Errorf("failed to get user input: %w", err)
 			}
-			if variableInput.GetExitCode() == cli.PromptCancelled {
-				fmt.Println("💬 Alrights, tell me again if you want to add a user")
+			var ok bool
+			variableInputForm, ok = formOutput.(*cli.FormModel)
+			if !ok {
+				return fmt.Errorf("failed to receive a cli.FormModel")
+			}
+			if errors.Is(variableInputForm.GetExitCode(), cli.ErrorUserCancelled) {
+				fmt.Println("💬 Alrights, tell me again if you want to create an automation from this template")
 				return errors.New("user cancelled action")
 			}
-			isValid := false
-			for i, promptInput := range promptInputs {
-				currentValue := variableInput.GetValue(promptInput.Id)
-				vm := *variableMap
-				switch vm[promptInput.Id].Type {
-				case "bool":
-					if _, err := strconv.ParseBool(currentValue); err != nil {
-						promptInputs[i].DefaultValue = currentValue
-					}
-				case "string":
+			inputVariableMap := variableInputForm.GetValueMap()
+			o, _ := json.MarshalIndent(inputVariableMap, "", "  ")
+			logrus.Debugf("submitting variable map as follows:\n%s", string(o))
 
-				}
-
-				promptInputs[i].Value = currentValue
+			automationRunOutput, err := client.RunAutomationV1(controller.RunAutomationV1Input{
+				AutomationId: automationOutput.Data.AutomationId,
+				VariableMap:  inputVariableMap,
+			})
+			if err != nil {
+				cli.PrintBoxedErrorMessage(
+					fmt.Sprintf(
+						"failed to run automation[%s] based on template[%s]: %s",
+						automationOutput.Data.AutomationId,
+						automationOutput.Data.TemplateId,
+						err,
+					),
+				)
+				return fmt.Errorf("failed to run automation")
 			}
-			if !isValid {
-				goto getVariables
-			}
-
-			// 2. a) 1) for each variable, ask user for it
-
-			// 2. a) 2) run validations based on the type
-
+			cli.PrintBoxedSuccessMessage(
+				fmt.Sprintf(
+					"Successfully triggered automation[%s] (detected %v items in queue)",
+					automationOutput.Data.AutomationId,
+					automationRunOutput.Data.QueueLength,
+				),
+			)
+			return nil
 			// 2. a) 3) trigger POST /api/v1/automation/${PENDING_AUTOMATION_ID} with variables
 		} else { // 2. b) 1) endpoint returns a ${PENDING_AUTOMATION_ID} and no variables
 

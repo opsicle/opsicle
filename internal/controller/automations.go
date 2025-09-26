@@ -18,7 +18,7 @@ func registerAutomationRoutes(opts RouteRegistrationOpts) {
 	v1 := opts.Router.PathPrefix("/v1/automation").Subrouter()
 
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleCreateAutomationV1))).Methods(http.MethodPost)
-	v1.Handle("{automationId}", requiresAuth(http.HandlerFunc(handleRunAutomationV1))).Methods(http.MethodPost)
+	v1.Handle("/{automationId}", requiresAuth(http.HandlerFunc(handleRunAutomationV1))).Methods(http.MethodPost)
 }
 
 type CreateAutomationV1OutputData struct {
@@ -148,16 +148,17 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
-type handleRunAutomationV1VariableMap map[string]handleRunAutomationV1Variable
-
-type handleRunAutomationV1Variable struct {
-	Id    string
-	Value any
+type RunAutomationV1Output struct {
+	AutomationId string `json:"automationId"`
+	IsSuccessful bool   `json:"isSuccessful"`
+	QueueLength  int    `json:"queueLength`
 }
 
-type handleRunAutomationV1Input struct {
-	AutomationId string                           `json:"-"`
-	VariableMap  handleRunAutomationV1VariableMap `json:"variableMap"`
+type RunAutomationV1VariableMap map[string]any
+
+type RunAutomationV1Input struct {
+	AutomationId string                     `json:"-"`
+	VariableMap  RunAutomationV1VariableMap `json:"variableMap"`
 }
 
 func handleRunAutomationV1(w http.ResponseWriter, r *http.Request) {
@@ -172,11 +173,26 @@ func handleRunAutomationV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
 		return
 	}
-	var input handleRunAutomationV1Input
+	var input RunAutomationV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is executing automation[%s]", session.UserId, automationId))
+	o, _ := json.MarshalIndent(input.VariableMap, "", "  ")
+	fmt.Println(string(o))
 
+	// TODO(joseph): perform validation on variables
+
+	automation := models.Automation{Id: &automationId}
+	if err := automation.Load(models.DatabaseConnection{Db: db}); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve automation", ErrorInvalidInput)
+		return
+	}
+	output := RunAutomationV1Output{
+		AutomationId: automationId,
+		IsSuccessful: false,
+		QueueLength:  42069,
+	}
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"fmt"
 	"strconv"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -10,12 +12,12 @@ import (
 type FormFieldType string
 
 const (
-	FormFieldBoolean = "boolean"
-	FormFieldEmail   = "email"
-	FormFieldFloat   = "float"
-	FormFieldInteger = "integer"
-	FormFieldSecret  = "secret"
-	FormFieldString  = "string"
+	FormFieldBoolean FormFieldType = "boolean"
+	FormFieldEmail   FormFieldType = "email"
+	FormFieldFloat   FormFieldType = "float"
+	FormFieldInteger FormFieldType = "integer"
+	FormFieldSecret  FormFieldType = "secret"
+	FormFieldString  FormFieldType = "string"
 )
 
 type FormFields []FormField
@@ -41,6 +43,10 @@ type FormField struct {
 
 	// Type is the intended type of the field
 	Type FormFieldType
+
+	// IsLabelHidden indicates whether the label of the field should be
+	// hidden from the display
+	IsLabelHidden bool
 
 	// IsRequired indicates whether a field is required to be
 	// filled up, displays an error to the user when this is
@@ -92,4 +98,39 @@ func (f *FormField) Update(msg tea.Msg) (textinput.Model, tea.Cmd) {
 
 func (f *FormField) Touch() {
 	f.isTouched = true
+}
+
+func (f *FormField) getDescription(maxWidth int) string {
+	description := fmt.Sprintf("(type: %v)", f.Type)
+	if f.IsRequired {
+		description = fmt.Sprintf("%s [REQUIRED]", description)
+	}
+	description += " " + f.Description
+	return wrapString(description, maxWidth)
+}
+
+func (f *FormField) getError(maxWidth int) string {
+	return formStyleInputError.Render(wrapString(fmt.Sprintf("❗️ %s", f.Err), maxWidth))
+}
+
+func (f *FormField) getDisplay(isFocused bool, maxWidth int) string {
+	var message bytes.Buffer
+	fieldName := fmt.Sprintf("%s [%s]", f.Label, f.Id)
+	inputDisplay := formStyleInput.Render(f.View())
+	if isFocused {
+		inputDisplay = formStyleInputFocused.Render(inputDisplay)
+	}
+	description := f.getDescription(maxWidth)
+	fmt.Fprintf(
+		&message,
+		"%s: %s\n%s\n",
+		formStyleInputLabel.Render(fieldName),
+		wrapString(inputDisplay, maxWidth),
+		formStyleFaded.Render(description),
+	)
+
+	if f.isTouched && f.Err != nil {
+		fmt.Fprintf(&message, "%s\n", f.getError(maxWidth))
+	}
+	return message.String()
 }
