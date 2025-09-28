@@ -105,17 +105,20 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to trigger automation: %w", err)
 		}
 
-		pendingAutomationId := automationOutput.Data.AutomationId
+		pendingAutomation := automationOutput.Data
+		pendingAutomationId := pendingAutomation.AutomationId
+		pendingAutomationInput := automationOutput.Data.VariableMap
 		logrus.Debugf("received pending automation with id '%s'", pendingAutomationId)
 		o, _ := json.MarshalIndent(automationOutput.Data, "", "  ")
 		logrus.Debugf("received pending automation data:\n%s\n", string(o))
+		var inputVariableMap map[string]any = nil
 
-		if automationOutput.Data.VariableMap != nil { // 2. a) endpoint returns a ${PENDING_AUTOMATION_ID} + list of variables and types
+		if pendingAutomationInput != nil {
+			logrus.Debugf("pending automation has variables to be filled up, creating form...")
+
 			formFields := cli.FormFields{}
-			// 2. a) 1) for each variable, ask user for it
-			// 2. a) 2) run validations based on the type
 			variableMap := automationOutput.Data.VariableMap
-			for id, variable := range *variableMap {
+			for id, variable := range variableMap {
 				var defaultValue *string
 				if variable.Default != nil {
 					val := fmt.Sprintf("%v", variable.Default)
@@ -154,6 +157,9 @@ var Command = &cobra.Command{
 			if err := variableInputForm.GetInitWarnings(); err != nil {
 				return fmt.Errorf("failed to create form as expected: %w", err)
 			}
+
+			logrus.Debugf("executing form to get input from user")
+
 			formProgram := tea.NewProgram(variableInputForm)
 			formOutput, err := formProgram.Run()
 			if err != nil {
@@ -168,41 +174,37 @@ var Command = &cobra.Command{
 				fmt.Println("💬 Alrights, tell me again if you want to create an automation from this template")
 				return errors.New("user cancelled action")
 			}
-			inputVariableMap := variableInputForm.GetValueMap()
+			inputVariableMap = variableInputForm.GetValueMap()
 			o, _ := json.MarshalIndent(inputVariableMap, "", "  ")
 			logrus.Debugf("submitting variable map as follows:\n%s", string(o))
-
-			automationRunOutput, err := client.RunAutomationV1(controller.RunAutomationV1Input{
-				AutomationId: automationOutput.Data.AutomationId,
-				VariableMap:  inputVariableMap,
-			})
-			if err != nil {
-				cli.PrintBoxedErrorMessage(
-					fmt.Sprintf(
-						"failed to run automation[%s] based on template[%s]: %s",
-						automationOutput.Data.AutomationId,
-						automationOutput.Data.TemplateId,
-						err,
-					),
-				)
-				return fmt.Errorf("failed to run automation")
-			}
-			cli.PrintBoxedSuccessMessage(
-				fmt.Sprintf(
-					"Successfully triggered automation[%s] (detected %v items in queue)",
-					automationOutput.Data.AutomationId,
-					automationRunOutput.Data.QueueLength,
-				),
-			)
-			return nil
-			// 2. a) 3) trigger POST /api/v1/automation/${PENDING_AUTOMATION_ID} with variables
-		} else { // 2. b) 1) endpoint returns a ${PENDING_AUTOMATION_ID} and no variables
-
-			// 2. b) 2) trigger POST /api/v1/automation/${PENDING_AUTOMATION_ID}
 		}
 
-		// 3. display "successfully triggered message" to user along with instructions
+		automationRunOutput, err := client.RunAutomationV1(controller.RunAutomationV1Input{
+			AutomationId: automationOutput.Data.AutomationId,
+			VariableMap:  inputVariableMap,
+		})
+		if err != nil {
+			cli.PrintBoxedErrorMessage(
+				fmt.Sprintf(
+					"failed to run automation[%s] based on template[%s]: %s",
+					automationOutput.Data.AutomationId,
+					automationOutput.Data.TemplateId,
+					err,
+				),
+			)
+			return fmt.Errorf("failed to run automation")
+		}
+
+		// 4. display "successfully triggered message" to user along with instructions
 		//    on how to view the status of the automation
+
+		cli.PrintBoxedSuccessMessage(
+			fmt.Sprintf(
+				"Successfully triggered automation[%s] as automationRun[%s]",
+				automationOutput.Data.AutomationId,
+				automationRunOutput.Data.AutomationRunId,
+			),
+		)
 
 		return nil
 	},

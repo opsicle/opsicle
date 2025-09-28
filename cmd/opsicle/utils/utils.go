@@ -5,6 +5,7 @@ import (
 	"opsicle/cmd/opsicle/utils/create"
 	"opsicle/cmd/opsicle/utils/get"
 	"opsicle/cmd/opsicle/utils/print"
+	"opsicle/cmd/opsicle/utils/queue"
 	"opsicle/cmd/opsicle/utils/send"
 	"opsicle/cmd/opsicle/utils/show"
 	"opsicle/cmd/opsicle/utils/start"
@@ -17,6 +18,7 @@ func init() {
 	Command.AddCommand(create.Command)
 	Command.AddCommand(get.Command)
 	Command.AddCommand(print.Command)
+	Command.AddCommand(queue.Command)
 	Command.AddCommand(send.Command)
 	Command.AddCommand(show.Command)
 	Command.AddCommand(start.Command)

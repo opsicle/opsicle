@@ -105,7 +105,7 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeString,
 	},
 	{
-		Name: "nats-nkey",
+		Name: "nats-nkey-value",
 		// this default value is the development nkey, this value must be aligned
 		// to the one in `./docker-compose.yml` in the root of the repository
 		DefaultValue: "SUADZTA4VJHBCO7K75DQ3IN7KZGWHKEI26D2IYEABRN5TXXYHXLWNDYT4A",
@@ -398,17 +398,22 @@ var Command = &cobra.Command{
 
 		*/
 		logrus.Infof("establishing connection to queue...")
+		queueId := "controller"
 		nats, err := queue.InitNats(queue.InitNatsOpts{
+			Id:          queueId,
 			Addr:        viper.GetString("nats-addr"),
 			Username:    viper.GetString("nats-username"),
 			Password:    viper.GetString("nats-password"),
-			NKey:        viper.GetString("nats-nkey"),
+			NKey:        viper.GetString("nats-nkey-value"),
 			ServiceLogs: serviceLogs,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialise nats queue: %w", err)
 		}
-		logrus.Debugf("established connection to queue at %s", nats.ConnectedUrl())
+		if err := nats.Connect(); err != nil {
+			return fmt.Errorf("failed to connect to nats: %w", err)
+		}
+		logrus.Debugf("established connection to queue")
 		audit.Log(audit.LogEntry{
 			EntityId:     fmt.Sprintf("%v@%s", userId, hostname),
 			EntityType:   audit.ControllerEntity,
@@ -422,6 +427,7 @@ var Command = &cobra.Command{
 		sessionSigningToken := viper.GetString("session-signing-token")
 		controllerOpts := controller.HttpApplicationOpts{
 			DatabaseConnection: databaseConnection,
+			QueueId:            queueId,
 			ReadinessChecks: []func() error{
 				func() error {
 					if !auditDatabaseConnectionOk {

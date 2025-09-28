@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"opsicle/internal/common"
+	"opsicle/internal/queue"
 	"strings"
 
 	"opsicle/internal/controller/docs"
@@ -25,6 +26,7 @@ type HttpApplicationOpts struct {
 	LivenessChecks      []func() error
 	ReadinessChecks     []func() error
 	PublicServerUrl     *url.URL
+	QueueId             string
 	ServiceLogs         chan<- common.ServiceLog
 	SessionSigningToken string
 }
@@ -45,6 +47,15 @@ type HttpApplicationOpts struct {
 // @description			Used for authenticating with endpoints
 func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 	db = opts.DatabaseConnection
+	if err := db.Ping(); err != nil {
+		panic("failed to get required database connection")
+	}
+
+	var err error
+	q, err = queue.Get(opts.QueueId)
+	if err != nil {
+		panic("failed to get required queue connection")
+	}
 
 	if opts.SessionSigningToken != "" {
 		models.SetSessionSigningToken(opts.SessionSigningToken)

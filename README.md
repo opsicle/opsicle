@@ -19,6 +19,58 @@ Opsicle is a Runbhook Automation platform.
 1. Make a clone of `.envrc.sample` into `.envrc`
 2. Fill up the values according to the values in the password manager
 
+#### Secrets for local services
+
+1. Majority of secrets for local services are stored in the Git repository for ease of setup for local development
+2. Where applicable, login credentials should be set to `opsicle:password`
+   1. Keep all usernames as `opsicle` as far as possible
+   2. Where validations apply and cannot be gotten around, development passwords should be `p@ssw0rd!!Opsicle`
+3. The risk of using these credentials is acknowledged and irrelevant to the security of deployed environments since we deploy differently from how services are run locally
+
+#### System architecture overview
+
+Opsicle consists of four main components:
+
+1. CLI tool (`opsicle`) with the code root found at `./cmd/opsicle`
+2. Controller (`controller`) which is started via the CLI tool with the code root found at `./cmd/opsicle/start/controller`
+2. Coordinator (`coordinator`) which is started via the CLI tool with the code root found at `./cmd/opsicle/start/coordinator`
+2. Worker (`worker`) which is started via the CLI tool with the code root found at `./cmd/opsicle/start/worker`
+
+##### Notes on system components and how they interact
+
+1. The CLI tool is the user interface for the Opsicle system
+2. The `controller` handles requests from the CLI tool and does most of the platform-level operations/transactions. It's a RESTful API and its SDK can be found at `./pkg/controller`
+3. The `coordinator` is a separate service for `worker` service instances to connect to to pull automations to execute. This service is also responsible for communicating all affairs with the `worker` back to the `controller` in an event-driven way via an appointed queue system (NATS).
+4. The `worker` component executes automations and reports on their status to the `coordinator` service via gRPC streams.
+
+#### 3rd party services overview/setup/notes
+
+##### MongoDB
+
+MongoDB is used as the audit database and used to store audit logs for all user and system actions.
+
+1. [MongoDB Compass](https://www.mongodb.com/products/tools/compass) is the recommended tool for working with MongoDB. Download it from [this link](https://www.mongodb.com/try/download/compass)
+2. To update the username/password locally, you need to remove the entire data directory and start MongoDB from scratch
+
+##### MySQL
+
+MySQL is used as the platform database and used to persist system data.
+
+1. [MySQL Workbench](https://www.mysql.com/products/workbench/) is the recommended tool for working with MySQL. Download it from [this link](https://dev.mysql.com/downloads/workbench/)
+
+##### NATS
+
+NATS is used as the queue system for submitting automations and processing them.
+
+1. [NATS UI](https://natsnui.app/) (included in the `docker-compose` setup) is the recommended tool for working with NATS. After spinning up Docker Compose, you can access it at [http://localhost:31311](http://localhost:31311)
+
+##### Redis
+
+Redis is used as a cache for all internal systems (ie. `controller` and `coordinator`)
+
+1. [Redis Insight](https://redis.io/insight/) (included in the `docker-compose` setup) is the recommended tool for working with Redis. After spinning up Docker Compose, you can access it at [http://localhost:5540](http://localhost:5540)
+2. To generate the password seen in the `redis.conf` file, use `printf -- '${THE_PASSWORD_YOU_WANT} | sha256sum -'
+
 ## For Users
 
 The following instructions assume a deployment where the deployment is accessible over `localhost` or `127.0.0.1`. You may need to modify the URLs to hit the correct server on the correct network relative to your workstation.

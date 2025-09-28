@@ -145,7 +145,7 @@ func printBoxedMessage(color AnsiColor, header, message string) {
 		defaultBoxStyle.
 			BorderForeground(lipgloss.Color(color)).
 			Align(lipgloss.Left).
-			Width(width)
+			Width(width - 2)
 	fmt.Println(
 		boxStyle.Render(fmt.Sprintf("%s\n\n%s", header, message)),
 	)

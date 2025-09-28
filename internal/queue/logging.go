@@ -4,6 +4,7 @@ import (
 	"opsicle/internal/common"
 )
 
+var isNoopInUse bool
 var noopServiceLog chan common.ServiceLog
 
 func initNoopServiceLog() {
@@ -11,6 +12,7 @@ func initNoopServiceLog() {
 }
 
 func startNoopServiceLog() {
+	isNoopInUse = true
 	for {
 		_, ok := <-noopServiceLog
 		if !ok {
@@ -20,5 +22,7 @@ func startNoopServiceLog() {
 }
 
 func stopNoopServiceLog() {
-	close(noopServiceLog)
+	if isNoopInUse {
+		close(noopServiceLog)
+	}
 }

@@ -9,4 +9,7 @@ type VariableSpec struct {
 	Label       string `json:"label" yaml:"label"`
 	Type        string `json:"type" yaml:"type"`
 	IsRequired  bool   `json:"isRequired" yaml:"isRequired"`
+
+	// Value is not in the spec but used during processing
+	Value any `json:"value" yaml:"-"`
 }

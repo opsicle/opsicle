@@ -18,6 +18,7 @@ var (
 	ErrorSelectFailed                    = errors.New("select_failed")
 	ErrorSelectsFailed                   = errors.New("selects_failed")
 	ErrorStmtPreparationFailed           = errors.New("stmt_preparation_failed")
+	ErrorTemplateContentRequired         = errors.New("template_content_required")
 	ErrorUpdateFailed                    = errors.New("update_failed")
 	ErrorUnknown                         = errors.New("unknown_error")
 	ErrorUserDeleted                     = errors.New("user_deleted")

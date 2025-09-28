@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"opsicle/internal/automations"
 	"opsicle/internal/common"
 	"opsicle/internal/controller/models"
 	"opsicle/internal/validate"
@@ -22,23 +23,12 @@ func registerAutomationRoutes(opts RouteRegistrationOpts) {
 }
 
 type CreateAutomationV1OutputData struct {
-	AutomationId     string                               `json:"automationId"`
-	TemplateId       string                               `json:"templateId"`
-	TemplateName     string                               `json:"templateName"`
-	TriggeredById    string                               `json:"triggeredById"`
-	TriggeredByEmail string                               `json:"triggeredByEmail"`
-	VariableMap      *CreateAutomationV1OutputVariableMap `json:"variableMap"`
-}
-
-type CreateAutomationV1OutputVariableMap map[string]CreateAutomationV1OutputVariable
-
-type CreateAutomationV1OutputVariable struct {
-	Default     any    `json:"default"`
-	Description string `json:"description"`
-	Id          string `json:"id"`
-	Label       string `json:"label"`
-	Type        string `json:"type"`
-	IsRequired  bool   `json:"isRequired"`
+	AutomationId     string                              `json:"automationId"`
+	TemplateId       string                              `json:"templateId"`
+	TemplateName     string                              `json:"templateName"`
+	TriggeredById    string                              `json:"triggeredById"`
+	TriggeredByEmail string                              `json:"triggeredByEmail"`
+	VariableMap      map[string]automations.VariableSpec `json:"variableMap"`
 }
 
 type CreateAutomationV1Input struct {
@@ -117,21 +107,7 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to parse template", ErrorInvalidTemplate)
 		return
 	}
-	var variableMap *CreateAutomationV1OutputVariableMap = nil
-	if sourceTemplate.Spec.Variables != nil {
-		varMap := CreateAutomationV1OutputVariableMap{}
-		for _, variable := range sourceTemplate.Spec.Variables {
-			varMap[variable.Id] = CreateAutomationV1OutputVariable{
-				Default:     variable.Default,
-				Description: variable.Description,
-				Id:          variable.Id,
-				Label:       variable.Label,
-				Type:        variable.Type,
-				IsRequired:  variable.IsRequired,
-			}
-		}
-		variableMap = &varMap
-	}
+	variableMap := sourceTemplate.GetVariables()
 
 	o, _ = json.MarshalIndent(variableMap, "", "  ")
 	fmt.Println(string(o))
@@ -149,9 +125,9 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 }
 
 type RunAutomationV1Output struct {
-	AutomationId string `json:"automationId"`
-	IsSuccessful bool   `json:"isSuccessful"`
-	QueueLength  int    `json:"queueLength`
+	AutomationId    string `json:"automationId"`
+	AutomationRunId string `json:"automationRunId"`
+	IsSuccessful    bool   `json:"isSuccessful"`
 }
 
 type RunAutomationV1VariableMap map[string]any
@@ -189,10 +165,24 @@ func handleRunAutomationV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve automation", ErrorInvalidInput)
 		return
 	}
+	queueRunOpts := models.QueueAutomationRunV1Opts{
+		Db: db,
+		Q:  q,
+
+		Input: input.VariableMap,
+	}
+	queuedAutomationRun, err := automation.QueueRunV1(queueRunOpts)
+	fmt.Println("??????????????????????????????????")
+	fmt.Println(err)
+	fmt.Println("??????????????????????????????????")
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to insert automation into the queue", ErrorQueueIssue)
+		return
+	}
 	output := RunAutomationV1Output{
-		AutomationId: automationId,
-		IsSuccessful: false,
-		QueueLength:  42069,
+		AutomationId:    automationId,
+		AutomationRunId: queuedAutomationRun.AutomationRunId,
+		IsSuccessful:    false,
 	}
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }

@@ -1,5 +1,7 @@
-export TELEGRAM_BOT_TOKEN='';
+alias o='go run .';
+export NATS_NKEY='';
 export SLACK_BOT_TOKEN='';
 export SLACK_APP_TOKEN='';
 export SMTP_USERNAME='';
 export SMTP_PASSWORD='';
+export TELEGRAM_BOT_TOKEN='';

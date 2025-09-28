@@ -62,16 +62,47 @@ services:
       - ./data/.nats/nats.conf:/etc/nats/nats.conf:ro
       - ./data/.nats/data:/data
 
+  natsui:
+    image: ghcr.io/nats-nui/nui:latest
+    container_name: nats-ui
+    restart: unless-stopped
+    ports:
+      - "31311:31311"
+    volumes:
+      - ./data/.nats/dev_nkey:/nats-creds:ro
+      - ./data/.natsui/data:/db
+
   redis:
     image: redis:7-alpine
-    container_name: cache
+    container_name: redis
     restart: unless-stopped
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     ports:
       - "6379:6379"
     volumes:
+      # passwords are found in this file
       - ./data/.redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
       - ./data/.redis/data/redis-data:/data
+
+  redisinsight:
+    image: redis/redisinsight:2.70.1
+    container_name: redisinsights
+    restart: unless-stopped
+    environment:
+      RI_LOG_LEVEL: debug
+      RI_REDIS_HOST: redis
+      RI_REDIS_PORT: "6379"
+      # the following set of credentials should be aligned to what's
+      # in the `redis.conf` that's bound as a volume in the above 
+      # `redis` service
+      RI_REDIS_USERNAME: insight
+      RI_REDIS_PASSWORD: password
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "5540:5540"
+    volumes:
+      - ./data/.redisinsight/data:/data
+
 
 volumes:
   redis-data:

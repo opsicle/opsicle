@@ -23,3 +23,19 @@ func (t Template) GetDescription() string {
 	}
 	return description
 }
+
+// GetVariables returns a mapping of variable ID to a
+// VariableSpec; returns nil if there are no variables
+func (t Template) GetVariables() map[string]VariableSpec {
+	if t.Spec.Variables != nil {
+		varMap := map[string]VariableSpec{}
+		for _, variable := range t.Spec.Variables {
+			varMap[variable.Id] = variable
+		}
+		if len(varMap) == 0 {
+			return nil
+		}
+		return varMap
+	}
+	return nil
+}
