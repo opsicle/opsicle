@@ -6,7 +6,7 @@ func (t *Template) DeleteV1(opts DatabaseConnection) error {
 	}
 	return executeMysqlDelete(mysqlQueryInput{
 		Db:           opts.Db,
-		Stmt:         `DELETE FROM automation_templates WHERE id = ?`,
+		Stmt:         `DELETE FROM templates WHERE id = ?`,
 		Args:         []any{t.GetId()},
 		FnSource:     "models.Template.DeleteV1",
 		RowsAffected: oneRowAffected,

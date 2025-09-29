@@ -24,9 +24,9 @@ func (t *Template) GetAutomationParamsV1(opts DatabaseConnection) (*Automation, 
 			SELECT
 				content,
 				created_by
-			FROM automation_template_versions
+			FROM template_versions
 			WHERE
-				automation_template_id = ?
+				template_id = ?
 				AND version = ?
 		`,
 		Args: []any{*t.Id, *t.Version},

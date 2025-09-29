@@ -73,14 +73,14 @@ func (t *Template) AddUserV1(opts AddUserToTemplateV1) error {
 		return err
 	}
 	inserts := map[string]any{
-		"automation_template_id": t.GetId(),
-		"user_id":                opts.UserId,
-		"can_view":               opts.CanView,
-		"can_execute":            opts.CanExecute,
-		"can_update":             opts.CanUpdate,
-		"can_delete":             opts.CanDelete,
-		"can_invite":             opts.CanInvite,
-		"created_by":             opts.CreatedBy,
+		"template_id": t.GetId(),
+		"user_id":     opts.UserId,
+		"can_view":    opts.CanView,
+		"can_execute": opts.CanExecute,
+		"can_update":  opts.CanUpdate,
+		"can_delete":  opts.CanDelete,
+		"can_invite":  opts.CanInvite,
+		"created_by":  opts.CreatedBy,
 	}
 	var insertFields, insertPlaceholders []string
 	var insertValues []any
@@ -91,7 +91,7 @@ func (t *Template) AddUserV1(opts AddUserToTemplateV1) error {
 	}
 	if err := executeMysqlInsert(mysqlQueryInput{
 		Db: opts.Db,
-		Stmt: fmt.Sprintf(`INSERT INTO automation_template_users(%s) VALUES (%s)`,
+		Stmt: fmt.Sprintf(`INSERT INTO template_users(%s) VALUES (%s)`,
 			strings.Join(insertFields, ","),
 			strings.Join(insertPlaceholders, ","),
 		),
@@ -135,7 +135,7 @@ func (t *Template) InviteUserV1(opts InviteTemplateUserV1Opts) (*InviteUserV1Out
 
 	sqlInserts := []string{
 		"id",
-		"automation_template_id",
+		"template_id",
 		"inviter_id",
 		"join_code",
 		"can_view",
@@ -171,7 +171,7 @@ func (t *Template) InviteUserV1(opts InviteTemplateUserV1Opts) (*InviteUserV1Out
 		sqlPlaceholders = append(sqlPlaceholders, "?")
 	}
 	sqlStmt := fmt.Sprintf(`
-		INSERT INTO automation_template_user_invitations(%s)
+		INSERT INTO template_user_invitations(%s)
 			VALUES (%s)
 			ON DUPLICATE KEY UPDATE
 				can_view = VALUES(can_view),
@@ -224,11 +224,11 @@ func (t *Template) ListUsersV1(opts DatabaseConnection) error {
 				atu.last_updated_at,
 				atu.last_updated_by
 			FROM
-				automation_template_users atu
+				template_users atu
 				JOIN users u ON u.id = atu.user_id
-				JOIN automation_templates t ON t.id = atu.automation_template_id
+				JOIN templates t ON t.id = atu.template_id
 			WHERE
-				atu.automation_template_id = ?
+				atu.template_id = ?
 		`,
 		Args: []any{
 			*t.Id,
@@ -295,9 +295,9 @@ func (t *Template) LoadV1(opts DatabaseConnection) error {
 				at.last_updated_by,
 				atv.content,
 				atv.version
-				FROM automation_templates at
-				JOIN automation_template_versions atv ON
-					atv.automation_template_id = at.id
+				FROM templates at
+				JOIN template_versions atv ON
+					atv.template_id = at.id
 					AND atv.version = at.version
 			WHERE
 				at.id = ?
@@ -361,7 +361,7 @@ func (t *Template) UpdateFieldsV1(opts UpdateFieldsV1) error {
 	return executeMysqlUpdate(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: fmt.Sprintf(`
-			UPDATE automation_templates
+			UPDATE templates
 				SET %s
 				WHERE id = ?
 			`,
@@ -439,8 +439,8 @@ func submitTemplateV1(opts submitTemplateV1Opts) (*Template, error) {
 	if err := executeMysqlInsert(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: `
-			INSERT INTO automation_template_versions (
-				automation_template_id,
+			INSERT INTO template_versions (
+				template_id,
 				version,
 				content,
 				created_by
@@ -457,7 +457,7 @@ func submitTemplateV1(opts submitTemplateV1Opts) (*Template, error) {
 			string(output.Content),
 			opts.UserId,
 		},
-		FnSource:     "models.submitTemplateV1[automation_template_versions]",
+		FnSource:     "models.submitTemplateV1[template_versions]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -466,7 +466,7 @@ func submitTemplateV1(opts submitTemplateV1Opts) (*Template, error) {
 	if err := executeMysqlUpdate(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: `
-			UPDATE automation_templates
+			UPDATE templates
 				SET 
 					version = ?,
 					description = ?,
@@ -480,7 +480,7 @@ func submitTemplateV1(opts submitTemplateV1Opts) (*Template, error) {
 			output.LastUpdatedBy.GetId(),
 			*output.Id,
 		},
-		FnSource:     "models.submitTemplateV1[automation_template_versions]",
+		FnSource:     "models.submitTemplateV1[template_versions]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -527,7 +527,7 @@ func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template,
 	if err := executeMysqlInsert(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: `
-			INSERT INTO automation_templates (
+			INSERT INTO templates (
 				id,
 				name,
 				description,
@@ -548,7 +548,7 @@ func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template,
 			*output.Version,
 			output.Users[0].UserId,
 		},
-		FnSource:     "models.createAutomationTemplateV1[automation_templates]",
+		FnSource:     "models.createAutomationTemplateV1[templates]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -557,8 +557,8 @@ func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template,
 	if err := executeMysqlInsert(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: `
-			INSERT INTO automation_template_versions (
-				automation_template_id,
+			INSERT INTO template_versions (
+				template_id,
 				version,
 				content,
 				created_by
@@ -575,7 +575,7 @@ func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template,
 			string(output.Content),
 			output.Users[0].UserId,
 		},
-		FnSource:     "models.createAutomationTemplateV1[automation_template_versions]",
+		FnSource:     "models.createAutomationTemplateV1[template_versions]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -584,8 +584,8 @@ func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template,
 	if err := executeMysqlInsert(mysqlQueryInput{
 		Db: opts.Db,
 		Stmt: `
-			INSERT INTO automation_template_users (
-				automation_template_id,
+			INSERT INTO template_users (
+				template_id,
 				user_id,
 				can_view,
 				can_execute,
@@ -611,7 +611,7 @@ func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template,
 			output.Users[0].CanDelete,
 			output.Users[0].CanInvite,
 		},
-		FnSource:     "models.createAutomationTemplateV1[automation_template_users]",
+		FnSource:     "models.createAutomationTemplateV1[template_users]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err

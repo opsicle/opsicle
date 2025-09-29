@@ -57,7 +57,7 @@ func (tu *TemplateUser) DeleteV1(opts DatabaseConnection) error {
 	}
 	return executeMysqlDelete(mysqlQueryInput{
 		Db:           opts.Db,
-		Stmt:         `DELETE FROM automation_template_users WHERE automation_template_id = ? AND user_id = ?`,
+		Stmt:         `DELETE FROM template_users WHERE template_id = ? AND user_id = ?`,
 		Args:         []any{tu.GetTemplateId(), tu.GetUserId()},
 		FnSource:     "models.TemplateUser.DeleteV1",
 		RowsAffected: oneRowAffected,
@@ -102,11 +102,11 @@ func (tu *TemplateUser) LoadV1(opts DatabaseConnection) error {
 				atu.last_updated_at,
 				atu.last_updated_by
 			FROM
-				automation_template_users atu
+				template_users atu
 				JOIN users u ON u.id = atu.user_id
-				JOIN automation_templates t ON t.id = atu.automation_template_id
+				JOIN templates t ON t.id = atu.template_id
 			WHERE
-				atu.automation_template_id = ?
+				atu.template_id = ?
 				AND atu.user_id = ?
 		`,
 		Args: []any{

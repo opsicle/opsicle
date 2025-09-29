@@ -5,6 +5,7 @@ import (
 	"opsicle/cmd/opsicle/create/mfa"
 	"opsicle/cmd/opsicle/create/org"
 	"opsicle/cmd/opsicle/create/template"
+	"opsicle/cmd/opsicle/create/user"
 
 	"github.com/spf13/cobra"
 )
@@ -14,6 +15,7 @@ func init() {
 	Command.AddCommand(mfa.Command)
 	Command.AddCommand(org.Command)
 	Command.AddCommand(template.Command)
+	Command.AddCommand(user.Command)
 }
 
 var Command = &cobra.Command{

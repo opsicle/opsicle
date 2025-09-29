@@ -28,6 +28,13 @@ var Flags cli.Flags = cli.Flags{
 		Usage:        "Path to an Automation Template",
 		Type:         cli.FlagTypeString,
 	},
+	{
+		Name:         "org",
+		Short:        'o',
+		DefaultValue: "",
+		Usage:        "Optionally, define the organisation that this template should be uploaded to",
+		Type:         cli.FlagTypeString,
+	},
 }
 
 func init() {

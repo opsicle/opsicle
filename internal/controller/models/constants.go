@@ -1,7 +1,8 @@
 package models
 
 var (
-	sessionSigningToken = "supersecretkey"
+	cachePrefixAutomationPending = "automation"
+	sessionSigningToken          = "supersecretkey"
 )
 
 func SetSessionSigningToken(token string) {

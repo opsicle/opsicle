@@ -32,7 +32,9 @@ type CreateAutomationV1OutputData struct {
 }
 
 type CreateAutomationV1Input struct {
-	TemplateId string `json:"templateId"`
+	Comment    string  `json:"comment"`
+	OrgId      *string `json:"orgId"`
+	TemplateId string  `json:"templateId"`
 }
 
 func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
@@ -91,15 +93,19 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 	}
 	redactedUser := user.GetRedacted()
 	automationParams.TriggeredBy = &redactedUser
-	pendingAutomation, err := models.CreateAutomationV1(automationParams, models.DatabaseConnection{Db: db})
+	pendingAutomation, err := models.CreatePendingAutomationV1(models.CreatePendingAutomationV1Opts{
+		OrgId:            input.OrgId,
+		TemplateContent:  template.Content,
+		TemplateId:       template.GetId(),
+		TemplateVersion:  template.GetVersion(),
+		TriggeredBy:      session.UserId,
+		TriggererComment: input.Comment,
+	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to create automation based on template[%s]: %s", templateId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create automation", ErrorDatabaseIssue)
 		return
 	}
-
-	o, _ := json.MarshalIndent(pendingAutomation, "", "  ")
-	fmt.Println(string(o))
 
 	sourceTemplate, err := pendingAutomation.GetTemplate()
 	if err != nil {
@@ -108,9 +114,6 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	variableMap := sourceTemplate.GetVariables()
-
-	o, _ = json.MarshalIndent(variableMap, "", "  ")
-	fmt.Println(string(o))
 
 	output := CreateAutomationV1OutputData{
 		AutomationId:     *pendingAutomation.Id,
@@ -134,6 +137,7 @@ type RunAutomationV1VariableMap map[string]any
 
 type RunAutomationV1Input struct {
 	AutomationId string                     `json:"-"`
+	OrgId        *string                    `json:"orgId"`
 	VariableMap  RunAutomationV1VariableMap `json:"variableMap"`
 }
 
@@ -155,13 +159,17 @@ func handleRunAutomationV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is executing automation[%s]", session.UserId, automationId))
-	o, _ := json.MarshalIndent(input.VariableMap, "", "  ")
-	fmt.Println(string(o))
-
-	// TODO(joseph): perform validation on variables
+	var orgId *string = nil
+	if input.OrgId != nil {
+		if err := validate.Uuid(*input.OrgId); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate org id", ErrorInvalidInput)
+			return
+		}
+		orgId = input.OrgId
+	}
 
 	automation := models.Automation{Id: &automationId}
-	if err := automation.Load(models.DatabaseConnection{Db: db}); err != nil {
+	if err := automation.LoadPendingV1(models.DatabaseConnection{Db: db}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve automation", ErrorInvalidInput)
 		return
 	}
@@ -170,12 +178,11 @@ func handleRunAutomationV1(w http.ResponseWriter, r *http.Request) {
 		Q:  q,
 
 		Input: input.VariableMap,
+		OrgId: orgId,
 	}
-	queuedAutomationRun, err := automation.QueueRunV1(queueRunOpts)
-	fmt.Println("??????????????????????????????????")
-	fmt.Println(err)
-	fmt.Println("??????????????????????????????????")
+	queuedAutomationRun, err := automation.RunV1(queueRunOpts)
 	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to run automation: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to insert automation into the queue", ErrorQueueIssue)
 		return
 	}

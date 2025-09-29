@@ -2,6 +2,25 @@
 
 Opsicle is a Runbhook Automation platform.
 
+- [Opsicle](#opsicle)
+- [Documentation](#documentation)
+  - [For Contributors](#for-contributors)
+    - [Quicklinks](#quicklinks)
+    - [Setting up locally](#setting-up-locally)
+      - [Secrets for local services](#secrets-for-local-services)
+      - [System architecture overview](#system-architecture-overview)
+        - [Notes on system components and how they interact](#notes-on-system-components-and-how-they-interact)
+      - [3rd party services overview/setup/notes](#3rd-party-services-overviewsetupnotes)
+        - [MongoDB](#mongodb)
+        - [MySQL](#mysql)
+        - [NATS](#nats)
+        - [Redis](#redis)
+      - [Scripts and how-tos](#scripts-and-how-tos)
+        - [Resetting the database](#resetting-the-database)
+  - [For Users](#for-users)
+    - [Deploying Opsicle](#deploying-opsicle)
+    - [Initialising Opsicle](#initialising-opsicle)
+
 # Documentation
 
 ## For Contributors
@@ -70,6 +89,16 @@ Redis is used as a cache for all internal systems (ie. `controller` and `coordin
 
 1. [Redis Insight](https://redis.io/insight/) (included in the `docker-compose` setup) is the recommended tool for working with Redis. After spinning up Docker Compose, you can access it at [http://localhost:5540](http://localhost:5540)
 2. To generate the password seen in the `redis.conf` file, use `printf -- '${THE_PASSWORD_YOU_WANT} | sha256sum -'
+
+#### Scripts and how-tos
+
+Scripts for use on your local machine are avaialble via a `Makefile`.
+
+##### Resetting the database
+
+```sh
+make mysql_reset;
+```
 
 ## For Users
 

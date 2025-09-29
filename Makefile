@@ -120,6 +120,8 @@ mysql_shell:
 mysql_reset:
 	@mysql -uopsicle -h127.0.0.1 -P3306 -ppassword -e 'DROP SCHEMA `opsicle`'
 	@mysql -uopsicle -h127.0.0.1 -P3306 -ppassword -e 'CREATE SCHEMA `opsicle`'
+
+mysql_migrate:
 	@go run . run migrations
 
 #                .__                               

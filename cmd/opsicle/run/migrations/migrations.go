@@ -55,6 +55,12 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "when this is non-zero, only that number of steps will be applied",
 		Type:         cli.FlagTypeInteger,
 	},
+	{
+		Name:         "force",
+		DefaultValue: 0,
+		Usage:        "when this is truthy, the migration will be forced to this version",
+		Type:         cli.FlagTypeInteger,
+	},
 }
 
 func init() {
@@ -82,17 +88,45 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to connect to mysql: %w", err)
 		}
-		steps := viper.GetInt("steps")
-		if err := database.MigrateMysql(database.MigrateOpts{
+		var steps *int
+
+		if cmd.Flags().Changed("steps") {
+			inputSteps := viper.GetInt("steps")
+			steps = &inputSteps
+		} else {
+			logrus.Infof("steps not specified, migration will be to the latest")
+		}
+		force := viper.GetInt("force")
+		if force != 0 {
+			logrus.Warnf("forcing a migration")
+		}
+		migrateOutput, err := database.MigrateMysql(database.MigrateOpts{
 			Connection:  databaseConnection,
+			Force:       force,
 			Steps:       steps,
 			ServiceLogs: serviceLogs,
-		}); err != nil {
+		})
+		if err != nil {
+			if migrateOutput != nil {
+				logrus.Infof("pre-migration database version: %v", migrateOutput.PreMigrationVersion)
+				logrus.Infof("migration database dirty status: %v", migrateOutput.IsDatabaseDirty)
+			}
 			return fmt.Errorf("failed to migrate mysql: %w", err)
 		}
+		direction := "up"
+		if steps != nil && *steps < 0 {
+			direction = "down"
+		}
+		logrus.Infof("applied %v %s migrations", len(migrateOutput.VersionsApplied), direction)
+		for _, version := range migrateOutput.VersionsApplied {
+			logrus.Infof("  - %v", version)
+		}
+		logrus.Infof("migration database dirty status: %v", migrateOutput.IsDatabaseDirty)
+		logrus.Infof("pre-migration database version: %v", migrateOutput.PreMigrationVersion)
+		logrus.Infof("post-migration database version: %v", migrateOutput.PostMigrationVersion)
 
 		<-time.After(500 * time.Millisecond)
-		logrus.Infof("database migration successful")
+		logrus.Infof("database migration operation successful")
 		return nil
 	},
 }

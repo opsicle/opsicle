@@ -1,0 +1,44 @@
+apiVersion: v1
+type: AutomationTemplate
+metadata:
+  name: approval
+  labels:
+    opsicle.io/description: "this is an approval automation template resource"
+spec:
+  approvalPolicy:
+    spec:
+      telegram:
+        authorizedResponders:
+          username: zephinzer
+        chatIds:
+          - 267230627
+  metadata:
+    displayName: Basic Automation
+    owners:
+    - name: Bjarne
+      email: stroustrup@opsicle.io
+    - name: Dennis
+      email: ritchie@opsicle.io
+  template:
+    volumeMounts:
+    - host: ./tmp
+      container: /tmp
+    phases:
+    - name: initialisation
+      image: alpine:latest
+      commands:
+        - echo "initialisation"
+    - name: information-gathering
+      image: alpine:latest
+      commands:
+        - nslookup google.com
+    - name: execution
+      image: alpine:latest
+      commands:
+        - mkdir -p /tmp
+        - wget -qO - google.com > /tmp/google.com.txt
+    - name: clean-up
+      image: alpine:latest
+      commands:
+        - cat /tmp/google.com.txt
+        - echo "cleanup done"

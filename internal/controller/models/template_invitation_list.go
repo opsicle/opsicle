@@ -45,8 +45,8 @@ func ListTemplateInvitationsV1(opts ListTemplateInvitationsV1Opts) (ListTemplate
 				tui.can_delete,
 				tui.can_invite,
 				tui.created_at
-				FROM automation_template_user_invitations tui
-					JOIN automation_templates at ON at.id = tui.automation_template_id
+				FROM template_user_invitations tui
+					JOIN templates at ON at.id = tui.template_id
 					JOIN users u ON u.id = tui.inviter_id
 				WHERE tui.%s = ?
 			`,

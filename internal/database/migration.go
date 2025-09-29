@@ -3,7 +3,9 @@ package database
 import (
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
+	"math"
 	"opsicle/internal/common"
 	"strings"
 
@@ -15,60 +17,105 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
+type MigrateMysqlOutput struct {
+	PostMigrationVersion uint
+	PreMigrationVersion  uint
+	IsDatabaseDirty      bool
+	VersionsApplied      []uint
+}
+
 type MigrateOpts struct {
 	Connection  *sql.DB
-	Steps       int
+	Force       int
+	Steps       *int
 	ServiceLogs chan<- common.ServiceLog
 }
 
-func MigrateMysql(opts MigrateOpts) error {
+func MigrateMysql(opts MigrateOpts) (*MigrateMysqlOutput, error) {
 	driver, err := mysql.WithInstance(opts.Connection, &mysql.Config{})
 	if err != nil {
-		return fmt.Errorf("failed to create mysql driver: %w", err)
+		return nil, fmt.Errorf("failed to create mysql driver: %w", err)
 	}
 	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "established database connection")
 
 	source, err := iofs.New(migrationFiles, "migrations")
 	if err != nil {
-		return fmt.Errorf("failed to create iofs source: %w", err)
+		return nil, fmt.Errorf("failed to create iofs source: %w", err)
 	}
 	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "created migrations model")
 
 	migrator, err := migrate.NewWithInstance("iofs", source, "mysql", driver)
 	if err != nil {
-		return fmt.Errorf("failed to create migrator instance: %w", err)
+		return nil, fmt.Errorf("failed to create migrator instance: %w", err)
 	}
 	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "created migrator instance")
 
-	version, isDirty, err := migrator.Version()
+	output := &MigrateMysqlOutput{}
+
+	output.PreMigrationVersion, output.IsDatabaseDirty, err = migrator.Version()
 	if err != nil {
 		if !strings.Contains(err.Error(), "no migration") {
-			return fmt.Errorf("failed to get version of current migration: %w", err)
+			return nil, fmt.Errorf("failed to get version of current migration: %w", err)
 		}
 	}
-	if isDirty {
-		return fmt.Errorf("failed to get a clean slate to run migrations on (current dirty version: %v)", version)
-	}
-	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "migrator version: %v (dirty: %v)", version, isDirty)
-	if opts.Steps != 0 {
-		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "running %v steps of migrations", opts.Steps)
-		if err := migrator.Steps(opts.Steps); err != nil {
-			if strings.Contains(err.Error(), "no change") {
-				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "no change detected")
-				return nil
+	if output.IsDatabaseDirty {
+		if opts.Force != 0 {
+			if err := migrator.Force(opts.Force); err != nil {
+				return nil, fmt.Errorf("failed to force version[%v]: %w", opts.Force, err)
 			}
-			return fmt.Errorf("failed to migrate %v steps: %s", opts.Steps, err)
+			version, isDirty, _ := migrator.Version()
+			output.PostMigrationVersion = version
+			output.IsDatabaseDirty = isDirty
+			return output, nil
+		} else {
+			return output, fmt.Errorf("failed to get a clean slate to run migrations on (current dirty version: %v)", output.IsDatabaseDirty)
 		}
+	}
+	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "migrator version: %v (dirty: %v)", output.PreMigrationVersion, output.IsDatabaseDirty)
+	direction := 1
+	steps := 0
+	if opts.Steps == nil {
+		steps = -1
 	} else {
-		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "running all pending migrations")
-		if err := migrator.Up(); err != nil {
-			if strings.Contains(err.Error(), "no change") {
-				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "no change detected")
-				return nil
-			}
-			return fmt.Errorf("failed to migrate: %w", err)
+		steps = *opts.Steps
+		if steps < 0 {
+			direction = -1
 		}
+		steps = int(math.Abs(float64(steps)))
 	}
-
-	return nil
+	isEndReached := false
+	isFailed := false
+	var migrationErr error
+	for !isEndReached && steps != 0 {
+		preVersion, preVersionIsDirty, _ := migrator.Version()
+		if err := migrator.Steps(direction); err != nil {
+			if strings.Contains(err.Error(), "file does not exist") {
+				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "file does not exist")
+				isEndReached = true
+			} else if errors.Is(err, migrate.ErrNoChange) {
+				opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "no change detected")
+				isEndReached = true
+			} else {
+				isFailed = true
+				migrationErr = err
+			}
+		} else {
+			if direction > 0 {
+				version, isDirty, _ := migrator.Version()
+				output.VersionsApplied = append(output.VersionsApplied, version)
+				output.IsDatabaseDirty = isDirty
+			} else if direction < 0 {
+				output.VersionsApplied = append(output.VersionsApplied, preVersion)
+				output.IsDatabaseDirty = preVersionIsDirty
+			}
+		}
+		steps--
+	}
+	version, isDirty, _ := migrator.Version()
+	output.PostMigrationVersion = version
+	output.IsDatabaseDirty = isDirty
+	if isFailed {
+		return output, fmt.Errorf("failed to complete migrations: %w", migrationErr)
+	}
+	return output, nil
 }

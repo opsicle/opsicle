@@ -31,9 +31,9 @@ func GetTemplateV1(opts GetTemplateV1Opts) (*Template, error) {
 				at.description,
 				atv.content,
 				atv.version
-				FROM automation_templates at
-				JOIN automation_template_versions atv ON atv.automation_template_id = at.id
-				JOIN automation_template_users atu ON atu.automation_template_id = at.id
+				FROM templates at
+				JOIN template_versions atv ON atv.template_id = at.id
+				JOIN template_users atu ON atu.template_id = at.id
 			WHERE
 				atu.user_id = ?
 				AND %s = ?

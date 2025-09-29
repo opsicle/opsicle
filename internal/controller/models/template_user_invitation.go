@@ -46,7 +46,7 @@ func (tui *TemplateUserInvitation) DeleteByIdV1(opts DatabaseConnection) error {
 	}
 	if err := executeMysqlDelete(mysqlQueryInput{
 		Db:           opts.Db,
-		Stmt:         "DELETE FROM automation_template_user_invitations WHERE id = ?",
+		Stmt:         "DELETE FROM template_user_invitations WHERE id = ?",
 		Args:         []any{tui.Id},
 		RowsAffected: oneRowAffected,
 		FnSource:     "models.TemplateUserInvitation.DeleteByIdV1",
@@ -67,7 +67,7 @@ func (tui *TemplateUserInvitation) LoadV1(opts DatabaseConnection) error {
 				tui.inviter_id,
 				tui.acceptor_id,
 				tui.acceptor_email,
-				tui.automation_template_id,
+				tui.template_id,
 				tui.join_code,
 				tui.can_view,
 				tui.can_execute,
@@ -76,7 +76,7 @@ func (tui *TemplateUserInvitation) LoadV1(opts DatabaseConnection) error {
 				tui.can_invite,
 				tui.created_at,
 				tui.last_updated_at
-				FROM automation_template_user_invitations tui
+				FROM template_user_invitations tui
 				WHERE id = ?
 		`,
 		Args:     []any{tui.Id},
@@ -108,7 +108,7 @@ func (tui *TemplateUserInvitation) ReplaceAcceptorEmailWithId(opts DatabaseConne
 	}
 	if err := executeMysqlUpdate(mysqlQueryInput{
 		Db:           opts.Db,
-		Stmt:         `UPDATE automation_template_user_invitations SET acceptor_id = ? WHERE id = ?`,
+		Stmt:         `UPDATE template_user_invitations SET acceptor_id = ? WHERE id = ?`,
 		Args:         []any{*tui.AcceptorId, tui.Id},
 		RowsAffected: oneRowAffected,
 		FnSource:     "models.TemplateUserInvitation.ReplaceAcceptorEmailWithId",

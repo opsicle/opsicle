@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/automations"
+	"opsicle/internal/cache"
 	"opsicle/internal/queue"
 	"opsicle/internal/validate"
 	"strings"
@@ -15,62 +16,63 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func CreateAutomationV1(input *Automation, opts DatabaseConnection) (*Automation, error) {
-	if err := validate.Uuid(input.TemplateId); err != nil {
-		return nil, fmt.Errorf("%w: %w", errorInputValidationFailed, err)
-	} else if input.TemplateVersion <= 0 {
-		return nil, fmt.Errorf("%w: missing template version", errorInputValidationFailed)
-	} else if len(input.TemplateContent) == 0 {
-		return nil, fmt.Errorf("%w: missing template content", errorInputValidationFailed)
-	} else if input.TriggeredBy == nil || input.TriggeredBy.Id == nil {
-		return nil, fmt.Errorf("%w: missing user", errorInputValidationFailed)
-	}
+type CreatePendingAutomationV1Opts struct {
+	OrgId            *string
+	TemplateContent  []byte
+	TemplateId       string
+	TemplateVersion  int64
+	TriggeredBy      string
+	TriggererComment string
+}
+
+// CreatePendingAutomationV1 creates an Automation instance and inserts
+// it into the cache for retrieval after the user confirms the execution
+func CreatePendingAutomationV1(opts CreatePendingAutomationV1Opts) (*Automation, error) {
 	automationId := uuid.NewString()
-	insertMap := map[string]any{
-		"id":                automationId,
-		"org_id":            input.OrgId,
-		"template_content":  input.TemplateContent,
-		"template_id":       input.TemplateId,
-		"template_version":  input.TemplateVersion,
-		"triggered_by":      input.TriggeredBy.GetId(),
-		"triggerer_comment": input.TriggererComment,
+	automationInstance := &Automation{
+		Id:              &automationId,
+		TemplateContent: opts.TemplateContent,
+		TemplateId:      opts.TemplateId,
+		TemplateVersion: opts.TemplateVersion,
+		TriggeredBy: &User{
+			Id: &opts.TriggeredBy,
+		},
+		TriggeredAt:      time.Now(),
+		TriggererComment: opts.TriggererComment,
 	}
-	fields := []string{}
-	valuePlaceholders := []string{}
-	values := []any{}
-	for field, value := range insertMap {
-		fields = append(fields, field)
-		valuePlaceholders = append(valuePlaceholders, "?")
-		values = append(values, value)
+	if opts.OrgId != nil {
+		if err := validate.Uuid(*opts.OrgId); err != nil {
+			return nil, fmt.Errorf("invalid org id: %w", err)
+		}
+		automationInstance.OrgId = opts.OrgId
 	}
-	if err := executeMysqlInsert(mysqlQueryInput{
-		Db:       opts.Db,
-		FnSource: "models.CreateAutomationV1",
-		Stmt: fmt.Sprintf(
-			`INSERT INTO automations (%s) VALUES (%s)`,
-			strings.Join(fields, ", "),
-			strings.Join(valuePlaceholders, ", "),
-		),
-		Args:         values,
-		RowsAffected: oneRowAffected,
-	}); err != nil {
-		return nil, err
+	cacheKey := strings.Join([]string{cachePrefixAutomationPending, automationId}, ":")
+	cacheData, err := json.Marshal(automationInstance)
+	if err != nil {
+		return nil, fmt.Errorf("invalid json: %w", err)
 	}
-	output := input
-	output.Id = &automationId
-	return output, nil
+	cacheExpiryDuration := time.Hour * 24 * 7
+	if err := cache.Get().Set(cacheKey, string(cacheData), cacheExpiryDuration); err != nil {
+		return nil, fmt.Errorf("models.CreatePendingAutomationV1: failed to update cache: %w", err)
+	}
+	return automationInstance, nil
 }
 
 type Automation struct {
-	Id                *string
-	OrgId             *string
-	TemplateId        string
-	TemplateVersion   int64
-	TemplateContent   []byte
-	TemplateCreatedBy *User
-	TriggeredBy       *User
-	TriggeredAt       time.Time
-	TriggererComment  string
+	Id                *string   `json:"id"`
+	InputVars         []byte    `json:"inputVars"`
+	LastKnownStatus   string    `json:"lastKnownStatus"`
+	Logs              []byte    `json:"logs"`
+	OrgId             *string   `json:"orgId"`
+	TemplateId        string    `json:"templateId"`
+	TemplateVersion   int64     `json:"templateVersion"`
+	TemplateContent   []byte    `json:"templateContent"`
+	TemplateCreatedBy *User     `json:"templateCreatedBy"`
+	TriggeredBy       *User     `json:"triggeredBy"`
+	TriggeredAt       time.Time `json:"triggeredAt"`
+	TriggererComment  string    `json:"triggererComment"`
+	CreatedAt         time.Time `json:"createdAt"`
+	LastUpdatedAt     time.Time `json:"lastUpdatedAt"`
 }
 
 func (a *Automation) assertId() error {
@@ -89,11 +91,62 @@ func (a *Automation) assertTemplateContent() error {
 	return nil
 }
 
+func (a *Automation) CreateV1(opts DatabaseConnection) error {
+	insertMap := map[string]any{
+		"id":                a.Id,
+		"input_vars":        a.InputVars,
+		"org_id":            a.OrgId,
+		"template_content":  a.TemplateContent,
+		"template_id":       a.TemplateId,
+		"template_version":  a.TemplateVersion,
+		"triggered_by":      a.TriggeredBy.GetId(),
+		"triggered_at":      a.TriggeredAt,
+		"triggerer_comment": a.TriggererComment,
+	}
+	fields := []string{}
+	valuePlaceholders := []string{}
+	values := []any{}
+	for field, value := range insertMap {
+		fields = append(fields, field)
+		valuePlaceholders = append(valuePlaceholders, "?")
+		values = append(values, value)
+	}
+	if err := executeMysqlInsert(mysqlQueryInput{
+		Db:       opts.Db,
+		FnSource: "models.Automation.CreateV1",
+		Stmt: fmt.Sprintf(
+			`INSERT INTO automations (%s) VALUES (%s)`,
+			strings.Join(fields, ", "),
+			strings.Join(valuePlaceholders, ", "),
+		),
+		Args:         values,
+		RowsAffected: oneRowAffected,
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (a *Automation) GetTemplate() (*automations.Template, error) {
 	return automations.LoadAutomationTemplate(a.TemplateContent)
 }
 
-func (a *Automation) Load(opts DatabaseConnection) error {
+func (a *Automation) LoadPendingV1(opts DatabaseConnection) error {
+	if a.TriggeredBy == nil {
+		a.TriggeredBy = &User{}
+	}
+	cacheKey := strings.Join([]string{cachePrefixAutomationPending, *a.Id}, ":")
+	cacheData, err := cache.Get().Get(cacheKey)
+	if err != nil {
+		return fmt.Errorf("models.Automation.LoadPendingV1: failed to get cache: %w", err)
+	}
+	if err := json.Unmarshal([]byte(cacheData), a); err != nil {
+		return fmt.Errorf("models.Automation.LoadPendingV1: failed to unmarshal data: %w", err)
+	}
+	return nil
+}
+
+func (a *Automation) LoadV1(opts DatabaseConnection) error {
 	if a.TriggeredBy == nil {
 		a.TriggeredBy = &User{}
 	}
@@ -138,13 +191,15 @@ type QueueAutomationRunV1Output struct {
 }
 
 type QueueAutomationRunV1Opts struct {
-	Db    *sql.DB
+	Db *sql.DB
+	Q  queue.Queue
+
 	Input map[string]any
-	Q     queue.Queue
+	OrgId *string
 }
 
 // QueueRun submits the automation to the queue for processing
-func (a *Automation) QueueRunV1(opts QueueAutomationRunV1Opts) (*QueueAutomationRunV1Output, error) {
+func (a *Automation) RunV1(opts QueueAutomationRunV1Opts) (*QueueAutomationRunV1Output, error) {
 	if err := a.assertId(); err != nil {
 		return nil, err
 	} else if err = a.assertTemplateContent(); err != nil {
@@ -159,12 +214,6 @@ func (a *Automation) QueueRunV1(opts QueueAutomationRunV1Opts) (*QueueAutomation
 	finalVariableMap := map[string]any{}
 	errs := []error{}
 
-	fmt.Println("!-------------------------------------------------------")
-	fmt.Println("-------------------------------------------------------")
-	o, _ := json.MarshalIndent(opts.Input, "", "  ")
-	fmt.Println(string(o))
-	fmt.Println("-------------------------------------------------------")
-	fmt.Println("!-------------------------------------------------------")
 	for variableId, variable := range variables {
 		inputValue, inputVarExists := opts.Input[variableId]
 		// assign defaults if it exists
@@ -206,43 +255,26 @@ func (a *Automation) QueueRunV1(opts QueueAutomationRunV1Opts) (*QueueAutomation
 	}
 
 	if len(errs) > 0 {
-		fmt.Println("yes it reached here")
 		return nil, errors.Join(errs...)
 	}
-	fmt.Println("aisdjioasjdioajsiodjaiosdjioasjiodjasiodjas")
 
 	for i, variable := range template.Spec.Variables {
 		template.Spec.Variables[i].Value = finalVariableMap[variable.Id]
 	}
-	automation := template.Spec.Template
-	automation.Variables = template.Spec.Variables
-	automation.Status.Id = uuid.NewString()
-	automation.Status.QueuedAt = time.Now()
-	automationData, err := json.MarshalIndent(automation, "", "  ")
+	automationSpec := template.Spec.Template
+	automationSpec.Variables = template.Spec.Variables
+	automationSpec.Status.Id = *a.Id
+	automationSpec.Status.QueuedAt = time.Now()
+	automationData, err := json.MarshalIndent(automationSpec, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("invalid automation format: %w", errorInputValidationFailed)
 	}
 
-	variableData, err := json.MarshalIndent(finalVariableMap, "", "  ")
+	a.InputVars, err = json.Marshal(finalVariableMap)
 	if err != nil {
-		return nil, fmt.Errorf("invalid variables format: %w", errorInputValidationFailed)
+		return nil, fmt.Errorf("failed to marshal variables: %w", err)
 	}
-
-	if err := executeMysqlInsert(mysqlQueryInput{
-		FnSource: "models.Automation.QueueRunV1",
-		Db:       opts.Db,
-		Stmt: `INSERT INTO automation_runs (
-			automation_id,
-			input_vars,
-			last_known_status
-		) VALUES (?, ?, ?)`,
-		Args: []any{
-			*a.Id,
-			string(variableData),
-			"pending",
-		},
-		RowsAffected: oneRowAffected,
-	}); err != nil {
+	if err := a.CreateV1(DatabaseConnection{Db: opts.Db}); err != nil {
 		return nil, fmt.Errorf("failed to insert automation run to db: %w", err)
 	}
 
@@ -258,8 +290,8 @@ func (a *Automation) QueueRunV1(opts QueueAutomationRunV1Opts) (*QueueAutomation
 	}
 
 	output := &QueueAutomationRunV1Output{
-		AutomationRunId:    automation.Status.Id,
-		AutomationQueuedAt: automation.Status.QueuedAt,
+		AutomationRunId:    automationSpec.Status.Id,
+		AutomationQueuedAt: automationSpec.Status.QueuedAt,
 	}
 
 	return output, nil

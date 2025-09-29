@@ -20,9 +20,9 @@ func (t *Template) LoadVersionsV1(opts DatabaseConnection) error {
 				created_at,
 				created_by
 			FROM
-				automation_template_versions atv
+				template_versions atv
 			WHERE
-				atv.automation_template_id = ?
+				atv.template_id = ?
 		`,
 		Args: []any{
 			*t.Id,
