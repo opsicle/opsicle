@@ -5,10 +5,22 @@
 - Third-party libraries: keep minimal, use the standard library as far as possible, for all dependencies, ensure minimal sub-dependencies and ensure it was last updated less than a year ago and has multiple contributors
 - Comments: concise, follow best practices for Go, no fillter
 - Naming: use `cameCase` for all JSON and YAML struct tags
+- When instantiating slices, do not use `make(T, 0)`, use the `[]T{}` semantics for standardisation
+- When documenting APIs use comment notation from `swaggo`
 
 ## Architecture style
 - Adopt an MVC code architecture
 - For Models components, adopt an object-oriented approach where structs represent classes that have functions that manipualte an instance's properties
+
+## Data persistence (database) things
+- Migrations can be found at `./internal/database/migrations` and uses `gomigrate`
+- The CLI invocation that runs migrations can be found at `./cmd/opsicle/run/migrations`
+- When creating migrations, use a timestamp (reference existing migrations) followed by a descriptive text in accordance with how `gomigrate` creates new migrations
+- All database tables should include an `id` field which accounts for a UUID
+- All database tables should include a `created_at` field which is set to the timestamp by default
+- Where applicable, the table should include a `created_by` field which is a UUID that references the `users`.`id` column
+- All database tables should include a `last_updated_at` field which is set to the timestamp by default and is updated to the current timestamp of any update done on the row
+- Where applicable, the table should include a `last_updated_by` field which is a UUID that references the `users`.`id` column
 
 ## API style
 - All resource manifests meant for ingestion by the system should be acceptable in both YAML and JSON formats

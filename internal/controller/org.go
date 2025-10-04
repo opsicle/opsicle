@@ -157,6 +157,17 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add permissions to org role", ErrorDatabaseIssue)
 		return
 	}
+	assigner := session.UserId
+	if err := orgRole.AssignUserV1(models.AssignOrgRoleV1Input{
+		DatabaseConnection: models.DatabaseConnection{Db: db},
+		OrgId:              orgInstance.GetId(),
+		UserId:             session.UserId,
+		AssignedBy:         &assigner,
+	}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to assign default role[%s] to user[%s]: %s", orgRole.GetId(), session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to assign org role", ErrorDatabaseIssue)
+		return
+	}
 
 	audit.Log(audit.LogEntry{
 		EntityId:     session.UserId,

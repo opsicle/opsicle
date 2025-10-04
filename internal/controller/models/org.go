@@ -404,7 +404,7 @@ func (o *Org) ListRolesV1(opts DatabaseConnection) (OrgRoles, error) {
 					OrgId:       o.Id,
 					Name:        roleName,
 					CreatedAt:   roleCreatedAt,
-					Permissions: make(OrgRolePermissions, 0),
+					Permissions: OrgRolePermissions{},
 				}
 				role.LastUpdatedAt = roleCreatedAt
 				if roleUpdatedAtRaw.Valid {
