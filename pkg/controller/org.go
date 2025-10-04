@@ -357,6 +357,57 @@ func (c Client) ListOrgUsersV1(input ListOrgUsersV1Input) (*ListOrgUsersV1Output
 	return output, err
 }
 
+type ListOrgRolesV1Output struct {
+	Data ListOrgRolesV1OutputData
+
+	http.Response
+}
+
+type ListOrgRolesV1OutputData []ListOrgRolesV1OutputDataRole
+
+type ListOrgRolesV1OutputDataRole struct {
+	CreatedAt     time.Time                                `json:"createdAt" yaml:"createdAt"`
+	CreatedBy     *ListOrgRolesV1OutputDataRoleUser        `json:"createdBy" yaml:"createdBy"`
+	Id            string                                   `json:"id" yaml:"id"`
+	LastUpdatedAt time.Time                                `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
+	Name          string                                   `json:"name" yaml:"name"`
+	OrgId         string                                   `json:"orgId" yaml:"orgId"`
+	Permissions   []ListOrgRolesV1OutputDataRolePermission `json:"permissions" yaml:"permissions"`
+}
+
+type ListOrgRolesV1OutputDataRoleUser struct {
+	Email string `json:"email" yaml:"email"`
+	Id    string `json:"id" yaml:"id"`
+}
+
+type ListOrgRolesV1OutputDataRolePermission struct {
+	Allows   uint64 `json:"allows" yaml:"allows"`
+	Denys    uint64 `json:"denys" yaml:"denys"`
+	Id       string `json:"id" yaml:"id"`
+	Resource string `json:"resource" yaml:"resource"`
+}
+
+type ListOrgRolesV1Input struct {
+	OrgId string `json:"-"`
+}
+
+func (c Client) ListOrgRolesV1(input ListOrgRolesV1Input) (*ListOrgRolesV1Output, error) {
+	var outputData ListOrgRolesV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/org/%s/roles", input.OrgId),
+		Output: &outputData,
+	})
+	var output *ListOrgRolesV1Output
+	if outputClient != nil {
+		output = &ListOrgRolesV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
+}
+
 type ListOrgMemberTypesV1Output struct {
 	Data ListOrgMemberTypesV1OutputData
 

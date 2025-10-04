@@ -91,6 +91,10 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	user := models.User{Email: input.Email}
 	if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to query user by email: %s", err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to receive a valid user", ErrorNotFound)
+			return
+		}
 		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to receive a valid user", ErrorDatabaseIssue)
 		return
 	}

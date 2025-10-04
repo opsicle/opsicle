@@ -183,9 +183,16 @@ var Command = &cobra.Command{
 				orgCode = ""
 				goto askUser
 			}
+			return fmt.Errorf("failed to create org: %w", err)
 		}
 
-		fmt.Printf("✅ Successfully created organisation[%s]\n", createOrgOutput.Data.Code)
+		cli.PrintBoxedSuccessMessage(
+			fmt.Sprintf(
+				"Organisation '%s' with codeword '%s' has been successfully created",
+				createOrgOutput.Data.Id,
+				createOrgOutput.Data.Code,
+			),
+		)
 
 		return nil
 	},

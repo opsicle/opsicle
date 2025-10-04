@@ -61,7 +61,7 @@ func validateUserIsNotLastAdmin(opts validateUserIsNotLastAdminOpts) error {
 	if err != nil {
 		return fmt.Errorf("failed to retrieve admin list: %w", err)
 	}
-	if len(admins) == 1 && admins[0].UserId == opts.UserId {
+	if len(admins) == 1 && admins[0].User.GetId() == opts.UserId {
 		return ErrorOrgRequiresOneAdmin
 	}
 	return nil

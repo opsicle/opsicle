@@ -25,7 +25,7 @@ type CreateOrgV1Opts struct {
 	UserId string
 }
 
-func CreateOrgV1(opts CreateOrgV1Opts) (string, error) {
+func CreateOrgV1(opts CreateOrgV1Opts) (*Org, error) {
 	orgUuid := uuid.NewString()
 
 	if err := executeMysqlInsert(mysqlQueryInput{
@@ -49,17 +49,18 @@ func CreateOrgV1(opts CreateOrgV1Opts) (string, error) {
 		FnSource:     "models.CreateOrgV1",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	org := Org{Id: &orgUuid}
-	if err := org.AddUserV1(AddUserToOrgV1{
-		Db:         opts.Db,
-		UserId:     opts.UserId,
-		MemberType: string(TypeOrgAdmin),
-	}); err != nil {
-		return "", err
+	org := Org{
+		Id:   &orgUuid,
+		Name: opts.Name,
+		Code: opts.Code,
+		Type: string(opts.Type),
+		CreatedBy: &User{
+			Id: &opts.UserId,
+		},
 	}
 
-	return orgUuid, nil
+	return &org, nil
 }

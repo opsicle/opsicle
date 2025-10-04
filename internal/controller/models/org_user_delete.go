@@ -10,7 +10,7 @@ func (ou *OrgUser) DeleteV1(opts DatabaseConnection) error {
 	return executeMysqlDelete(mysqlQueryInput{
 		Db:           opts.Db,
 		Stmt:         `DELETE FROM org_users WHERE org_id = ? AND user_id = ?`,
-		Args:         []any{ou.OrgId, ou.UserId},
+		Args:         []any{ou.Org.GetId(), ou.User.GetId()},
 		FnSource:     "models.OrgUser.DeleteV1",
 		RowsAffected: oneRowAffected,
 	})

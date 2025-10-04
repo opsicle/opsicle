@@ -14,7 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var flags cli.Flags = cli.Flags{
+var Flags cli.Flags = cli.Flags{
 	{
 		Name:         "email",
 		DefaultValue: "",
@@ -36,7 +36,7 @@ var flags cli.Flags = cli.Flags{
 }
 
 func init() {
-	flags.AddToCommand(Command)
+	Flags.AddToCommand(Command)
 }
 
 var Command = &cobra.Command{
@@ -44,7 +44,7 @@ var Command = &cobra.Command{
 	Short: "Creates an account on Opsicle",
 	Long:  "Creates an account on Opsicle. If you are using your own instance, set the value of the --controller-url flag to your controller's address (this address needs to be reachable from your host machine)",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		flags.BindViper(cmd)
+		Flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var client *controller.Client

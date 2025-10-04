@@ -50,6 +50,8 @@ func (c Client) CreateSessionV1(opts CreateSessionV1Input) (*CreateSessionV1Outp
 			return nil, err
 		}
 		switch outputClient.GetErrorCode().Error() {
+		case ErrorNotFound.Error():
+			err = ErrorNotFound
 		case ErrorEmailUnverified.Error():
 			err = ErrorEmailUnverified
 		case ErrorInvalidCredentials.Error():

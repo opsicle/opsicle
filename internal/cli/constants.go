@@ -26,5 +26,5 @@ const (
 )
 
 func PrintLogo() {
-	fmt.Println(Logo)
+	fmt.Print(Logo)
 }

@@ -60,16 +60,9 @@ var Command = &cobra.Command{
 		}
 		controllerUrl := viper.GetString("controller-url")
 		methodId := "opsicle/run/automation"
-	enforceAuth:
 		sessionToken, err := cli.RequireAuth(controllerUrl, methodId)
 		if err != nil {
-			rootCmd := cmd.Root()
-			rootCmd.SetArgs([]string{"login"})
-			_, err := rootCmd.ExecuteC()
-			if err != nil {
-				return err
-			}
-			goto enforceAuth
+			return err
 		}
 
 		client, err := controller.NewClient(controller.NewClientOpts{
@@ -150,7 +143,7 @@ var Command = &cobra.Command{
 				return strings.Compare(formFields[i].Label, formFields[j].Label) < 0
 			})
 			variableInputForm := cli.CreateForm(cli.FormOpts{
-				Title:       fmt.Sprintf("Executing template[%s]", automationOutput.Data.TemplateName),
+				Title:       fmt.Sprintf("Executing template[%s]", pendingAutomation.TemplateName),
 				Description: "Please enter/confirm values for the following variables",
 				Fields:      formFields,
 			})
@@ -172,7 +165,7 @@ var Command = &cobra.Command{
 			}
 			if errors.Is(variableInputForm.GetExitCode(), cli.ErrorUserCancelled) {
 				fmt.Println("💬 Alrights, tell me again if you want to create an automation from this template")
-				return errors.New("user cancelled action")
+				return cli.ErrorUserCancelled
 			}
 			inputVariableMap = variableInputForm.GetValueMap()
 			o, _ := json.MarshalIndent(inputVariableMap, "", "  ")

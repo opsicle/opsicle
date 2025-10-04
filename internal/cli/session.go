@@ -4,14 +4,23 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/pkg/controller"
+
+	"github.com/spf13/cobra"
 )
 
-func RequireAuth(controllerUrl string, methodId string) (string, error) {
+func RequireAuth(controllerUrl string, methodId string, runOnUnauth ...*cobra.Command) (string, error) {
 	sessionToken, _, err := controller.GetSessionToken()
 	if err != nil {
-		return "", fmt.Errorf("not authenticated")
+		if len(runOnUnauth) == 0 {
+			return "", ErrorNotAuthenticated
+		}
+		remediate := runOnUnauth[0]
+		if err := remediate.Execute(); err != nil {
+			return "", errors.Join(ErrorAuthError, err)
+		}
 	}
 
+tryAuth:
 	client, err := controller.NewClient(controller.NewClientOpts{
 		ControllerUrl: controllerUrl,
 		BearerAuth: &controller.NewClientBearerAuthOpts{
@@ -20,10 +29,18 @@ func RequireAuth(controllerUrl string, methodId string) (string, error) {
 		Id: methodId,
 	})
 	if err != nil {
-		if errors.Is(err, controller.ErrorConnectionRefused) {
-			return "", fmt.Errorf("unexpected error: %w", err)
+		if errors.Is(err, controller.ErrorInvalidInput) {
+			return "", errors.Join(ErrorClientUnavailable, err)
+		} else if errors.Is(err, controller.ErrorHealthcheckFailed) {
+			return "", errors.Join(ErrorControllerUnavailable, err)
+		} else if len(runOnUnauth) > 0 {
+			remediate := runOnUnauth[0]
+			if err := remediate.Execute(); err != nil {
+				return "", errors.Join(ErrorAuthError, err)
+			}
+			goto tryAuth
 		}
-		return "", fmt.Errorf("unexpected error: %w", err)
+		return "", err
 	}
 
 	output, err := client.ValidateSessionV1()

@@ -66,20 +66,20 @@ func NewClient(opts NewClientOpts) (*Client, error) {
 
 	controllerUrl, err := url.Parse(opts.ControllerUrl)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse provided controllerUrl[%s]: %s", opts.ControllerUrl, err)
+		return nil, fmt.Errorf("%w: failed to parse provided controllerUrl[%s]: %w", ErrorInvalidInput, opts.ControllerUrl, err)
 	}
 
 	if controllerUrl.Scheme == "" {
-		return nil, fmt.Errorf("failed to determine url scheme of controllerUrl[%s]", opts.ControllerUrl)
+		return nil, fmt.Errorf("%w: failed to determine url scheme of controllerUrl[%s]", ErrorInvalidInput, opts.ControllerUrl)
 	}
 	client.ControllerUrl = controllerUrl
 
 	healthcheckOutput, err := client.HealthcheckPing()
 	if err != nil {
-		return nil, fmt.Errorf("%w[failed to check health of controller]: %w", ErrorHealthcheckFailed, err)
+		return nil, fmt.Errorf("%w: failed to check health of controller: %w", ErrorHealthcheckFailed, err)
 	}
 	if healthcheckOutput.Data.Status != "ok" {
-		return nil, fmt.Errorf("%w[controller repsonded with unhealthy]: %w", ErrorHealthcheckFailed, err)
+		return nil, fmt.Errorf("%w: controller repsonded with unhealthy: %w", ErrorHealthcheckFailed, err)
 	}
 
 	return client, nil
@@ -160,6 +160,9 @@ type Client struct {
 }
 
 func (c Client) WithAuth(auth ...string) Client {
+	if c.BearerAuth == nil {
+		c.BearerAuth = &NewClientBearerAuthOpts{}
+	}
 	if len(auth) == 1 {
 		c.BearerAuth.Token = auth[0]
 	} else if len(auth) == 2 {
@@ -219,6 +222,7 @@ func (c Client) do(input request) (*clientOutput, error) {
 		}
 		return nil, fmt.Errorf("%w: %w: %w", ErrorClientRequestExecution, ErrorOutputNil, err)
 	}
+	defer httpResponse.Body.Close()
 	output := &clientOutput{Response: *httpResponse}
 	if !isControllerResponse(httpResponse) {
 		return output, ErrorClientResponseNotFromController

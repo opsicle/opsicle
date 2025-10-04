@@ -34,6 +34,7 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleLeaveOrgV1))).Methods(http.MethodDelete)
 	v1.Handle("/{orgId}/member/{userId}", requiresAuth(http.HandlerFunc(handleDeleteOrgUserV1))).Methods(http.MethodDelete)
 	v1.Handle("/{orgId}/members", requiresAuth(http.HandlerFunc(handleListOrgUsersV1))).Methods(http.MethodGet)
+	v1.Handle("/{orgId}/roles", requiresAuth(http.HandlerFunc(handleListOrgRolesV1))).Methods(http.MethodGet)
 	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateOrgInvitationV1))).Methods(http.MethodPatch)
 
 	v1 = opts.Router.PathPrefix("/v1/orgs").Subrouter()
@@ -41,12 +42,12 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleListOrgsV1))).Methods(http.MethodGet)
 }
 
-type handleCreateOrgV1Output struct {
+type CreateOrgV1Output struct {
 	Id   string `json:"id"`
 	Code string `json:"code"`
 }
 
-type handleCreateOrgV1Input struct {
+type CreateOrgV1Input struct {
 	Name string `json:"name"`
 	Code string `json:"code"`
 }
@@ -57,7 +58,7 @@ type handleCreateOrgV1Input struct {
 // @Tags         controller-service
 // @Accept       json
 // @Produce      json
-// @Param        request body handleCreateOrgV1Input true "User credentials"
+// @Param        request body CreateOrgV1Input true "User credentials"
 // @Success      200 {object} commonHttpResponse "ok"
 // @Failure      403 {object} commonHttpResponse "forbidden"
 // @Failure      500 {object} commonHttpResponse "internal server error"
@@ -71,7 +72,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log(common.LogLevelDebug, "successfully read body into bytes")
-	var input handleCreateOrgV1Input
+	var input CreateOrgV1Input
 	if err := json.Unmarshal(requestBody, &input); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", ErrorInvalidInput)
 		return
@@ -90,7 +91,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgId, err := models.CreateOrgV1(models.CreateOrgV1Opts{
+	orgInstance, err := models.CreateOrgV1(models.CreateOrgV1Opts{
 		Db:     db,
 		Code:   input.Code,
 		Name:   input.Name,
@@ -105,20 +106,71 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create org", ErrorDatabaseIssue)
 		return
 	}
-	log(common.LogLevelDebug, fmt.Sprintf("successfully created org[%s] with id[%s]", input.Code, orgId))
+	log(common.LogLevelDebug, fmt.Sprintf("created org[%s] with id[%s]", input.Code, orgInstance.GetId()))
+	log(common.LogLevelDebug, fmt.Sprintf("adding user[%s] to org[%s]", session.UserId, orgInstance.GetId()))
+	if err := orgInstance.AddUserV1(models.AddUserToOrgV1{
+		Db:         db,
+		UserId:     session.UserId,
+		MemberType: string(models.TypeOrgAdmin),
+	}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to add user[%s] to org[%s]: %s", session.UserId, orgInstance.GetId(), err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add user to org", ErrorDatabaseIssue)
+		return
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("added user[%s] to org[%s] as admin", session.UserId, orgInstance.GetId()))
+
+	log(common.LogLevelDebug, fmt.Sprintf("adding default role to org[%s]", orgInstance.GetId()))
+	orgRole, err := orgInstance.CreateRoleV1(models.CreateOrgRoleV1Input{
+		DatabaseConnection: models.DatabaseConnection{Db: db},
+		RoleName:           models.DefaultOrgRoleName,
+		UserId:             session.UserId,
+	})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to add default role to org[%s]: %s", orgRole.GetId(), err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add role to org", ErrorDatabaseIssue)
+		return
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("added default role[%s] to org[%s]", orgRole.GetId(), orgInstance.GetId()))
+
+	log(common.LogLevelDebug, fmt.Sprintf("adding default permissions to orgRole[%s]", orgRole.GetId()))
+	resources := []models.Resource{
+		models.ResourceAutomationLogs,
+		models.ResourceAutomations,
+		models.ResourceOrg,
+		models.ResourceOrgBilling,
+		models.ResourceOrgConfig,
+		models.ResourceOrgUser,
+		models.ResourceTemplates,
+	}
+	permissionErrs := []error{}
+	for _, resource := range resources {
+		if err := orgRole.CreatePermissionV1(models.CreateOrgRolePermissionV1Input{
+			Allows:             models.ActionSetAdmin,
+			Resource:           resource,
+			DatabaseConnection: models.DatabaseConnection{Db: db},
+		}); err != nil {
+			permissionErrs = append(permissionErrs, err)
+		}
+	}
+	if len(permissionErrs) > 0 {
+		log(common.LogLevelError, fmt.Sprintf("failed to add permissions to orgRole[%s]: %s", orgRole.GetId(), errors.Join(permissionErrs...)))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add permissions to org role", ErrorDatabaseIssue)
+		return
+	}
+
 	audit.Log(audit.LogEntry{
 		EntityId:     session.UserId,
 		EntityType:   audit.UserEntity,
 		Verb:         audit.Create,
-		ResourceId:   orgId,
+		ResourceId:   orgInstance.GetId(),
 		ResourceType: audit.OrgResource,
 		Status:       audit.Success,
 		SrcIp:        &session.SourceIp,
 		SrcUa:        &session.UserAgent,
 		DstHost:      &r.Host,
 	})
-	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleCreateOrgV1Output{
-		Id:   orgId,
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", CreateOrgV1Output{
+		Id:   orgInstance.GetId(),
 		Code: input.Code,
 	})
 }
@@ -177,12 +229,12 @@ func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", ErrorDatabaseIssue)
 		return
 	}
-	log(common.LogLevelDebug, fmt.Sprintf("successfully retrieved user[%s] in org[%s]", orgUser.UserId, orgUser.OrgId))
+	log(common.LogLevelDebug, fmt.Sprintf("successfully retrieved user[%s] in org[%s]", orgUser.User.GetId(), orgUser.Org.GetId()))
 	audit.Log(audit.LogEntry{
 		EntityId:     session.UserId,
 		EntityType:   audit.UserEntity,
 		Verb:         audit.Get,
-		ResourceId:   orgUser.UserId,
+		ResourceId:   orgUser.User.GetId(),
 		ResourceType: audit.OrgUserResource,
 		Status:       audit.Success,
 		SrcIp:        &session.SourceIp,
@@ -317,12 +369,12 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 			handleListOrgUsersV1OutputUser{
 				JoinedAt:   orgUser.JoinedAt,
 				MemberType: orgUser.MemberType,
-				OrgId:      orgUser.OrgId,
-				OrgCode:    orgUser.OrgCode,
-				OrgName:    orgUser.OrgName,
-				UserId:     orgUser.UserId,
-				UserEmail:  orgUser.UserEmail,
-				UserType:   orgUser.UserType,
+				OrgId:      orgUser.Org.GetId(),
+				OrgCode:    orgUser.Org.Code,
+				OrgName:    orgUser.Org.Name,
+				UserId:     orgUser.User.GetId(),
+				UserEmail:  orgUser.User.Email,
+				UserType:   string(orgUser.User.Type),
 			},
 		)
 	}
@@ -332,6 +384,107 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 		EntityType:   audit.UserEntity,
 		Verb:         audit.List,
 		ResourceType: audit.OrgUserResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleListOrgRolesV1Output []handleListOrgRolesV1OutputRole
+
+type handleListOrgRolesV1OutputRole struct {
+	CreatedAt     time.Time                                  `json:"createdAt" yaml:"createdAt"`
+	CreatedBy     *handleListOrgRolesV1OutputRoleUser        `json:"createdBy" yaml:"createdBy"`
+	Id            string                                     `json:"id" yaml:"id"`
+	LastUpdatedAt time.Time                                  `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
+	Name          string                                     `json:"name" yaml:"name"`
+	OrgId         string                                     `json:"orgId" yaml:"orgId"`
+	Permissions   []handleListOrgRolesV1OutputRolePermission `json:"permissions" yaml:"permissions"`
+}
+
+type handleListOrgRolesV1OutputRoleUser struct {
+	Email string `json:"email" yaml:"email"`
+	Id    string `json:"id" yaml:"id"`
+}
+
+type handleListOrgRolesV1OutputRolePermission struct {
+	Allows   uint64 `json:"allows" yaml:"allows"`
+	Denys    uint64 `json:"denys" yaml:"denys"`
+	Id       string `json:"id" yaml:"id"`
+	Resource string `json:"resource" yaml:"resource"`
+}
+
+func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+
+	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested list of roles from org[%s]", session.UserId, orgId))
+	org := models.Org{Id: &orgId}
+	if _, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: session.UserId}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to get user[%s] from org[%s]: %s", session.UserId, orgId, err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, fmt.Sprintf("refused to list roles in org[%s] at user[%s]'s request", orgId, session.UserId), ErrorInvalidInput)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org roles", ErrorDatabaseIssue)
+		return
+	}
+	orgRoles, err := org.ListRolesV1(models.DatabaseConnection{Db: db})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to list roles from org[%s]: %s", orgId, err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org roles", ErrorDatabaseIssue)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org roles", ErrorDatabaseIssue)
+		return
+	}
+	output := make(handleListOrgRolesV1Output, 0, len(orgRoles))
+	for _, role := range orgRoles {
+		var createdBy *handleListOrgRolesV1OutputRoleUser
+		if role.CreatedBy != nil && role.CreatedBy.Id != nil {
+			createdBy = &handleListOrgRolesV1OutputRoleUser{
+				Id:    role.CreatedBy.GetId(),
+				Email: role.CreatedBy.Email,
+			}
+		}
+		permissions := make([]handleListOrgRolesV1OutputRolePermission, 0, len(role.Permissions))
+		for _, permission := range role.Permissions {
+			if permission.Id == nil {
+				continue
+			}
+			permissions = append(permissions, handleListOrgRolesV1OutputRolePermission{
+				Id:       *permission.Id,
+				Resource: string(permission.Resource),
+				Allows:   uint64(permission.Allows),
+				Denys:    uint64(permission.Denys),
+			})
+		}
+		orgIdValue := orgId
+		if role.OrgId != nil {
+			orgIdValue = *role.OrgId
+		}
+		output = append(output, handleListOrgRolesV1OutputRole{
+			CreatedAt:     role.CreatedAt,
+			CreatedBy:     createdBy,
+			Id:            role.GetId(),
+			LastUpdatedAt: role.LastUpdatedAt,
+			Name:          role.Name,
+			OrgId:         orgIdValue,
+			Permissions:   permissions,
+		})
+	}
+
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.List,
+		ResourceId:   orgId,
+		ResourceType: audit.OrgResource,
 		Status:       audit.Success,
 		SrcIp:        &session.SourceIp,
 		SrcUa:        &session.UserAgent,
@@ -577,9 +730,9 @@ func handleGetOrgCurrentUserV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleGetOrgCurrentUserV1Output{
 		JoinedAt:   orgUser.JoinedAt,
 		MemberType: orgUser.MemberType,
-		OrgCode:    orgUser.OrgCode,
-		OrgId:      orgUser.OrgId,
-		UserId:     orgUser.UserId,
+		OrgCode:    orgUser.Org.Code,
+		OrgId:      orgUser.Org.GetId(),
+		UserId:     orgUser.User.GetId(),
 
 		Permissions: OrgUserMemberPermissions{
 			CanManageUsers: isAllowedToManageOrgUsers(orgUser),
@@ -674,10 +827,10 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 		output := handleUpdateOrgInvitationV1Output{
 			JoinedAt:       orgUser.JoinedAt,
 			MembershipType: orgUser.MemberType,
-			OrgId:          orgUser.OrgId,
-			OrgCode:        orgUser.OrgCode,
-			OrgName:        orgUser.OrgName,
-			UserId:         orgUser.UserId,
+			OrgId:          orgUser.Org.GetId(),
+			OrgCode:        orgUser.Org.Code,
+			OrgName:        orgUser.Org.Name,
+			UserId:         orgUser.User.GetId(),
 		}
 		audit.Log(audit.LogEntry{
 			EntityId:     session.UserId,
@@ -729,10 +882,9 @@ func handleLeaveOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("received request by user[%s] to leave org[%s]", session.UserId, orgId))
 
-	orgUser := models.OrgUser{
-		OrgId:  orgId,
-		UserId: session.UserId,
-	}
+	orgUser := models.NewOrgUser()
+	orgUser.Org.Id = &orgId
+	orgUser.User.Id = &session.UserId
 	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", ErrorDatabaseIssue)
 		return
@@ -816,10 +968,9 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("validated user[%s] is able to manage org[%s] members", session.UserId, orgId))
 
-	orgUser := models.OrgUser{
-		OrgId:  orgId,
-		UserId: userId,
-	}
+	orgUser := models.NewOrgUser()
+	orgUser.Org.Id = &orgId
+	orgUser.User.Id = &session.UserId
 	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", ErrorDatabaseIssue)
 		return
@@ -931,7 +1082,9 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	orgUser := models.OrgUser{OrgId: orgId, UserId: userId}
+	orgUser := models.NewOrgUser()
+	orgUser.Org.Id = &orgId
+	orgUser.User.Id = &session.UserId
 	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to load user[%s] in org[%s]: %s", userId, orgId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user", ErrorDatabaseIssue)

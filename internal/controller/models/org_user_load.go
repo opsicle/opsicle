@@ -28,16 +28,16 @@ func (ou *OrgUser) LoadV1(opts DatabaseConnection) error {
 					ou.org_id = ?
 					AND ou.user_id = ?
 		`,
-		Args:     []any{ou.OrgId, ou.UserId},
+		Args:     []any{ou.Org.GetId(), ou.User.GetId()},
 		FnSource: "models.OrgUser.LoadV1",
 		ProcessRow: func(r *sql.Row) error {
 			return r.Scan(
 				&ou.JoinedAt,
 				&ou.MemberType,
-				&ou.UserEmail,
-				&ou.UserType,
-				&ou.OrgCode,
-				&ou.OrgName,
+				&ou.User.Email,
+				&ou.User.Type,
+				&ou.Org.Code,
+				&ou.Org.Name,
 			)
 		},
 	}); err != nil {

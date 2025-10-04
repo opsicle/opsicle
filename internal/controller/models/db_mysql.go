@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
@@ -203,4 +204,53 @@ func isMysqlDuplicateError(err error) bool {
 		}
 	}
 	return false
+}
+
+func parseInsertMap(insertMap map[string]any) (fieldNames []string, fieldValues []any, fieldValuePlaceholders []string, err error) {
+	var errs []error
+	for k, v := range insertMap {
+		fieldNames = append(fieldNames, k)
+		switch value := v.(type) {
+		case []byte, string, uint, uint32, uint64, int, int32, int64, float32, float64, bool:
+			fieldValues = append(fieldValues, value)
+			fieldValuePlaceholders = append(fieldValuePlaceholders, "?")
+		case DatabaseFunction:
+			fieldValues = append(fieldValues, value)
+			fieldValuePlaceholders = append(fieldValuePlaceholders, string(value))
+		default:
+			valueType := reflect.TypeOf(v)
+			errs = append(errs, fmt.Errorf("field[%s] has unexpected type '%s'", k, valueType.String()))
+		}
+	}
+	if len(errs) > 0 {
+		err = errors.Join(errs...)
+		return nil, nil, nil, err
+	}
+	return
+}
+
+func parseUpdateMap(updateMap map[string]any) (fieldNames []string, fieldSetters []string, fieldValues []any, err error) {
+	var errs []error
+	for k, v := range updateMap {
+		fieldNames = append(fieldNames, k)
+		switch val := v.(type) {
+		case string, uint, uint32, uint64, int, int32, int64, float32, float64, bool:
+			fieldSetters = append(fieldSetters, fmt.Sprintf("`%s` = ?", k))
+			fieldValues = append(fieldValues, val)
+		case []byte:
+			fieldSetters = append(fieldSetters, fmt.Sprintf("`%s` = ?", k))
+			fieldValues = append(fieldValues, string(val))
+		case DatabaseFunction:
+			fieldSetters = append(fieldSetters, fmt.Sprintf("`%s` = %s", k, v))
+		default:
+			valueType := reflect.TypeOf(v)
+			errs = append(errs, fmt.Errorf("field[%s] has invalid type '%s'", k, valueType.String()))
+		}
+	}
+
+	if len(errs) > 0 {
+		err = errors.Join(errs...)
+		return nil, nil, nil, err
+	}
+	return
 }
