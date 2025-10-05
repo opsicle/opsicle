@@ -54,6 +54,57 @@ func (or *OrgRole) GetId() string {
 	return *or.Id
 }
 
+type GetOrgRoleByIdV1Opts struct {
+	DatabaseConnection
+
+	RoleId string
+}
+
+func (o *Org) GetRoleByIdV1(opts GetOrgRoleByIdV1Opts) (*OrgRole, error) {
+	if err := o.assertIdDefined(); err != nil {
+		return nil, err
+	}
+	if opts.Db == nil {
+		return nil, fmt.Errorf("missing db connection: %w", errorInputValidationFailed)
+	}
+	if opts.RoleId == "" {
+		return nil, fmt.Errorf("role id undefined: %w", errorInputValidationFailed)
+	}
+	role := &OrgRole{OrgId: o.Id}
+	row := opts.Db.QueryRow(`
+		SELECT
+			id,
+			name,
+			created_at,
+			last_updated_at,
+			created_by
+		FROM org_roles
+		WHERE id = ? AND org_id = ?
+	`, opts.RoleId, o.GetId())
+	var (
+		roleId        string
+		createdAt     time.Time
+		lastUpdatedAt sql.NullTime
+		createdById   sql.NullString
+	)
+	if err := row.Scan(&roleId, &role.Name, &createdAt, &lastUpdatedAt, &createdById); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrorNotFound
+		}
+		return nil, fmt.Errorf("failed to get org role: %w", err)
+	}
+	role.Id = &roleId
+	role.CreatedAt = createdAt
+	if lastUpdatedAt.Valid {
+		role.LastUpdatedAt = lastUpdatedAt.Time
+	}
+	if createdById.Valid {
+		createdBy := createdById.String
+		role.CreatedBy = &User{Id: &createdBy}
+	}
+	return role, nil
+}
+
 type AssignOrgRoleV1Input struct {
 	DatabaseConnection
 

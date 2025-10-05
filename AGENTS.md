@@ -1,6 +1,8 @@
 # AGENTS.md (global)
 
-## Code style (universal)
+## Styling and guidelines
+
+### Code style (universal)
 - Langauges: use only Go for software code, use `/bin/sh`-compatible Shell for all scripts
 - Third-party libraries: keep minimal, use the standard library as far as possible, for all dependencies, ensure minimal sub-dependencies and ensure it was last updated less than a year ago and has multiple contributors
 - Comments: concise, follow best practices for Go, no fillter
@@ -8,24 +10,63 @@
 - When instantiating slices, do not use `make(T, 0)`, use the `[]T{}` semantics for standardisation
 - When documenting APIs use comment notation from `swaggo`
 
-## Architecture style
+#### Go conventions
+- Target Go: 1.24+
+- Use `go fmt` and `go vet`, no PR if `go vet` fails
+- Use `gorilla/mux` for creation of any HTTP-based servers
+- Use `spf13/cobra` for structuring commands
+- Use `spf13/viper` for managing the configuration
+- Use `charmbracelet/bubbletea` for all interactive CLI UI components
+- Use `sirupsen/logrus` for logging in the CLI
+- Commands go into `/cmd/*`; the root command package is contained in a directory in `./cmd`, with each subfolder being a sub-command
+- SDKs for other Go apps to use is in `./pkg`
+- Internal controllers are in `./internal`
+
+#### Error messages
+- All errors should be in americaniZed english, meaning use 'z' over 's' in examples like 'authorized', 'unauthorized'
+
+#### Struct tags
+- Always include both `json` and `yaml` tags in **camelCase** on exported fields that are used by the SDK.
+- Example:
+  ```go
+  type ExampleStruct struct {
+    SampleBoolean bool `json:"sampleBoolean" yaml:"sampleBoolean"`
+    SampleFloat float64 `json:"sampleFloat" yaml:"sampleFloat"`
+    SampleNumber int64 `json:"sampleNumber" yaml:"sampleNumber"`
+    SampleString string `json:"sampleString" yaml:"sampleString"`
+  }
+  ```
+
+## Architecture guidelines
 - Adopt an MVC code architecture
 - For Models components, adopt an object-oriented approach where structs represent classes that have functions that manipualte an instance's properties
 
-## Data persistence (database) things
+### Data persistence (database) preferences and guidelines
 - Migrations can be found at `./internal/database/migrations` and uses `gomigrate`
 - The CLI invocation that runs migrations can be found at `./cmd/opsicle/run/migrations`
 - When creating migrations, use a timestamp (reference existing migrations) followed by a descriptive text in accordance with how `gomigrate` creates new migrations
 - All database tables should include an `id` field which accounts for a UUID
 - All database tables should include a `created_at` field which is set to the timestamp by default
+- All `name` fields meant for storing human-readable names for a resource should be set to type `VARCHAR(255)` to accomodate 255 characters in a name
 - Where applicable, the table should include a `created_by` field which is a UUID that references the `users`.`id` column
 - All database tables should include a `last_updated_at` field which is set to the timestamp by default and is updated to the current timestamp of any update done on the row
 - Where applicable, the table should include a `last_updated_by` field which is a UUID that references the `users`.`id` column
 
-## API style
+### API communications guidelines
 - All resource manifests meant for ingestion by the system should be acceptable in both YAML and JSON formats
 - Users can submit YAML manifests or send an API call with JSON in its body, use the `Content-Type` in the request to decide which to parse
 - Exported SDKs (in `./pkg/`) should reference the internal controller's (as defined in MVC) types for contract parity
+- For communication via RESTful APIs, implement a retry strategy that:
+  - Only retries when it receives a HTTP status that definitely means the request didn't go through (IE when it's more than 500)
+  - Has an exponential backoff strategy with a predefined (can be a variable) maximum number of retries
+  - Logs all retry attempts
+- For communication via gRPC streams:
+  - Implement authentication via SSL certificates
+  - Ensure that TLS can be established and that the certificate is valid
+  - Do not implement mTLS (do not verify authenticity of certificate), only implement TLS to ensure data-in-transit is encrypted
+  - Identify organisations via the Organization field of the SSL certificate which should be the organisation ID
+  - Identify organisations via the CommonName field of the SSL certificate which should be the organisation codeword
+  - Authenticate organisations via the OrganizationalUnit field of the SSL certificate which should an organisation API key
 
 ## Opsicle platform components
 - This repository contains code to build a single binary that can be used to start 4 different components
@@ -36,6 +77,15 @@
   3. `coordinator`: A service that retrieves pending automations from the NATS queue, handles the approvals if any, and submits it to the `worker` component for execution. Collects logs and execution information from the `worker` component when execution is completed.
   4. `worker`: A background service that connects via gRPC streams to the `coordinator` and receives automations to execute. Executes the automations as sent to it by the `coordinator` and returns data such as logs to the `coordinator`
 
+### Networking and communication guidelines between components
+- `approver` and `controller` interact via single-transaction RESTful API calls. Implement an appropriate retry strategy
+- `controller` and `coordinator` interact via single-transaction RESTful API calls.
+- `coordinator` and `worker` interact via gRPC streams.
+
+### Controller component
+- `./internal/database/migrations` contains the database migrations and consequently the database structure
+- `./internal/controller` contains the Controller (as it is in MVC) 
+
 ## File layout
 - `./bin`: contains built binaries and is generally kept empty for the VCS
 - `./cmd`: contains commands, each directory represents a command/sub-command
@@ -45,11 +95,8 @@
 - `./internal`: contains internal controller code
 - `./pkg`: contains mainly Opsicle SDKs for other apps to consume; within Opsicle, if a service is consuming another service's functionality, it must use the SDK here
 
-### Controller component
-- `./internal/database/migrations` contains the database migrations and consequently the database structure
-- `./internal/controller` contains the Controller (as it is in MVC) 
 
-## Data persistence/storage guidelines
+## Data persistence/storage implementation notes
 Local deployments of these can be found in the `docker-compose.yml` at the root of this repository:
 - MySQL is used for the platform database. All persistent data should be sent here
 - Use MySQL workbench to manage the MySQL instance
@@ -64,32 +111,6 @@ Local deployments of these can be found in the `docker-compose.yml` at the root 
 - All infrastructure-as-code is to be written in Terraform
 - Use Digital Ocean as the service provider
 
-## Go conventions
-- Target Go: 1.24+
-- Use `got fmt` and `go vet`, no PR if `go vet` fails
-- Use `spf13/cobra` for structuring commands
-- Use `spf13/viper` for managing the configuration
-- Use `charmbracelet/bubbletea` for all interactive CLI UI components
-- Use `sirupsen/logrus` for logging in the CLI
-- Commands go into `/cmd/*`; the root command package is contained in a directory in `./cmd`, with each subfolder being a sub-command
-- SDKs for other Go apps to use is in `./pkg`
-- Internal controllers are in `./internal`
-
-## Error messages
-- All errors should be in americaniZed english, meaning use 'z' over 's' in examples like 'authorized', 'unauthorized'
-
-## Struct tags
-- Always include both `json` and `yaml` tags in **camelCase** on exported fields that are used by the SDK.
-- Example:
-
-```go
-type ExampleStruct struct {
-  SampleBoolean bool `json:"sampleBoolean" yaml:"sampleBoolean"`
-  SampleFloat float64 `json:"sampleFloat" yaml:"sampleFloat"`
-  SampleNumber int64 `json:"sampleNumber" yaml:"sampleNumber"`
-  SampleString string `json:"sampleString" yaml:"sampleString"`
-}
-```
 
 ## When told to add things
 
@@ -170,7 +191,7 @@ type ExampleStruct struct {
     /* ... */
   }
   ```
-- For all CLI commands that involve CRUD operations and requires a sign-in, use the following to enforce authentication:
+- For all CLI commands that involving Create / Read / Update/ Delete operations, these require a sign-in, so use the following to enforce authentication:
   ```go
   enforceAuth:
 		sessionToken, err := cli.RequireAuth(controllerUrl, methodId)

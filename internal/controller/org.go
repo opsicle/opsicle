@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +14,7 @@ import (
 	"opsicle/internal/controller/models"
 	"opsicle/internal/controller/templates"
 	"opsicle/internal/email"
+	"opsicle/internal/tls"
 	"opsicle/internal/validate"
 	"strings"
 	"time"
@@ -35,6 +38,8 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/{orgId}/member/{userId}", requiresAuth(http.HandlerFunc(handleDeleteOrgUserV1))).Methods(http.MethodDelete)
 	v1.Handle("/{orgId}/members", requiresAuth(http.HandlerFunc(handleListOrgUsersV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/roles", requiresAuth(http.HandlerFunc(handleListOrgRolesV1))).Methods(http.MethodGet)
+	v1.Handle("/{orgId}/tokens", requiresAuth(http.HandlerFunc(handleListOrgTokensV1))).Methods(http.MethodGet)
+	v1.Handle("/{orgId}/token", requiresAuth(http.HandlerFunc(handleCreateOrgTokenV1))).Methods(http.MethodPost)
 	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateOrgInvitationV1))).Methods(http.MethodPatch)
 
 	v1 = opts.Router.PathPrefix("/v1/orgs").Subrouter()
@@ -166,6 +171,18 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to assign default role[%s] to user[%s]: %s", orgRole.GetId(), session.UserId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to assign org role", ErrorDatabaseIssue)
+		return
+	}
+
+	log(common.LogLevelDebug, fmt.Sprintf("creating certificate authority for org[%s]", orgInstance.GetId()))
+	if _, err := orgInstance.CreateCertificateAuthorityV1(models.CreateOrgCertificateAuthorityV1Input{
+		DatabaseConnection: models.DatabaseConnection{Db: db},
+		CertOptions: &tls.CertificateOptions{
+			NotAfter: time.Now().Add(time.Hour * 24 * 365 * 5),
+		},
+	}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to create certificate authority for org[%s]: %s", orgInstance.GetId(), err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create certificate authority", ErrorDatabaseIssue)
 		return
 	}
 
@@ -501,6 +518,257 @@ func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
 		SrcUa:        &session.UserAgent,
 		DstHost:      &r.Host,
 	})
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleListOrgTokensV1Output []handleListOrgTokensV1OutputToken
+
+type handleListOrgTokensV1OutputToken struct {
+	Id            string                                `json:"id" yaml:"id"`
+	OrgId         string                                `json:"orgId" yaml:"orgId"`
+	Name          string                                `json:"name" yaml:"name"`
+	Description   *string                               `json:"description" yaml:"description"`
+	CreatedAt     time.Time                             `json:"createdAt" yaml:"createdAt"`
+	CreatedBy     *handleListOrgTokensV1OutputTokenUser `json:"createdBy" yaml:"createdBy"`
+	LastUpdatedAt time.Time                             `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
+	LastUpdatedBy *handleListOrgTokensV1OutputTokenUser `json:"lastUpdatedBy" yaml:"lastUpdatedBy"`
+}
+
+type handleListOrgTokensV1OutputTokenUser struct {
+	Id string `json:"id" yaml:"id"`
+}
+
+func handleListOrgTokensV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+
+	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested list of tokens from org[%s]", session.UserId, orgId))
+
+	if err := validateRequesterCanManageOrgUsers(validateRequesterCanManageOrgUsersOpts{
+		OrgId:           orgId,
+		RequesterUserId: session.UserId,
+	}); err != nil {
+		switch {
+		case errors.Is(err, ErrorInsufficientPermissions):
+			log(common.LogLevelError, fmt.Sprintf("user[%s] is not authorized to list tokens for org[%s]", session.UserId, orgId))
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not authorized to list tokens", ErrorInsufficientPermissions)
+			return
+		case errors.Is(err, ErrorDatabaseIssue):
+			log(common.LogLevelError, fmt.Sprintf("failed to verify requester permissions for org[%s]: %s", orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", ErrorDatabaseIssue)
+			return
+		default:
+			log(common.LogLevelError, fmt.Sprintf("unexpected error verifying requester permissions for org[%s]: %s", orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", ErrorUnknown)
+			return
+		}
+	}
+
+	org := models.Org{Id: &orgId}
+	orgTokens, err := org.ListTokensV1(models.ListOrgTokensV1Opts{DatabaseConnection: models.DatabaseConnection{Db: db}})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to list tokens for org[%s]: %s", orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org tokens", ErrorDatabaseIssue)
+		return
+	}
+
+	redactedTokens := orgTokens.GetRedacted()
+	output := make(handleListOrgTokensV1Output, 0, len(redactedTokens))
+	for _, token := range redactedTokens {
+		var createdBy *handleListOrgTokensV1OutputTokenUser
+		if token.CreatedBy != nil && token.CreatedBy.Id != nil {
+			createdBy = &handleListOrgTokensV1OutputTokenUser{Id: *token.CreatedBy.Id}
+		}
+		var lastUpdatedBy *handleListOrgTokensV1OutputTokenUser
+		if token.LastUpdatedBy != nil && token.LastUpdatedBy.Id != nil {
+			lastUpdatedBy = &handleListOrgTokensV1OutputTokenUser{Id: *token.LastUpdatedBy.Id}
+		}
+		output = append(output, handleListOrgTokensV1OutputToken{
+			Id:            token.GetId(),
+			OrgId:         token.GetOrg().GetId(),
+			Name:          token.Name,
+			Description:   token.Description,
+			CreatedAt:     token.CreatedAt,
+			CreatedBy:     createdBy,
+			LastUpdatedAt: token.LastUpdatedAt,
+			LastUpdatedBy: lastUpdatedBy,
+		})
+	}
+
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.List,
+		ResourceId:   orgId,
+		ResourceType: audit.OrgResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type handleCreateOrgTokenV1Input struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+	RoleId      string  `json:"roleId"`
+}
+
+type handleCreateOrgTokenV1Output struct {
+	TokenId     string `json:"tokenId"`
+	Name        string `json:"name"`
+	ApiKey      string `json:"apiKey"`
+	Certificate string `json:"certificatePem"`
+	PrivateKey  string `json:"privateKeyPem"`
+}
+
+func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+
+	requestBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", ErrorInvalidInput)
+		return
+	}
+	var input handleCreateOrgTokenV1Input
+	if err := json.Unmarshal(requestBody, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", ErrorInvalidInput)
+		return
+	}
+	if input.Name == "" {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "token name is required", ErrorInvalidInput)
+		return
+	}
+	if input.RoleId == "" {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "role id is required", ErrorInvalidInput)
+		return
+	}
+	if err := validateRequesterCanManageOrgUsers(validateRequesterCanManageOrgUsersOpts{
+		OrgId:           orgId,
+		RequesterUserId: session.UserId,
+	}); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not authorized to manage tokens", ErrorInsufficientPermissions)
+		return
+	}
+
+	org := models.Org{Id: &orgId}
+	orgDetails, err := models.GetOrgV1(models.GetOrgV1Opts{Db: db, Id: &orgId})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to get org[%s]: %s", orgId, err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", ErrorNotFound)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org", ErrorDatabaseIssue)
+		return
+	}
+
+	orgRole, err := org.GetRoleByIdV1(models.GetOrgRoleByIdV1Opts{
+		DatabaseConnection: models.DatabaseConnection{Db: db},
+		RoleId:             input.RoleId,
+	})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to load role[%s] for org[%s]: %s", input.RoleId, orgId, err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "specified role was not found", ErrorNotFound)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load org role", ErrorDatabaseIssue)
+		return
+	}
+
+	ca, err := org.LoadCertificateAuthorityV1(models.LoadOrgCertificateAuthorityV1Opts{
+		DatabaseConnection: models.DatabaseConnection{Db: db},
+	})
+	if err != nil {
+		if errors.Is(err, models.ErrorNotFound) {
+			log(common.LogLevelDebug, fmt.Sprintf("no certificate authority for org[%s], creating new one", orgId))
+			ca, err = org.CreateCertificateAuthorityV1(models.CreateOrgCertificateAuthorityV1Input{
+				DatabaseConnection: models.DatabaseConnection{Db: db},
+			})
+		}
+		if err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to prepare certificate authority for org[%s]: %s", orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to prepare certificate authority", ErrorDatabaseIssue)
+			return
+		}
+	}
+
+	caCert, caKey, err := ca.GetCryptoMaterials()
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to parse certificate authority for org[%s]: %s", orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load certificate authority", ErrorDatabaseIssue)
+		return
+	}
+
+	apiKey, err := generateAPIKey(64)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to generate api key for org[%s]: %s", orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to generate api key", ErrorUnknown)
+		return
+	}
+
+	tokenId := uuid.NewString()
+	certOpts := tls.CertificateOptions{
+		CommonName:         orgDetails.Code,
+		Organization:       []string{orgDetails.GetId()},
+		OrganizationalUnit: []string{tokenId, apiKey},
+		IsClient:           true,
+	}
+	certOpts.NotAfter = caCert.NotAfter
+	if certOpts.NotAfter.After(caCert.NotAfter) {
+		certOpts.NotAfter = caCert.NotAfter
+	}
+	certificate, key, err := tls.GenerateCertificate(&certOpts, caCert, caKey)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to generate certificate for org[%s]: %s", orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to generate certificate", ErrorUnknown)
+		return
+	}
+
+	createdBy := session.UserId
+	orgToken, err := org.CreateTokenV1(models.CreateOrgTokenV1Input{
+		TokenId:            tokenId,
+		DatabaseConnection: models.DatabaseConnection{Db: db},
+		Name:               input.Name,
+		Description:        input.Description,
+		CertificatePem:     certificate.Pem,
+		PrivateKeyPem:      key.Pem,
+		ApiKey:             apiKey,
+		CreatedBy:          &createdBy,
+		OrgRole:            orgRole,
+	})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to create org token for org[%s]: %s", orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create org token", ErrorDatabaseIssue)
+		return
+	}
+
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Create,
+		ResourceId:   orgToken.GetId(),
+		ResourceType: audit.OrgResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
+
+	output := handleCreateOrgTokenV1Output{
+		TokenId:     orgToken.GetId(),
+		Name:        orgToken.Name,
+		ApiKey:      apiKey,
+		Certificate: string(certificate.Pem),
+		PrivateKey:  string(key.Pem),
+	}
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
@@ -1180,4 +1448,15 @@ func handleListOrgMemberTypesV1(w http.ResponseWriter, r *http.Request) {
 		DstHost:      &r.Host,
 	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", memberTypes)
+}
+
+func generateAPIKey(length int) (string, error) {
+	if length%2 != 0 {
+		return "", fmt.Errorf("length must be even")
+	}
+	buf := make([]byte, length/2)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	return hex.EncodeToString(buf), nil
 }

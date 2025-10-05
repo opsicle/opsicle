@@ -52,10 +52,16 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		controllerUrl := viper.GetString("controller-url")
 		methodId := "opsicle/submit/template"
+	enforceAuth:
 		sessionToken, err := cli.RequireAuth(controllerUrl, methodId)
 		if err != nil {
-			fmt.Println("⚠️  You must be logged-in to run this command")
-			return err
+			rootCmd := cmd.Root()
+			rootCmd.SetArgs([]string{"login"})
+			_, err := rootCmd.ExecuteC()
+			if err != nil {
+				return err
+			}
+			goto enforceAuth
 		}
 
 		automationTemplatePath := viper.GetString("file")

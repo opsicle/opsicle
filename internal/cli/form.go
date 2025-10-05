@@ -94,7 +94,7 @@ func CreateForm(opts FormOpts) *FormModel {
 		case FormFieldString:
 			fallthrough
 		default:
-			validator = getStringValidator(formValidatorOpts{IsRequired: true})
+			validator = getStringValidator(formValidatorOpts{IsRequired: field.IsRequired})
 		}
 		inputModel.Validate = validator
 		inputModel.PlaceholderStyle = formStylePlaceholder

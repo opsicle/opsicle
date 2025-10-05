@@ -408,6 +408,97 @@ func (c Client) ListOrgRolesV1(input ListOrgRolesV1Input) (*ListOrgRolesV1Output
 	return output, err
 }
 
+type ListOrgTokensV1Output struct {
+	Data ListOrgTokensV1OutputData
+
+	http.Response
+}
+
+type ListOrgTokensV1OutputData []ListOrgTokensV1OutputToken
+
+type ListOrgTokensV1OutputToken struct {
+	Id            string                     `json:"id" yaml:"id"`
+	OrgId         string                     `json:"orgId" yaml:"orgId"`
+	Name          string                     `json:"name" yaml:"name"`
+	Description   *string                    `json:"description" yaml:"description"`
+	CreatedAt     time.Time                  `json:"createdAt" yaml:"createdAt"`
+	CreatedBy     *ListOrgTokensV1OutputUser `json:"createdBy" yaml:"createdBy"`
+	LastUpdatedAt time.Time                  `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
+	LastUpdatedBy *ListOrgTokensV1OutputUser `json:"lastUpdatedBy" yaml:"lastUpdatedBy"`
+}
+
+type ListOrgTokensV1OutputUser struct {
+	Id string `json:"id" yaml:"id"`
+}
+
+type ListOrgTokensV1Input struct {
+	OrgId string `json:"-"`
+}
+
+func (c Client) ListOrgTokensV1(input ListOrgTokensV1Input) (*ListOrgTokensV1Output, error) {
+	var outputData ListOrgTokensV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/org/%s/tokens", input.OrgId),
+		Output: &outputData,
+	})
+	var output *ListOrgTokensV1Output
+	if outputClient != nil {
+		output = &ListOrgTokensV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorInsufficientPermissions.Error():
+			err = ErrorInsufficientPermissions
+		case ErrorNotFound.Error():
+			err = ErrorNotFound
+		}
+	}
+	return output, err
+}
+
+type CreateOrgTokenV1Input struct {
+	OrgId       string  `json:"-"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	RoleId      string  `json:"roleId"`
+}
+
+type CreateOrgTokenV1Output struct {
+	Data CreateOrgTokenV1OutputData
+
+	http.Response
+}
+
+type CreateOrgTokenV1OutputData struct {
+	TokenId        string `json:"tokenId" yaml:"tokenId"`
+	Name           string `json:"name" yaml:"name"`
+	ApiKey         string `json:"apiKey" yaml:"apiKey"`
+	CertificatePem string `json:"certificatePem" yaml:"certificatePem"`
+	PrivateKeyPem  string `json:"privateKeyPem" yaml:"privateKeyPem"`
+}
+
+func (c Client) CreateOrgTokenV1(input CreateOrgTokenV1Input) (*CreateOrgTokenV1Output, error) {
+	var outputData CreateOrgTokenV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodPost,
+		Path:   fmt.Sprintf("/api/v1/org/%s/token", input.OrgId),
+		Data:   input,
+		Output: &outputData,
+	})
+	var output *CreateOrgTokenV1Output
+	if outputClient != nil {
+		output = &CreateOrgTokenV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
+}
+
 type ListOrgMemberTypesV1Output struct {
 	Data ListOrgMemberTypesV1OutputData
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -211,7 +212,7 @@ func parseInsertMap(insertMap map[string]any) (fieldNames []string, fieldValues 
 	for k, v := range insertMap {
 		fieldNames = append(fieldNames, k)
 		switch value := v.(type) {
-		case []byte, string, uint, uint32, uint64, int, int32, int64, float32, float64, bool:
+		case []byte, string, uint, uint32, uint64, int, int32, int64, float32, float64, bool, time.Time:
 			fieldValues = append(fieldValues, value)
 			fieldValuePlaceholders = append(fieldValuePlaceholders, "?")
 		case DatabaseFunction:
