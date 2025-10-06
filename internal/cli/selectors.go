@@ -66,25 +66,30 @@ func (m SelectorModel) Init() tea.Cmd {
 }
 
 func (m *SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+		switch msg.Type {
+		case tea.KeyCtrlC:
 			m.isQuitting = true
 			m.exitCode = PromptCancelled
 			return m, tea.Quit
 
-		case "up", "w", "p":
-			if m.cursor > 0 {
+		case tea.KeyUp:
+			if m.cursor == 0 {
+				m.cursor = len(m.choices) - 1
+			} else if m.cursor > 0 {
 				m.cursor--
 			}
 
-		case "down", "s", "n":
-			if m.cursor < len(m.choices)-1 {
+		case tea.KeyDown:
+			if m.cursor == len(m.choices)-1 {
+				m.cursor = 0
+			} else if m.cursor < len(m.choices)-1 {
 				m.cursor++
 			}
 
-		case "enter":
+		case tea.KeyEnter:
 			m.selected = m.cursor
 			m.isQuitting = true
 			return m, tea.Quit
@@ -96,14 +101,15 @@ func (m *SelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m SelectorModel) View() string {
 	var b strings.Builder
 
-	if len(m.choices) > 0 {
+	if m.isQuitting {
+		if m.exitCode != PromptCancelled {
+			fmt.Fprintf(&b, "%s\n", m.choices[m.cursor].Render(true))
+		}
+	} else if len(m.choices) > 0 {
 		for i, choice := range m.choices {
 			fmt.Fprintf(&b, "%s\n", choice.Render(m.cursor == i))
 		}
-	}
-
-	if !m.isQuitting {
-		fmt.Fprintf(&b, "%s", blurredStyle.Render("\nUse [up]/w/p and [down]/a/n to move, enter to select, q to quit.\n"))
+		fmt.Fprintf(&b, "%s", blurredStyle.Render("\nUse [up] and [down] to move, [enter] to select, [ctrl + c] to quit.\n"))
 	}
 
 	fmt.Fprintf(&b, "\n")

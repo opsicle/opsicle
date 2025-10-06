@@ -26,6 +26,7 @@ type OrgToken struct {
 	CreatedBy      *User     `json:"createdBy" yaml:"createdBy"`
 	LastUpdatedAt  time.Time `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
 	LastUpdatedBy  *User     `json:"lastUpdatedBy" yaml:"lastUpdatedBy"`
+	Role           *OrgRole  `json:"role" yaml:"role"`
 }
 
 func (ot OrgToken) GetId() string {
@@ -47,6 +48,23 @@ func (ot OrgToken) GetRedacted() OrgToken {
 	redacted.CertificateB64 = ""
 	redacted.PrivateKeyB64 = ""
 	redacted.ApiKey = ""
+	if redacted.Role != nil {
+		roleCopy := *redacted.Role
+		if roleCopy.CreatedBy != nil {
+			tmp := roleCopy.CreatedBy.GetRedacted()
+			roleCopy.CreatedBy = &tmp
+		}
+		if len(roleCopy.Permissions) > 0 {
+			perms := make(OrgRolePermissions, len(roleCopy.Permissions))
+			for idx, perm := range roleCopy.Permissions {
+				permCopy := perm
+				permCopy.OrgRole = &roleCopy
+				perms[idx] = permCopy
+			}
+			roleCopy.Permissions = perms
+		}
+		redacted.Role = &roleCopy
+	}
 	return redacted
 }
 
@@ -64,6 +82,23 @@ func (ots OrgTokens) GetRedacted() OrgTokens {
 		if redacted.LastUpdatedBy != nil {
 			user := redacted.LastUpdatedBy.GetRedacted()
 			redacted.LastUpdatedBy = &user
+		}
+		if redacted.Role != nil {
+			roleCopy := *redacted.Role
+			if roleCopy.CreatedBy != nil {
+				tmp := roleCopy.CreatedBy.GetRedacted()
+				roleCopy.CreatedBy = &tmp
+			}
+			if len(roleCopy.Permissions) > 0 {
+				perms := make(OrgRolePermissions, len(roleCopy.Permissions))
+				for idx, perm := range roleCopy.Permissions {
+					permCopy := perm
+					permCopy.OrgRole = &roleCopy
+					perms[idx] = permCopy
+				}
+				roleCopy.Permissions = perms
+			}
+			redacted.Role = &roleCopy
 		}
 		output = append(output, redacted)
 	}
@@ -122,12 +157,10 @@ func (o *Org) CreateTokenV1(opts CreateOrgTokenV1Input) (*OrgToken, error) {
 	privateKeyB64 := base64.StdEncoding.EncodeToString(opts.PrivateKeyPem)
 
 	insertMap := map[string]any{
-		"id":              opts.TokenId,
-		"name":            opts.Name,
-		"api_key":         hashedApiKey,
-		"certificate_b64": certificateB64,
-		"private_key_b64": privateKeyB64,
-		"org_id":          o.GetId(),
+		"id":      opts.TokenId,
+		"name":    opts.Name,
+		"api_key": hashedApiKey,
+		"org_id":  o.GetId(),
 	}
 	if opts.Description != nil {
 		insertMap["description"] = *opts.Description
@@ -150,7 +183,7 @@ func (o *Org) CreateTokenV1(opts CreateOrgTokenV1Input) (*OrgToken, error) {
 			strings.Join(fieldPlaceholders, ", "),
 		),
 		Args:         fieldValues,
-		FnSource:     "models.Org.CreateTokenV1",
+		FnSource:     "models.Org.CreateTokenV1[org_tokens]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -178,7 +211,7 @@ func (o *Org) CreateTokenV1(opts CreateOrgTokenV1Input) (*OrgToken, error) {
 			strings.Join(rolePlaceholders, ", "),
 		),
 		Args:         roleValues,
-		FnSource:     "models.Org.CreateTokenV1",
+		FnSource:     "models.Org.CreateTokenV1[org_token_roles]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -204,6 +237,7 @@ func (o *Org) CreateTokenV1(opts CreateOrgTokenV1Input) (*OrgToken, error) {
 		CreatedBy:      createdBy,
 		LastUpdatedAt:  now,
 		LastUpdatedBy:  lastUpdatedBy,
+		Role:           opts.OrgRole,
 	}
 	return &token, nil
 }
@@ -261,8 +295,6 @@ func (o *Org) ListTokensV1(opts ListOrgTokensV1Opts) (OrgTokens, error) {
 				id,
 				name,
 				description,
-				certificate_b64,
-				private_key_b64,
 				api_key,
 				created_at,
 				created_by,
@@ -285,8 +317,6 @@ func (o *Org) ListTokensV1(opts ListOrgTokensV1Opts) (OrgTokens, error) {
 				&id,
 				&token.Name,
 				&description,
-				&token.CertificateB64,
-				&token.PrivateKeyB64,
 				&token.ApiKey,
 				&token.CreatedAt,
 				&createdById,
@@ -303,10 +333,12 @@ func (o *Org) ListTokensV1(opts ListOrgTokensV1Opts) (OrgTokens, error) {
 			if createdById.Valid {
 				createdBy := createdById.String
 				token.CreatedBy = &User{Id: &createdBy}
+				token.CreatedBy.LoadByIdV1(DatabaseConnection{Db: opts.Db})
 			}
 			if lastUpdatedById.Valid {
 				lastUpdatedBy := lastUpdatedById.String
 				token.LastUpdatedBy = &User{Id: &lastUpdatedBy}
+				token.LastUpdatedBy.LoadByIdV1(DatabaseConnection{Db: opts.Db})
 			}
 			tokens = append(tokens, token)
 			return nil
@@ -315,4 +347,186 @@ func (o *Org) ListTokensV1(opts ListOrgTokensV1Opts) (OrgTokens, error) {
 		return nil, err
 	}
 	return tokens, nil
+}
+
+type GetOrgTokenByIdV1Opts struct {
+	DatabaseConnection
+
+	TokenId string
+}
+
+func (o *Org) GetTokenByIdV1(opts GetOrgTokenByIdV1Opts) (*OrgToken, error) {
+	if err := o.assertIdDefined(); err != nil {
+		return nil, err
+	}
+	if opts.Db == nil {
+		return nil, fmt.Errorf("missing db connection: %w", errorInputValidationFailed)
+	}
+	if err := validate.Uuid(opts.TokenId); err != nil {
+		return nil, fmt.Errorf("token id invalid: %w", errorInputValidationFailed)
+	}
+	var (
+		token               *OrgToken
+		role                *OrgRole
+		rolePermissionsSeen = map[string]struct{}{}
+		tokenDescription    sql.NullString
+		tokenCreatedBy      sql.NullString
+		tokenLastUpdatedBy  sql.NullString
+		roleId              sql.NullString
+		roleName            sql.NullString
+		roleCreatedAt       sql.NullTime
+		roleLastUpdatedAt   sql.NullTime
+		roleCreatedById     sql.NullString
+		roleCreatedByEmail  sql.NullString
+		permissionId        sql.NullString
+		permissionResource  sql.NullString
+		permissionAllows    sql.NullInt64
+		permissionDenys     sql.NullInt64
+	)
+	if err := executeMysqlSelects(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			SELECT
+				ot.id,
+				ot.org_id,
+				ot.name,
+				ot.description,
+				ot.created_at,
+				ot.created_by,
+				ot.last_updated_at,
+				ot.last_updated_by,
+				orls.id,
+				orls.name,
+				orls.created_at,
+				orls.last_updated_at,
+				orls.created_by,
+				u.email,
+				orp.id,
+				orp.resource,
+				orp.allows,
+				orp.denys
+			FROM org_tokens ot
+				LEFT JOIN org_token_roles otr ON otr.org_token_id = ot.id
+				LEFT JOIN org_roles orls ON orls.id = otr.org_role_id
+				LEFT JOIN users u ON u.id = orls.created_by
+				LEFT JOIN org_role_permissions orp ON orp.org_role_id = orls.id
+			WHERE
+				ot.id = ?
+				AND ot.org_id = ?
+		`,
+		Args: []any{
+			opts.TokenId,
+			o.GetId(),
+		},
+		FnSource: "models.Org.GetTokenByIdV1",
+		ProcessRows: func(r *sql.Rows) error {
+			var (
+				tokenId            string
+				tokenOrgId         string
+				tokenName          string
+				tokenCreatedAt     time.Time
+				tokenLastUpdatedAt time.Time
+			)
+			if err := r.Scan(
+				&tokenId,
+				&tokenOrgId,
+				&tokenName,
+				&tokenDescription,
+				&tokenCreatedAt,
+				&tokenCreatedBy,
+				&tokenLastUpdatedAt,
+				&tokenLastUpdatedBy,
+				&roleId,
+				&roleName,
+				&roleCreatedAt,
+				&roleLastUpdatedAt,
+				&roleCreatedById,
+				&roleCreatedByEmail,
+				&permissionId,
+				&permissionResource,
+				&permissionAllows,
+				&permissionDenys,
+			); err != nil {
+				return err
+			}
+			if token == nil {
+				token = &OrgToken{
+					Id:            &tokenId,
+					Org:           o,
+					Name:          tokenName,
+					CreatedAt:     tokenCreatedAt,
+					LastUpdatedAt: tokenLastUpdatedAt,
+				}
+				if tokenDescription.Valid {
+					description := tokenDescription.String
+					token.Description = &description
+				}
+				if tokenCreatedBy.Valid {
+					createdBy := tokenCreatedBy.String
+					token.CreatedBy = &User{Id: &createdBy}
+				}
+				if tokenLastUpdatedBy.Valid {
+					lastUpdatedBy := tokenLastUpdatedBy.String
+					token.LastUpdatedBy = &User{Id: &lastUpdatedBy}
+				}
+			}
+			if roleId.Valid {
+				if role == nil {
+					roleIdValue := roleId.String
+					role = &OrgRole{
+						Id:          &roleIdValue,
+						OrgId:       &tokenOrgId,
+						Permissions: OrgRolePermissions{},
+					}
+					if roleName.Valid {
+						role.Name = roleName.String
+					}
+					if roleCreatedAt.Valid {
+						role.CreatedAt = roleCreatedAt.Time
+					}
+					if roleLastUpdatedAt.Valid {
+						role.LastUpdatedAt = roleLastUpdatedAt.Time
+					} else if roleCreatedAt.Valid {
+						role.LastUpdatedAt = roleCreatedAt.Time
+					}
+					if roleCreatedById.Valid {
+						createdById := roleCreatedById.String
+						user := &User{Id: &createdById}
+						if roleCreatedByEmail.Valid {
+							user.Email = roleCreatedByEmail.String
+						}
+						role.CreatedBy = user
+					}
+				}
+				if permissionId.Valid {
+					if _, exists := rolePermissionsSeen[permissionId.String]; !exists {
+						rolePermissionsSeen[permissionId.String] = struct{}{}
+						permissionIdValue := permissionId.String
+						permission := OrgRolePermission{
+							Id:       &permissionIdValue,
+							OrgRole:  role,
+							Resource: Resource(permissionResource.String),
+						}
+						if permissionAllows.Valid {
+							permission.Allows = Action(uint(permissionAllows.Int64))
+						}
+						if permissionDenys.Valid {
+							permission.Denys = Action(uint(permissionDenys.Int64))
+						}
+						role.Permissions = append(role.Permissions, permission)
+					}
+				}
+			}
+			return nil
+		},
+	}); err != nil {
+		return nil, err
+	}
+	if token == nil {
+		return nil, ErrorNotFound
+	}
+	if role != nil {
+		token.Role = role
+	}
+	return token, nil
 }

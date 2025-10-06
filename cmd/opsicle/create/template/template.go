@@ -80,8 +80,8 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to load automation template from path[%s]: %w", absolutePathToAutomationTemplate, err)
 		}
-		var automationTemplateInstance automations.Template
-		if err := yaml.Unmarshal(automationTemplateData, &automationTemplateInstance); err != nil {
+		var templateInstance automations.Template
+		if err := yaml.Unmarshal(automationTemplateData, &templateInstance); err != nil {
 			return fmt.Errorf("failed to validate automation template: %w", err)
 		}
 
@@ -96,7 +96,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
-		fmt.Printf("⏳ Submitting template with name[%s]...\n", automationTemplateInstance.GetName())
+		fmt.Printf("⏳ Submitting template with name[%s]...\n", templateInstance.GetName())
 		automationTemplate, err := client.SubmitTemplateV1(controller.SubmitTemplateV1Input{
 			Data: automationTemplateData,
 		})

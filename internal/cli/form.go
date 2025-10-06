@@ -97,7 +97,7 @@ func CreateForm(opts FormOpts) *FormModel {
 			validator = getStringValidator(formValidatorOpts{IsRequired: field.IsRequired})
 		}
 		inputModel.Validate = validator
-		inputModel.PlaceholderStyle = formStylePlaceholder
+		inputModel.PlaceholderStyle = stylePlaceholder
 		formField := FormField{
 			DefaultValue: field.DefaultValue,
 			Description:  field.Description,
@@ -383,7 +383,7 @@ func (m *FormModel) getHeader() string {
 }
 
 func (m *FormModel) getTitle() string {
-	return fmt.Sprintf("📝 %s\n", wrapString(formStyleTitle.Render(m.title), m.dimensions.width))
+	return fmt.Sprintf("📝 %s\n", wrapString(styleTitle.Render(m.title), m.dimensions.width))
 }
 
 func (m *FormModel) getViewContent() string {
@@ -402,7 +402,7 @@ func (m *FormModel) getViewContent() string {
 	}
 	if !m.isExitting {
 		if m.err != nil {
-			fmt.Fprintf(&message, "💡 %s\n\n", formStyleError.Render("There are issues with the fields indicated above"))
+			fmt.Fprintf(&message, "💡 %s\n\n", styleError.Render("There are issues with the fields indicated above"))
 		}
 		buttons := []string{}
 		for i, button := range m.buttons {
@@ -415,9 +415,6 @@ func (m *FormModel) getViewContent() string {
 }
 
 func (m FormModel) View() string {
-	if m.isExitting {
-		return "\n"
-	}
 	if m.viewport != nil {
 		var header bytes.Buffer
 		fmt.Fprint(&header, m.getHeader())

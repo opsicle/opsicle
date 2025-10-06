@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"opsicle/cmd/opsicle/get/org/token"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
 	"os"
@@ -31,6 +32,7 @@ var flags cli.Flags = cli.Flags{
 
 func init() {
 	flags.AddToCommand(Command)
+	Command.AddCommand(token.Command)
 }
 
 var Command = &cobra.Command{

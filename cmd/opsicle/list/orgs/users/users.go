@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
+	"strings"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
@@ -94,9 +95,13 @@ var Command = &cobra.Command{
 
 			var displayOut bytes.Buffer
 			table := tablewriter.NewWriter(&displayOut)
-			table.Header([]any{"email", "member type", "joined"}...)
+			table.Header([]any{"email", "member type", "roles", "joined"}...)
 			for _, orgUser := range orgUsers.Data {
-				table.Append([]string{orgUser.UserEmail, orgUser.MemberType, orgUser.JoinedAt.Local().Format(cli.TimestampHuman)})
+				roleNames := make([]string, 0, len(orgUser.Roles))
+				for _, role := range orgUser.Roles {
+					roleNames = append(roleNames, role.Name)
+				}
+				table.Append([]string{orgUser.UserEmail, orgUser.MemberType, strings.Join(roleNames, ", "), orgUser.JoinedAt.Local().Format(cli.TimestampHuman)})
 			}
 			table.Render()
 			fmt.Println(displayOut.String())

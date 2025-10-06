@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -22,13 +23,19 @@ var flags cli.Flags = cli.Flags{
 		Name:         "controller-url",
 		Short:        'u',
 		DefaultValue: "http://localhost:54321",
-		Usage:        "defines the url where the controller service is accessible at",
+		Usage:        "Defines the url where the controller service is accessible at",
 		Type:         cli.FlagTypeString,
 	},
 	{
 		Name:         "org",
 		DefaultValue: "",
-		Usage:        "codeword of the organisation that the token should belong to",
+		Usage:        "Codeword of the organisation that the token should belong to",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "output-dir",
+		DefaultValue: "",
+		Usage:        "Location of the output directory (when specified, generated API key, certificate, and key will be placed in this directory)",
 		Type:         cli.FlagTypeString,
 	},
 }
@@ -151,7 +158,7 @@ var Command = &cobra.Command{
 			return strings.ToLower(rolesOutput.Data[i].Name) < strings.ToLower(rolesOutput.Data[j].Name)
 		})
 		fmt.Println("")
-		fmt.Println("Select the role that this token should assume:")
+		fmt.Println("💬 Which role should this token assume?")
 		fmt.Println("")
 
 		selectorChoices := []cli.SelectorChoice{}
@@ -192,6 +199,26 @@ var Command = &cobra.Command{
 
 		logrus.Debugf("created token[%s] for org[%s]", createTokenOutput.Data.TokenId, orgOutput.Data.Id)
 
+		outputDir := strings.TrimSpace(viper.GetString("output-dir"))
+		if outputDir != "" {
+			if err := os.MkdirAll(outputDir, 0o750); err != nil {
+				return fmt.Errorf("failed to prepare output directory: %w", err)
+			}
+			tokenId := createTokenOutput.Data.TokenId
+			outputTargets := writeTargets{
+				{suffix: ".apikey", content: createTokenOutput.Data.ApiKey, description: "api key"},
+				{suffix: ".crt", content: createTokenOutput.Data.CertificatePem, description: "certificate"},
+				{suffix: ".key", content: createTokenOutput.Data.PrivateKeyPem, description: "private key"},
+			}
+			for _, target := range outputTargets {
+				targetPath := filepath.Join(outputDir, fmt.Sprintf("%s%s", tokenId, target.suffix))
+				if err := os.WriteFile(targetPath, []byte(target.content), 0o600); err != nil {
+					return fmt.Errorf("failed to write %s to %s: %w", target.description, targetPath, err)
+				}
+				fmt.Printf("✨ Wrote %s data to %s\n", target.description, targetPath)
+			}
+		}
+
 		outputFormat := strings.ToLower(viper.GetString("output"))
 		if outputFormat == "json" {
 			jsonOutput := struct {
@@ -209,7 +236,15 @@ var Command = &cobra.Command{
 			return nil
 		}
 
-		cli.PrintBoxedSuccessMessage(fmt.Sprintf("Created token '%s' for org '%s'", createTokenOutput.Data.Name, orgOutput.Data.Code))
+		message := fmt.Sprintf("Created token '%s' for org '%s'", createTokenOutput.Data.Name, orgOutput.Data.Code)
+		if outputDir != "" {
+			message = fmt.Sprintf("%s\n\nThe API key, certificate, and private key can be found at: %s\n", message, outputDir)
+		}
+		cli.PrintBoxedSuccessMessage(message)
+		if outputDir != "" {
+			return nil
+		}
+
 		fmt.Printf("\n🔑 API Key:\n%s\n\n", createTokenOutput.Data.ApiKey)
 		fmt.Println("📄 Certificate PEM:")
 		fmt.Println(createTokenOutput.Data.CertificatePem)
@@ -218,4 +253,11 @@ var Command = &cobra.Command{
 
 		return nil
 	},
+}
+
+type writeTargets []writeTarget
+type writeTarget struct {
+	suffix      string
+	content     string
+	description string
 }

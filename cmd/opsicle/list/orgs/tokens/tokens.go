@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"opsicle/internal/cli"
@@ -104,18 +103,8 @@ var Command = &cobra.Command{
 		outputFormat := strings.ToLower(viper.GetString("output"))
 		switch outputFormat {
 		case "json":
-			payload := struct {
-				Org    controller.GetOrgV1OutputData        `json:"org"`
-				Tokens controller.ListOrgTokensV1OutputData `json:"tokens"`
-			}{
-				Org:    orgOutput.Data,
-				Tokens: listOutput.Data,
-			}
-			encoder := json.NewEncoder(os.Stdout)
-			encoder.SetIndent("", "  ")
-			if err := encoder.Encode(payload); err != nil {
-				return fmt.Errorf("failed to encode json output: %w", err)
-			}
+			o, _ := json.MarshalIndent(listOutput, "", "  ")
+			fmt.Println(string(o))
 		default:
 			if len(listOutput.Data) == 0 {
 				fmt.Printf("No tokens found for org %s\n", orgOutput.Data.Code)
@@ -131,11 +120,11 @@ var Command = &cobra.Command{
 				}
 				createdBy := ""
 				if token.CreatedBy != nil {
-					createdBy = token.CreatedBy.Id
+					createdBy = token.CreatedBy.Email
 				}
 				lastUpdatedBy := ""
 				if token.LastUpdatedBy != nil {
-					lastUpdatedBy = token.LastUpdatedBy.Id
+					lastUpdatedBy = token.LastUpdatedBy.Email
 				}
 				table.Append([]string{
 					token.Id,

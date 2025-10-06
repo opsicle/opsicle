@@ -1,10 +1,27 @@
 package controller
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"opsicle/internal/controller/models"
 )
+
+func generateApiKey(length int) (string, error) {
+	if length%2 != 0 {
+		return "", fmt.Errorf("length must be even")
+	}
+	buf := make([]byte, length/2)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	apiKey := hex.EncodeToString(buf)
+	if len(apiKey) > length {
+		apiKey = apiKey[:length]
+	}
+	return apiKey, nil
+}
 
 type OrgUserMemberPermissions struct {
 	CanManageUsers bool `json:"canManageUsers"`

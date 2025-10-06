@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"opsicle/internal/controller"
 )
 
 type CreateOrgV1Output struct {
@@ -319,21 +321,43 @@ func (c Client) ListOrgInvitationsV1() (*ListOrgInvitationsV1Output, error) {
 }
 
 type ListOrgUsersV1Output struct {
-	Data ListOrgUsersV1OutputData
+	Data ListOrgUsersV1OutputData `json:"data" yaml:"data"`
 	http.Response
 }
 
 type ListOrgUsersV1OutputData []ListOrgUsersV1OutputDataUser
 
 type ListOrgUsersV1OutputDataUser struct {
-	JoinedAt   time.Time `json:"joinedAt"`
-	MemberType string    `json:"memberType"`
-	OrgId      string    `json:"orgId"`
-	OrgCode    string    `json:"orgCode"`
-	OrgName    string    `json:"orgName"`
-	UserId     string    `json:"userId"`
-	UserEmail  string    `json:"userEmail"`
-	UserType   string    `json:"userType"`
+	JoinedAt   time.Time                          `json:"joinedAt" yaml:"joinedAt"`
+	MemberType string                             `json:"memberType" yaml:"memberType"`
+	OrgId      string                             `json:"orgId" yaml:"orgId"`
+	OrgCode    string                             `json:"orgCode" yaml:"orgCode"`
+	OrgName    string                             `json:"orgName" yaml:"orgName"`
+	UserId     string                             `json:"userId" yaml:"userId"`
+	UserEmail  string                             `json:"userEmail" yaml:"userEmail"`
+	UserType   string                             `json:"userType" yaml:"userType"`
+	Roles      []ListOrgUsersV1OutputDataUserRole `json:"roles" yaml:"roles"`
+}
+
+type ListOrgUsersV1OutputDataUserRole struct {
+	CreatedAt     time.Time                                    `json:"createdAt" yaml:"createdAt"`
+	CreatedBy     *ListOrgUsersV1OutputDataUserRoleUser        `json:"createdBy" yaml:"createdBy"`
+	Id            string                                       `json:"id" yaml:"id"`
+	LastUpdatedAt time.Time                                    `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
+	Name          string                                       `json:"name" yaml:"name"`
+	Permissions   []ListOrgUsersV1OutputDataUserRolePermission `json:"permissions" yaml:"permissions"`
+}
+
+type ListOrgUsersV1OutputDataUserRoleUser struct {
+	Email string `json:"email" yaml:"email"`
+	Id    string `json:"id" yaml:"id"`
+}
+
+type ListOrgUsersV1OutputDataUserRolePermission struct {
+	Allows   uint64 `json:"allows" yaml:"allows"`
+	Denys    uint64 `json:"denys" yaml:"denys"`
+	Id       string `json:"id" yaml:"id"`
+	Resource string `json:"resource" yaml:"resource"`
 }
 
 type ListOrgUsersV1Input struct {
@@ -409,34 +433,19 @@ func (c Client) ListOrgRolesV1(input ListOrgRolesV1Input) (*ListOrgRolesV1Output
 }
 
 type ListOrgTokensV1Output struct {
-	Data ListOrgTokensV1OutputData
+	Data controller.ListOrgTokensV1Output
 
 	http.Response
 }
 
-type ListOrgTokensV1OutputData []ListOrgTokensV1OutputToken
-
-type ListOrgTokensV1OutputToken struct {
-	Id            string                     `json:"id" yaml:"id"`
-	OrgId         string                     `json:"orgId" yaml:"orgId"`
-	Name          string                     `json:"name" yaml:"name"`
-	Description   *string                    `json:"description" yaml:"description"`
-	CreatedAt     time.Time                  `json:"createdAt" yaml:"createdAt"`
-	CreatedBy     *ListOrgTokensV1OutputUser `json:"createdBy" yaml:"createdBy"`
-	LastUpdatedAt time.Time                  `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
-	LastUpdatedBy *ListOrgTokensV1OutputUser `json:"lastUpdatedBy" yaml:"lastUpdatedBy"`
-}
-
-type ListOrgTokensV1OutputUser struct {
-	Id string `json:"id" yaml:"id"`
-}
+type ListOrgTokensV1OutputData controller.ListOrgTokensV1Output
 
 type ListOrgTokensV1Input struct {
 	OrgId string `json:"-"`
 }
 
 func (c Client) ListOrgTokensV1(input ListOrgTokensV1Input) (*ListOrgTokensV1Output, error) {
-	var outputData ListOrgTokensV1OutputData
+	var outputData controller.ListOrgTokensV1Output
 	outputClient, err := c.do(request{
 		Method: http.MethodGet,
 		Path:   fmt.Sprintf("/api/v1/org/%s/tokens", input.OrgId),
@@ -445,6 +454,44 @@ func (c Client) ListOrgTokensV1(input ListOrgTokensV1Input) (*ListOrgTokensV1Out
 	var output *ListOrgTokensV1Output
 	if outputClient != nil {
 		output = &ListOrgTokensV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorInsufficientPermissions.Error():
+			err = ErrorInsufficientPermissions
+		case ErrorNotFound.Error():
+			err = ErrorNotFound
+		}
+	}
+	return output, err
+}
+
+type GetOrgTokenV1Output struct {
+	Data GetOrgTokenV1OutputData
+
+	http.Response
+}
+
+type GetOrgTokenV1OutputData controller.GetOrgTokenV1Output
+
+type GetOrgTokenV1Input struct {
+	OrgId   string `json:"-"`
+	TokenId string `json:"-"`
+}
+
+func (c Client) GetOrgTokenV1(input GetOrgTokenV1Input) (*GetOrgTokenV1Output, error) {
+	var outputData GetOrgTokenV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/org/%s/token/%s", input.OrgId, input.TokenId),
+		Output: &outputData,
+	})
+	var output *GetOrgTokenV1Output
+	if outputClient != nil {
+		output = &GetOrgTokenV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
 		}

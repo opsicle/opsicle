@@ -66,9 +66,9 @@ func (f *FormField) View() string {
 		if value {
 			display = "[ ✔ ]"
 		}
-		displayStyle := formStyleInput
+		displayStyle := styleInput
 		if f.Model.Focused() {
-			displayStyle = formStyleInputFocused
+			displayStyle = styleInputFocused
 		}
 		return displayStyle.Render(display)
 	default:
@@ -110,23 +110,23 @@ func (f *FormField) getDescription(maxWidth int) string {
 }
 
 func (f *FormField) getError(maxWidth int) string {
-	return formStyleInputError.Render(wrapString(fmt.Sprintf("❗️ %s", f.Err), maxWidth))
+	return styleInputError.Render(wrapString(fmt.Sprintf("❗️ %s", f.Err), maxWidth))
 }
 
 func (f *FormField) getDisplay(isFocused bool, maxWidth int) string {
 	var message bytes.Buffer
 	fieldName := fmt.Sprintf("%s [%s]", f.Label, f.Id)
-	inputDisplay := formStyleInput.Render(f.View())
+	inputDisplay := styleInput.Render(f.View())
 	if isFocused {
-		inputDisplay = formStyleInputFocused.Render(inputDisplay)
+		inputDisplay = styleInputFocused.Render(inputDisplay)
 	}
 	description := f.getDescription(maxWidth)
 	fmt.Fprintf(
 		&message,
 		"%s: %s\n%s\n",
-		formStyleInputLabel.Render(fieldName),
+		styleInputLabel.Render(fieldName),
 		wrapString(inputDisplay, maxWidth),
-		formStyleFaded.Render(description),
+		styleFaded.Render(description),
 	)
 
 	if f.isTouched && f.Err != nil {

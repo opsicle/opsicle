@@ -31,9 +31,9 @@ type FormButton struct {
 type FormButtonType string
 
 func (fb *FormButton) View(isSelected bool) string {
-	displayStyle := formStyleInput
+	displayStyle := styleInput
 	if isSelected {
-		displayStyle = formStyleInputFocused
+		displayStyle = styleInputFocused
 	}
 	return displayStyle.Render(fmt.Sprintf("[ %s ]", fb.Label))
 }

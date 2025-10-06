@@ -10,6 +10,16 @@
 - When instantiating slices, do not use `make(T, 0)`, use the `[]T{}` semantics for standardisation
 - When documenting APIs use comment notation from `swaggo`
 
+#### Actions nomenclature
+- As far as possible, use the following verbs for any function that manipulates/reads data:
+  - Create*: for functions involving creation of a resource
+  - Get*: for functions involving retrieval of a single resource
+  - List*: for functions involving listing of multiple resources of a single resource type
+  - Update*: for functions involving updating of details of a given resource type
+  - Delete*: for functions involving removal/deletion of a given resource type
+  - Execute*: for functions involving executing of a given resource type (where applicable, not every resource type is executable)
+- Also use the above pattern for implementing any permissions involving actions
+
 #### Go conventions
 - Target Go: 1.24+
 - Use `go fmt` and `go vet`, no PR if `go vet` fails
@@ -21,6 +31,7 @@
 - Commands go into `/cmd/*`; the root command package is contained in a directory in `./cmd`, with each subfolder being a sub-command
 - SDKs for other Go apps to use is in `./pkg`
 - Internal controllers are in `./internal`
+- Do not use inline structs, always define structs outside of the function conusming it
 
 #### Error messages
 - All errors should be in americaniZed english, meaning use 'z' over 's' in examples like 'authorized', 'unauthorized'

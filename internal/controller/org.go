@@ -1,8 +1,6 @@
 package controller
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +9,7 @@ import (
 	"opsicle/internal/audit"
 	"opsicle/internal/common"
 	"opsicle/internal/common/images"
+	"opsicle/internal/controller/constants"
 	"opsicle/internal/controller/models"
 	"opsicle/internal/controller/templates"
 	"opsicle/internal/email"
@@ -39,6 +38,7 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/{orgId}/members", requiresAuth(http.HandlerFunc(handleListOrgUsersV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/roles", requiresAuth(http.HandlerFunc(handleListOrgRolesV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/tokens", requiresAuth(http.HandlerFunc(handleListOrgTokensV1))).Methods(http.MethodGet)
+	v1.Handle("/{orgId}/token/{tokenId}", requiresAuth(http.HandlerFunc(handleGetOrgTokenV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/token", requiresAuth(http.HandlerFunc(handleCreateOrgTokenV1))).Methods(http.MethodPost)
 	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateOrgInvitationV1))).Methods(http.MethodPatch)
 
@@ -352,14 +352,36 @@ func handleListOrgsV1(w http.ResponseWriter, r *http.Request) {
 type handleListOrgUsersV1Output []handleListOrgUsersV1OutputUser
 
 type handleListOrgUsersV1OutputUser struct {
-	JoinedAt   time.Time `json:"joinedAt"`
-	MemberType string    `json:"memberType"`
-	OrgId      string    `json:"orgId"`
-	OrgCode    string    `json:"orgCode"`
-	OrgName    string    `json:"orgName"`
-	UserId     string    `json:"userId"`
-	UserEmail  string    `json:"userEmail"`
-	UserType   string    `json:"userType"`
+	JoinedAt   time.Time                            `json:"joinedAt"`
+	MemberType string                               `json:"memberType"`
+	OrgId      string                               `json:"orgId"`
+	OrgCode    string                               `json:"orgCode"`
+	OrgName    string                               `json:"orgName"`
+	UserId     string                               `json:"userId"`
+	UserEmail  string                               `json:"userEmail"`
+	UserType   string                               `json:"userType"`
+	Roles      []handleListOrgUsersV1OutputUserRole `json:"roles"`
+}
+
+type handleListOrgUsersV1OutputUserRole struct {
+	CreatedAt     time.Time                                      `json:"createdAt" yaml:"createdAt"`
+	CreatedBy     *handleListOrgUsersV1OutputUserRoleUser        `json:"createdBy" yaml:"createdBy"`
+	Id            string                                         `json:"id" yaml:"id"`
+	LastUpdatedAt time.Time                                      `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
+	Name          string                                         `json:"name" yaml:"name"`
+	Permissions   []handleListOrgUsersV1OutputUserRolePermission `json:"permissions" yaml:"permissions"`
+}
+
+type handleListOrgUsersV1OutputUserRoleUser struct {
+	Email string `json:"email" yaml:"email"`
+	Id    string `json:"id" yaml:"id"`
+}
+
+type handleListOrgUsersV1OutputUserRolePermission struct {
+	Allows   uint64 `json:"allows" yaml:"allows"`
+	Denys    uint64 `json:"denys" yaml:"denys"`
+	Id       string `json:"id" yaml:"id"`
+	Resource string `json:"resource" yaml:"resource"`
 }
 
 func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
@@ -392,6 +414,40 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 	}
 	output := handleListOrgUsersV1Output{}
 	for _, orgUser := range orgUsers {
+		userRoles, err := orgUser.ListRolesV1(models.DatabaseConnection{Db: db})
+		if err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to list roles for user[%s] in org[%s]: %s", orgUser.User.GetId(), orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user roles", ErrorDatabaseIssue)
+			return
+		}
+		roles := make([]handleListOrgUsersV1OutputUserRole, 0, len(userRoles))
+		for _, role := range userRoles {
+			roleOutput := handleListOrgUsersV1OutputUserRole{
+				CreatedAt:     role.CreatedAt,
+				Id:            role.GetId(),
+				LastUpdatedAt: role.LastUpdatedAt,
+				Name:          role.Name,
+				Permissions:   make([]handleListOrgUsersV1OutputUserRolePermission, 0, len(role.Permissions)),
+			}
+			if role.CreatedBy != nil && role.CreatedBy.Id != nil {
+				roleOutput.CreatedBy = &handleListOrgUsersV1OutputUserRoleUser{
+					Id:    role.CreatedBy.GetId(),
+					Email: role.CreatedBy.Email,
+				}
+			}
+			for _, permission := range role.Permissions {
+				if permission.Id == nil {
+					continue
+				}
+				roleOutput.Permissions = append(roleOutput.Permissions, handleListOrgUsersV1OutputUserRolePermission{
+					Id:       *permission.Id,
+					Resource: string(permission.Resource),
+					Allows:   uint64(permission.Allows),
+					Denys:    uint64(permission.Denys),
+				})
+			}
+			roles = append(roles, roleOutput)
+		}
 		output = append(
 			output,
 			handleListOrgUsersV1OutputUser{
@@ -403,6 +459,7 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 				UserId:     orgUser.User.GetId(),
 				UserEmail:  orgUser.User.Email,
 				UserType:   string(orgUser.User.Type),
+				Roles:      roles,
 			},
 		)
 	}
@@ -420,24 +477,24 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
-type handleListOrgRolesV1Output []handleListOrgRolesV1OutputRole
+type ListOrgRolesV1Output []ListOrgRolesV1OutputRole
 
-type handleListOrgRolesV1OutputRole struct {
-	CreatedAt     time.Time                                  `json:"createdAt" yaml:"createdAt"`
-	CreatedBy     *handleListOrgRolesV1OutputRoleUser        `json:"createdBy" yaml:"createdBy"`
-	Id            string                                     `json:"id" yaml:"id"`
-	LastUpdatedAt time.Time                                  `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
-	Name          string                                     `json:"name" yaml:"name"`
-	OrgId         string                                     `json:"orgId" yaml:"orgId"`
-	Permissions   []handleListOrgRolesV1OutputRolePermission `json:"permissions" yaml:"permissions"`
+type ListOrgRolesV1OutputRole struct {
+	CreatedAt     time.Time                            `json:"createdAt" yaml:"createdAt"`
+	CreatedBy     *ListOrgRolesV1OutputRoleUser        `json:"createdBy" yaml:"createdBy"`
+	Id            string                               `json:"id" yaml:"id"`
+	LastUpdatedAt time.Time                            `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
+	Name          string                               `json:"name" yaml:"name"`
+	OrgId         string                               `json:"orgId" yaml:"orgId"`
+	Permissions   []ListOrgRolesV1OutputRolePermission `json:"permissions" yaml:"permissions"`
 }
 
-type handleListOrgRolesV1OutputRoleUser struct {
+type ListOrgRolesV1OutputRoleUser struct {
 	Email string `json:"email" yaml:"email"`
 	Id    string `json:"id" yaml:"id"`
 }
 
-type handleListOrgRolesV1OutputRolePermission struct {
+type ListOrgRolesV1OutputRolePermission struct {
 	Allows   uint64 `json:"allows" yaml:"allows"`
 	Denys    uint64 `json:"denys" yaml:"denys"`
 	Id       string `json:"id" yaml:"id"`
@@ -471,21 +528,21 @@ func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org roles", ErrorDatabaseIssue)
 		return
 	}
-	output := make(handleListOrgRolesV1Output, 0, len(orgRoles))
+	output := make(ListOrgRolesV1Output, 0, len(orgRoles))
 	for _, role := range orgRoles {
-		var createdBy *handleListOrgRolesV1OutputRoleUser
+		var createdBy *ListOrgRolesV1OutputRoleUser
 		if role.CreatedBy != nil && role.CreatedBy.Id != nil {
-			createdBy = &handleListOrgRolesV1OutputRoleUser{
+			createdBy = &ListOrgRolesV1OutputRoleUser{
 				Id:    role.CreatedBy.GetId(),
 				Email: role.CreatedBy.Email,
 			}
 		}
-		permissions := make([]handleListOrgRolesV1OutputRolePermission, 0, len(role.Permissions))
+		permissions := make([]ListOrgRolesV1OutputRolePermission, 0, len(role.Permissions))
 		for _, permission := range role.Permissions {
 			if permission.Id == nil {
 				continue
 			}
-			permissions = append(permissions, handleListOrgRolesV1OutputRolePermission{
+			permissions = append(permissions, ListOrgRolesV1OutputRolePermission{
 				Id:       *permission.Id,
 				Resource: string(permission.Resource),
 				Allows:   uint64(permission.Allows),
@@ -496,7 +553,7 @@ func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
 		if role.OrgId != nil {
 			orgIdValue = *role.OrgId
 		}
-		output = append(output, handleListOrgRolesV1OutputRole{
+		output = append(output, ListOrgRolesV1OutputRole{
 			CreatedAt:     role.CreatedAt,
 			CreatedBy:     createdBy,
 			Id:            role.GetId(),
@@ -521,21 +578,22 @@ func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
-type handleListOrgTokensV1Output []handleListOrgTokensV1OutputToken
+type ListOrgTokensV1Output []ListOrgTokensV1OutputToken
 
-type handleListOrgTokensV1OutputToken struct {
-	Id            string                                `json:"id" yaml:"id"`
-	OrgId         string                                `json:"orgId" yaml:"orgId"`
-	Name          string                                `json:"name" yaml:"name"`
-	Description   *string                               `json:"description" yaml:"description"`
-	CreatedAt     time.Time                             `json:"createdAt" yaml:"createdAt"`
-	CreatedBy     *handleListOrgTokensV1OutputTokenUser `json:"createdBy" yaml:"createdBy"`
-	LastUpdatedAt time.Time                             `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
-	LastUpdatedBy *handleListOrgTokensV1OutputTokenUser `json:"lastUpdatedBy" yaml:"lastUpdatedBy"`
+type ListOrgTokensV1OutputToken struct {
+	Id            string                          `json:"id" yaml:"id"`
+	OrgId         string                          `json:"orgId" yaml:"orgId"`
+	Name          string                          `json:"name" yaml:"name"`
+	Description   *string                         `json:"description" yaml:"description"`
+	CreatedAt     time.Time                       `json:"createdAt" yaml:"createdAt"`
+	CreatedBy     *ListOrgTokensV1OutputTokenUser `json:"createdBy" yaml:"createdBy"`
+	LastUpdatedAt time.Time                       `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
+	LastUpdatedBy *ListOrgTokensV1OutputTokenUser `json:"lastUpdatedBy" yaml:"lastUpdatedBy"`
 }
 
-type handleListOrgTokensV1OutputTokenUser struct {
-	Id string `json:"id" yaml:"id"`
+type ListOrgTokensV1OutputTokenUser struct {
+	Id    string `json:"id" yaml:"id"`
+	Email string `json:"email" yaml:"email"`
 }
 
 func handleListOrgTokensV1(w http.ResponseWriter, r *http.Request) {
@@ -575,17 +633,23 @@ func handleListOrgTokensV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	redactedTokens := orgTokens.GetRedacted()
-	output := make(handleListOrgTokensV1Output, 0, len(redactedTokens))
+	output := make(ListOrgTokensV1Output, 0, len(redactedTokens))
 	for _, token := range redactedTokens {
-		var createdBy *handleListOrgTokensV1OutputTokenUser
+		var createdBy *ListOrgTokensV1OutputTokenUser
 		if token.CreatedBy != nil && token.CreatedBy.Id != nil {
-			createdBy = &handleListOrgTokensV1OutputTokenUser{Id: *token.CreatedBy.Id}
+			createdBy = &ListOrgTokensV1OutputTokenUser{
+				Id:    *token.CreatedBy.Id,
+				Email: token.CreatedBy.Email,
+			}
 		}
-		var lastUpdatedBy *handleListOrgTokensV1OutputTokenUser
+		var lastUpdatedBy *ListOrgTokensV1OutputTokenUser
 		if token.LastUpdatedBy != nil && token.LastUpdatedBy.Id != nil {
-			lastUpdatedBy = &handleListOrgTokensV1OutputTokenUser{Id: *token.LastUpdatedBy.Id}
+			lastUpdatedBy = &ListOrgTokensV1OutputTokenUser{
+				Id:    *token.LastUpdatedBy.Id,
+				Email: token.LastUpdatedBy.Email,
+			}
 		}
-		output = append(output, handleListOrgTokensV1OutputToken{
+		output = append(output, ListOrgTokensV1OutputToken{
 			Id:            token.GetId(),
 			OrgId:         token.GetOrg().GetId(),
 			Name:          token.Name,
@@ -608,6 +672,131 @@ func handleListOrgTokensV1(w http.ResponseWriter, r *http.Request) {
 		SrcUa:        &session.UserAgent,
 		DstHost:      &r.Host,
 	})
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+type GetOrgTokenV1Output struct {
+	Id            string                          `json:"id" yaml:"id"`
+	OrgId         string                          `json:"orgId" yaml:"orgId"`
+	Name          string                          `json:"name" yaml:"name"`
+	Description   *string                         `json:"description" yaml:"description"`
+	CreatedAt     time.Time                       `json:"createdAt" yaml:"createdAt"`
+	CreatedBy     *ListOrgTokensV1OutputTokenUser `json:"createdBy" yaml:"createdBy"`
+	LastUpdatedAt time.Time                       `json:"lastUpdatedAt" yaml:"lastUpdatedAt"`
+	LastUpdatedBy *ListOrgTokensV1OutputTokenUser `json:"lastUpdatedBy" yaml:"lastUpdatedBy"`
+	Role          *GetOrgTokenV1OutputRole        `json:"role" yaml:"role"`
+}
+
+type GetOrgTokenV1OutputRole struct {
+	Id          string                              `json:"id" yaml:"id"`
+	Name        string                              `json:"name" yaml:"name"`
+	Permissions []GetOrgTokenV1OutputRolePermission `json:"permissions" yaml:"permissions"`
+}
+
+type GetOrgTokenV1OutputRolePermission struct {
+	Id       string `json:"id" yaml:"id"`
+	Resource string `json:"resource" yaml:"resource"`
+	Allows   uint64 `json:"allows" yaml:"allows"`
+	Denys    uint64 `json:"denys" yaml:"denys"`
+}
+
+func handleGetOrgTokenV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+	tokenId := vars["tokenId"]
+
+	if err := validate.Uuid(tokenId); err != nil {
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s] provided invalid tokenId[%s]: %s", session.UserId, tokenId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "token id is invalid", ErrorInvalidInput)
+		return
+	}
+
+	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested token[%s] from org[%s]", session.UserId, tokenId, orgId))
+
+	if err := validateRequesterCanManageOrgUsers(validateRequesterCanManageOrgUsersOpts{
+		OrgId:           orgId,
+		RequesterUserId: session.UserId,
+	}); err != nil {
+		switch {
+		case errors.Is(err, ErrorInsufficientPermissions):
+			log(common.LogLevelError, fmt.Sprintf("user[%s] is not authorized to view token[%s] for org[%s]", session.UserId, tokenId, orgId))
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not authorized to view token", ErrorInsufficientPermissions)
+			return
+		case errors.Is(err, ErrorDatabaseIssue):
+			log(common.LogLevelError, fmt.Sprintf("failed to verify requester permissions for org[%s]: %s", orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", ErrorDatabaseIssue)
+			return
+		default:
+			log(common.LogLevelError, fmt.Sprintf("unexpected error verifying requester permissions for org[%s]: %s", orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", ErrorUnknown)
+			return
+		}
+	}
+
+	org := models.Org{Id: &orgId}
+	orgToken, err := org.GetTokenByIdV1(models.GetOrgTokenByIdV1Opts{
+		DatabaseConnection: models.DatabaseConnection{Db: db},
+		TokenId:            tokenId,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, models.ErrorNotFound):
+			log(common.LogLevelDebug, fmt.Sprintf("token[%s] in org[%s] not found", tokenId, orgId))
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "token was not found", ErrorNotFound)
+			return
+		default:
+			log(common.LogLevelError, fmt.Sprintf("failed to load token[%s] for org[%s]: %s", tokenId, orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org token", ErrorDatabaseIssue)
+			return
+		}
+	}
+
+	redactedToken := orgToken.GetRedacted()
+	var createdBy *ListOrgTokensV1OutputTokenUser
+	if redactedToken.CreatedBy != nil && redactedToken.CreatedBy.Id != nil {
+		createdBy = &ListOrgTokensV1OutputTokenUser{Id: *redactedToken.CreatedBy.Id}
+	}
+	var lastUpdatedBy *ListOrgTokensV1OutputTokenUser
+	if redactedToken.LastUpdatedBy != nil && redactedToken.LastUpdatedBy.Id != nil {
+		lastUpdatedBy = &ListOrgTokensV1OutputTokenUser{Id: *redactedToken.LastUpdatedBy.Id}
+	}
+
+	var roleOutput *GetOrgTokenV1OutputRole
+	if redactedToken.Role != nil {
+		permissions := make([]GetOrgTokenV1OutputRolePermission, 0, len(redactedToken.Role.Permissions))
+		for _, permission := range redactedToken.Role.Permissions {
+			permissionId := ""
+			if permission.Id != nil {
+				permissionId = *permission.Id
+			}
+			permissions = append(permissions, GetOrgTokenV1OutputRolePermission{
+				Id:       permissionId,
+				Resource: string(permission.Resource),
+				Allows:   uint64(permission.Allows),
+				Denys:    uint64(permission.Denys),
+			})
+		}
+		roleOutput = &GetOrgTokenV1OutputRole{
+			Id:          redactedToken.Role.GetId(),
+			Name:        redactedToken.Role.Name,
+			Permissions: permissions,
+		}
+	}
+
+	output := GetOrgTokenV1Output{
+		Id:            redactedToken.GetId(),
+		OrgId:         redactedToken.GetOrg().GetId(),
+		Name:          redactedToken.Name,
+		Description:   redactedToken.Description,
+		CreatedAt:     redactedToken.CreatedAt,
+		CreatedBy:     createdBy,
+		LastUpdatedAt: redactedToken.LastUpdatedAt,
+		LastUpdatedBy: lastUpdatedBy,
+		Role:          roleOutput,
+	}
+
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
@@ -707,12 +896,13 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiKey, err := generateAPIKey(64)
+	apiKey, err := generateApiKey(constants.ApiKeyLength - len(constants.ApiKeyPrefix))
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to generate api key for org[%s]: %s", orgId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to generate api key", ErrorUnknown)
 		return
 	}
+	apiKey = constants.ApiKeyPrefix + apiKey
 
 	tokenId := uuid.NewString()
 	certOpts := tls.CertificateOptions{
@@ -1448,15 +1638,4 @@ func handleListOrgMemberTypesV1(w http.ResponseWriter, r *http.Request) {
 		DstHost:      &r.Host,
 	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", memberTypes)
-}
-
-func generateAPIKey(length int) (string, error) {
-	if length%2 != 0 {
-		return "", fmt.Errorf("length must be even")
-	}
-	buf := make([]byte, length/2)
-	if _, err := rand.Read(buf); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
-	}
-	return hex.EncodeToString(buf), nil
 }

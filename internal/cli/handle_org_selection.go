@@ -54,7 +54,7 @@ func HandleOrgSelection(opts HandleOrgSelectionOpts) (orgCode *string, err error
 		fmt.Printf("⚠️  The organisation <%s> does not seem valid\n", opts.UserInput)
 	}
 
-	fmt.Println("💬 Which organisation will it be?")
+	fmt.Println(styleBold.Render("💬 Which organisation will it be?"))
 	fmt.Println("")
 	choices := []SelectorChoice{}
 	for _, org := range listOrgsOutput.Data {

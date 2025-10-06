@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"opsicle/cmd/opsicle/list/orgs/invitations"
 	"opsicle/cmd/opsicle/list/orgs/roles"
+	"opsicle/cmd/opsicle/list/orgs/tokens"
 	"opsicle/cmd/opsicle/list/orgs/users"
 	"opsicle/internal/cli"
 	"opsicle/pkg/controller"
@@ -28,6 +29,7 @@ var flags cli.Flags = cli.Flags{
 func init() {
 	Command.AddCommand(invitations.Command)
 	Command.AddCommand(roles.Command)
+	Command.AddCommand(tokens.Command)
 	Command.AddCommand(users.Command)
 	flags.AddToCommand(Command)
 }
