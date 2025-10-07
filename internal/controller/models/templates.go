@@ -19,6 +19,7 @@ type Template struct {
 	Version       *int64
 	Content       []byte
 	Users         []TemplateUser
+	Orgs          []TemplateOrg
 	Versions      []TemplateVersion
 	CreatedAt     time.Time
 	CreatedBy     *User
@@ -359,13 +360,13 @@ func (t *Template) UpdateFieldsV1(opts UpdateFieldsV1) error {
 	})
 }
 
-type SubmitTemplateV1Opts struct {
+type CreateTemplateVersionV1Opts struct {
 	Db       *sql.DB
 	Template automations.Template
 	UserId   string
 }
 
-func SubmitTemplateV1(opts SubmitTemplateV1Opts) (*Template, error) {
+func CreateTemplateVersionV1(opts CreateTemplateVersionV1Opts) (*Template, error) {
 	templateName := opts.Template.GetName()
 	automationTemplate, err := GetTemplateV1(GetTemplateV1Opts{
 		Db:           opts.Db,
@@ -374,7 +375,7 @@ func SubmitTemplateV1(opts SubmitTemplateV1Opts) (*Template, error) {
 	})
 	if err != nil {
 		if isMysqlNotFoundError(err) {
-			return createAutomationTemplateV1(createAutomationTemplateV1Opts{
+			return createTemplate(createTemplateOpts{
 				Db:       opts.Db,
 				Template: opts.Template,
 				UserId:   opts.UserId,
@@ -382,7 +383,7 @@ func SubmitTemplateV1(opts SubmitTemplateV1Opts) (*Template, error) {
 		}
 		return nil, err
 	}
-	return submitTemplateV1(submitTemplateV1Opts{
+	return createTemplateVersionV1(createTemplateVersionV1Opts{
 		Db:              opts.Db,
 		CurrentTemplate: automationTemplate,
 		UpdatedTemplate: opts.Template,
@@ -390,14 +391,65 @@ func SubmitTemplateV1(opts SubmitTemplateV1Opts) (*Template, error) {
 	})
 }
 
-type submitTemplateV1Opts struct {
+type SubmitOrgTemplateV1Opts struct {
+	Db       *sql.DB
+	OrgId    string
+	Template automations.Template
+	UserId   string
+}
+
+func SubmitOrgTemplateV1(opts SubmitOrgTemplateV1Opts) (*Template, error) {
+	if opts.OrgId == "" {
+		return nil, fmt.Errorf("missing organization id: %w", errorInputValidationFailed)
+	}
+	templateName := opts.Template.GetName()
+	orgTemplate, err := GetOrgTemplateV1(GetOrgTemplateV1Opts{
+		Db:           opts.Db,
+		OrgId:        opts.OrgId,
+		TemplateName: &templateName,
+		UserId:       opts.UserId,
+	})
+	if err != nil {
+		if isMysqlNotFoundError(err) {
+			createdTemplate, createErr := createTemplate(createTemplateOpts{
+				Db:       opts.Db,
+				Template: opts.Template,
+				UserId:   opts.UserId,
+				OrgId:    &opts.OrgId,
+			})
+			if createErr != nil {
+				return nil, createErr
+			}
+			if err := ensureTemplateOrgLink(opts.Db, createdTemplate.GetId(), opts.OrgId, opts.UserId); err != nil {
+				return nil, err
+			}
+			return createdTemplate, nil
+		}
+		return nil, err
+	}
+	updatedTemplate, err := createTemplateVersionV1(createTemplateVersionV1Opts{
+		Db:              opts.Db,
+		CurrentTemplate: orgTemplate,
+		UpdatedTemplate: opts.Template,
+		UserId:          opts.UserId,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureTemplateOrgLink(opts.Db, updatedTemplate.GetId(), opts.OrgId, opts.UserId); err != nil {
+		return nil, err
+	}
+	return updatedTemplate, nil
+}
+
+type createTemplateVersionV1Opts struct {
 	Db              *sql.DB
 	CurrentTemplate *Template
 	UpdatedTemplate automations.Template
 	UserId          string
 }
 
-func submitTemplateV1(opts submitTemplateV1Opts) (*Template, error) {
+func createTemplateVersionV1(opts createTemplateVersionV1Opts) (*Template, error) {
 	if opts.CurrentTemplate == nil {
 		return nil, fmt.Errorf("empty current template: %w", errorInputValidationFailed)
 	}
@@ -441,7 +493,7 @@ func submitTemplateV1(opts submitTemplateV1Opts) (*Template, error) {
 			string(output.Content),
 			opts.UserId,
 		},
-		FnSource:     "models.submitTemplateV1[template_versions]",
+		FnSource:     "models.createTemplateVersionV1[template_versions]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -464,7 +516,7 @@ func submitTemplateV1(opts submitTemplateV1Opts) (*Template, error) {
 			output.LastUpdatedBy.GetId(),
 			*output.Id,
 		},
-		FnSource:     "models.submitTemplateV1[template_versions]",
+		FnSource:     "models.createTemplateVersionV1[template_versions]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
@@ -473,13 +525,83 @@ func submitTemplateV1(opts submitTemplateV1Opts) (*Template, error) {
 	return &output, nil
 }
 
-type createAutomationTemplateV1Opts struct {
+func ensureTemplateOrgLink(db *sql.DB, templateId string, orgId string, userId string) error {
+	linkId := uuid.NewString()
+	insertErr := executeMysqlInsert(mysqlQueryInput{
+		Db: db,
+		Stmt: `
+			INSERT INTO template_orgs (
+				id,
+				template_id,
+				org_id,
+				created_by,
+				last_updated_by
+			) VALUES (
+				?,
+				?,
+				?,
+				?,
+				?
+			)
+		`,
+		Args: []any{
+			linkId,
+			templateId,
+			orgId,
+			userId,
+			userId,
+		},
+		FnSource:     "models.ensureTemplateOrgLink[insert]",
+		RowsAffected: oneRowAffected,
+	})
+	if insertErr != nil {
+		if errors.Is(insertErr, ErrorDuplicateEntry) {
+			if err := executeMysqlUpdate(mysqlQueryInput{
+				Db: db,
+				Stmt: `
+					UPDATE template_orgs
+					SET last_updated_by = ?
+					WHERE template_id = ? AND org_id = ?
+				`,
+				Args: []any{
+					userId,
+					templateId,
+					orgId,
+				},
+				FnSource: "models.ensureTemplateOrgLink[update]",
+			}); err != nil {
+				return err
+			}
+		} else {
+			return insertErr
+		}
+	}
+	if err := executeMysqlUpdate(mysqlQueryInput{
+		Db: db,
+		Stmt: `
+			UPDATE templates
+				SET org_id = ?
+			WHERE id = ?
+		`,
+		Args: []any{
+			orgId,
+			templateId,
+		},
+		FnSource: "models.ensureTemplateOrgLink[templates]",
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+type createTemplateOpts struct {
 	Db       *sql.DB
 	Template automations.Template
 	UserId   string
+	OrgId    *string
 }
 
-func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template, error) {
+func createTemplate(opts createTemplateOpts) (*Template, error) {
 	automationTemplateUuid := uuid.NewString()
 
 	description := opts.Template.GetDescription()
@@ -488,6 +610,10 @@ func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template,
 	templateData, err := yaml.Marshal(opts.Template)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal template: %w", err)
+	}
+	orgs := []TemplateOrg{}
+	if opts.OrgId != nil {
+		orgs = append(orgs, TemplateOrg{OrgId: opts.OrgId})
 	}
 
 	output := Template{
@@ -506,99 +632,111 @@ func createAutomationTemplateV1(opts createAutomationTemplateV1Opts) (*Template,
 				CanInvite:  true,
 			},
 		},
+		Orgs: orgs,
 	}
 
+	templateInsertMap := map[string]any{
+		"id":          *output.Id,
+		"name":        *output.Name,
+		"description": *output.Description,
+		"version":     *output.Version,
+		"created_by":  output.Users[0].UserId,
+	}
+	fn, fv, fvp, err := parseInsertMap(templateInsertMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse template insert map: %w", err)
+	}
 	if err := executeMysqlInsert(mysqlQueryInput{
 		Db: opts.Db,
-		Stmt: `
-			INSERT INTO templates (
-				id,
-				name,
-				description,
-				version,
-				created_by
-			) VALUES (
-				?, 
-				?, 
-				?, 
-				?, 
-				?
-			)
-		`,
-		Args: []any{
-			*output.Id,
-			*output.Name,
-			*output.Description,
-			*output.Version,
-			output.Users[0].UserId,
-		},
-		FnSource:     "models.createAutomationTemplateV1[templates]",
+		Stmt: fmt.Sprintf(`
+			INSERT INTO templates (%s) VALUES (%s)`,
+			strings.Join(fn, ", "),
+			strings.Join(fvp, ", "),
+		),
+		Args:         fv,
+		FnSource:     "models.createTemplate[templates]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
 	}
 
+	templateVersionInsertMap := map[string]any{
+		"template_id": *output.Id,
+		"version":     *output.Version,
+		"content":     string(output.Content),
+		"created_by":  output.Users[0].UserId,
+	}
+	fn, fv, fvp, err = parseInsertMap(templateVersionInsertMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse templateVersion insert map: %w", err)
+	}
 	if err := executeMysqlInsert(mysqlQueryInput{
 		Db: opts.Db,
-		Stmt: `
-			INSERT INTO template_versions (
-				template_id,
-				version,
-				content,
-				created_by
-			) VALUES (
-			 ?,
-			 ?,
-			 ?,
-			 ?
-			)
-		`,
-		Args: []any{
-			*output.Id,
-			*output.Version,
-			string(output.Content),
-			output.Users[0].UserId,
-		},
-		FnSource:     "models.createAutomationTemplateV1[template_versions]",
+		Stmt: fmt.Sprintf(`
+			INSERT INTO template_versions (%s) VALUES (%s)
+			`,
+			strings.Join(fn, ", "),
+			strings.Join(fvp, ", "),
+		),
+		Args:         fv,
+		FnSource:     "models.createTemplate[template_versions]",
 		RowsAffected: oneRowAffected,
 	}); err != nil {
 		return nil, err
 	}
 
-	if err := executeMysqlInsert(mysqlQueryInput{
-		Db: opts.Db,
-		Stmt: `
-			INSERT INTO template_users (
-				template_id,
-				user_id,
-				can_view,
-				can_execute,
-				can_update,
-				can_delete,
-				can_invite
-			) VALUES (
-			  ?,
-			  ?,
-			  ?,
-			  ?,
-			  ?,
-			  ?,
-			  ?
-			)
-		`,
-		Args: []any{
-			*output.Id,
-			output.Users[0].UserId,
-			output.Users[0].CanView,
-			output.Users[0].CanExecute,
-			output.Users[0].CanUpdate,
-			output.Users[0].CanDelete,
-			output.Users[0].CanInvite,
-		},
-		FnSource:     "models.createAutomationTemplateV1[template_users]",
-		RowsAffected: oneRowAffected,
-	}); err != nil {
-		return nil, err
+	if len(output.Orgs) > 0 {
+		templateOrgInsertMap := map[string]any{
+			"id":              uuid.NewString(),
+			"template_id":     *output.Id,
+			"org_id":          output.Orgs[0].OrgId,
+			"created_by":      output.Users[0].UserId,
+			"last_updated_by": output.Users[0].UserId,
+		}
+		fn, fv, fvp, err = parseInsertMap(templateOrgInsertMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse templateOrg insert map: %w", err)
+		}
+		if err := executeMysqlInsert(mysqlQueryInput{
+			Db: opts.Db,
+			Stmt: fmt.Sprintf(`
+				INSERT INTO template_orgs (%s) VALUES (%s)`,
+				strings.Join(fn, ", "),
+				strings.Join(fvp, ", "),
+			),
+			Args:         fv,
+			FnSource:     "models.createTemplate[templateorgs]",
+			RowsAffected: oneRowAffected,
+		}); err != nil {
+			return nil, err
+		}
+	} else if len(output.Users) > 0 {
+		templateUserInsertMap := map[string]any{
+			"template_id": *output.Id,
+			"user_id":     output.Users[0].UserId,
+			"can_view":    output.Users[0].CanView,
+			"can_execute": output.Users[0].CanExecute,
+			"can_update":  output.Users[0].CanUpdate,
+			"can_delete":  output.Users[0].CanDelete,
+			"can_invite":  output.Users[0].CanInvite,
+		}
+		fn, fv, fvp, err = parseInsertMap(templateUserInsertMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse templateUser insert map: %w", err)
+		}
+		if err := executeMysqlInsert(mysqlQueryInput{
+			Db: opts.Db,
+			Stmt: fmt.Sprintf(`
+				INSERT INTO template_users (%s) VALUES (%s)`,
+				strings.Join(fn, ", "),
+				strings.Join(fvp, ", "),
+			),
+			Args:         fv,
+			FnSource:     "models.createTemplate[template_users]",
+			RowsAffected: oneRowAffected,
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	return &output, nil

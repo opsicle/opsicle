@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"opsicle/internal/audit"
+	"opsicle/internal/automations"
 	"opsicle/internal/common"
 	"opsicle/internal/common/images"
 	"opsicle/internal/controller/constants"
@@ -15,11 +16,13 @@ import (
 	"opsicle/internal/email"
 	"opsicle/internal/tls"
 	"opsicle/internal/validate"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"gopkg.in/yaml.v3"
 )
 
 func registerOrgRoutes(opts RouteRegistrationOpts) {
@@ -37,6 +40,8 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/{orgId}/member/{userId}", requiresAuth(http.HandlerFunc(handleDeleteOrgUserV1))).Methods(http.MethodDelete)
 	v1.Handle("/{orgId}/members", requiresAuth(http.HandlerFunc(handleListOrgUsersV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/roles", requiresAuth(http.HandlerFunc(handleListOrgRolesV1))).Methods(http.MethodGet)
+	v1.Handle("/{orgId}/template", requiresAuth(http.HandlerFunc(handleSubmitOrgTemplateV1))).Methods(http.MethodPost)
+	v1.Handle("/{orgId}/templates", requiresAuth(http.HandlerFunc(handleListOrgTemplatesV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/tokens", requiresAuth(http.HandlerFunc(handleListOrgTokensV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/token/{tokenId}", requiresAuth(http.HandlerFunc(handleGetOrgTokenV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/token", requiresAuth(http.HandlerFunc(handleCreateOrgTokenV1))).Methods(http.MethodPost)
@@ -575,6 +580,165 @@ func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
 		SrcUa:        &session.UserAgent,
 		DstHost:      &r.Host,
 	})
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+func handleSubmitOrgTemplateV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+	if orgId == "" {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id was not provided", ErrorInvalidInput)
+		return
+	}
+	if _, err := uuid.Parse(orgId); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id is not a valid uuid", ErrorInvalidInput)
+		return
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is creating an automation template for org[%s]", session.UserId, orgId))
+
+	org := models.Org{Id: &orgId}
+	if _, err := org.GetUserV1(models.GetOrgUserV1Opts{
+		Db:     db,
+		UserId: session.UserId,
+	}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to verify membership of user[%s] in org[%s]: %s", session.UserId, orgId, err))
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "user is not part of organization", ErrorInsufficientPermissions)
+			return
+		}
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "organization membership verification failed", ErrorDatabaseIssue)
+		return
+	}
+
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		return
+	}
+	var input handleSubmitTemplateV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		return
+	}
+
+	var template automations.Template
+	if err := yaml.Unmarshal(input.Data, &template); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse automation tempalte data", ErrorInvalidInput)
+		return
+	}
+
+	automationTemplateVersion, err := models.SubmitOrgTemplateV1(models.SubmitOrgTemplateV1Opts{
+		Db:       db,
+		OrgId:    orgId,
+		Template: template,
+		UserId:   session.UserId,
+	})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to create automation template in db: %s", err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create automation tempalte", ErrorDatabaseIssue)
+		return
+	}
+	output := handleSubmitTemplateV1Output{
+		Id:      *automationTemplateVersion.Id,
+		Name:    *automationTemplateVersion.Name,
+		Version: *automationTemplateVersion.Version,
+	}
+
+	verb := audit.Create
+	if *automationTemplateVersion.Version > 1 {
+		verb = audit.Update
+	}
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         verb,
+		ResourceId:   *automationTemplateVersion.Id,
+		ResourceType: audit.AutomationTemplateResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
+func handleListOrgTemplatesV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+	if orgId == "" {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id was not provided", ErrorInvalidInput)
+		return
+	}
+	if _, err := uuid.Parse(orgId); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id is not a valid uuid", ErrorInvalidInput)
+		return
+	}
+
+	log(common.LogLevelDebug, fmt.Sprintf("retrieving automation templates for org[%s] by user[%s]", orgId, session.UserId))
+
+	org := models.Org{Id: &orgId}
+	if _, err := org.GetUserV1(models.GetOrgUserV1Opts{
+		Db:     db,
+		UserId: session.UserId,
+	}); err != nil {
+		if errors.Is(err, models.ErrorNotFound) {
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "user is not authorized to access organization templates", ErrorInsufficientPermissions)
+			return
+		}
+		log(common.LogLevelError, fmt.Sprintf("failed to verify membership of user[%s] in org[%s]: %s", session.UserId, orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "organization membership verification failed", ErrorDatabaseIssue)
+		return
+	}
+
+	templates, err := org.ListTemplatesV1(models.DatabaseConnection{Db: db})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to list org templates for org[%s]: %s", orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list automation templates", ErrorDatabaseIssue)
+		return
+	}
+
+	sort.Slice(templates, func(i, j int) bool {
+		iTime := time.Time{}
+		if templates[i].LastUpdatedAt != nil {
+			iTime = *templates[i].LastUpdatedAt
+		}
+		jTime := time.Time{}
+		if templates[j].LastUpdatedAt != nil {
+			jTime = *templates[j].LastUpdatedAt
+		}
+		return iTime.After(jTime)
+	})
+
+	output := handleListTemplatesV1Output{}
+	for _, template := range templates {
+		outputItem := handleListTemplatesV1OutputTemplate{
+			Id:            *template.Id,
+			Description:   *template.Description,
+			Name:          *template.Name,
+			Content:       template.Content,
+			Version:       *template.Version,
+			CreatedAt:     template.CreatedAt,
+			LastUpdatedAt: template.LastUpdatedAt,
+		}
+		if template.CreatedBy != nil {
+			outputItem.CreatedBy = &handleListTemplatesV1OutputTemplateUser{
+				Id:    template.CreatedBy.GetId(),
+				Email: template.CreatedBy.Email,
+			}
+		}
+		if template.LastUpdatedBy != nil {
+			outputItem.LastUpdatedBy = &handleListTemplatesV1OutputTemplateUser{
+				Id:    template.LastUpdatedBy.GetId(),
+				Email: template.LastUpdatedBy.Email,
+			}
+		}
+		output = append(output, outputItem)
+	}
+
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 

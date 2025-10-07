@@ -23,20 +23,18 @@ func registerAutomationTemplatesRoutes(opts RouteRegistrationOpts) {
 	requiresAuth := getRouteAuther(opts.ServiceLogs)
 
 	v1 := opts.Router.PathPrefix("/v1/templates").Subrouter()
-
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleListTemplatesV1))).Methods(http.MethodGet)
 
-	v1 = opts.Router.PathPrefix("/v1/template").Subrouter()
-
-	v1.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleDeleteTemplateV1))).Methods(http.MethodDelete)
-	v1.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleGetTemplateV1))).Methods(http.MethodGet)
-	v1.Handle("", requiresAuth(http.HandlerFunc(handleSubmitTemplateV1))).Methods(http.MethodPost)
-	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateTemplateInvitationV1))).Methods(http.MethodPatch)
-	v1.Handle("/{templateId}/user", requiresAuth(http.HandlerFunc(handleCreateTemplateUserV1))).Methods(http.MethodPost)
-	v1.Handle("/{templateId}/users", requiresAuth(http.HandlerFunc(handleListTemplateUsersV1))).Methods(http.MethodGet)
-	v1.Handle("/{templateId}/user/{userId}", requiresAuth(http.HandlerFunc(handleDeleteTemplateUsersV1))).Methods(http.MethodDelete)
-	v1.Handle("/{templateId}/versions", requiresAuth(http.HandlerFunc(handleListTemplateVersionsV1))).Methods(http.MethodGet)
-	v1.Handle("/{templateId}/version", requiresAuth(http.HandlerFunc(handleUpdateTemplateVersionV1))).Methods(http.MethodPut)
+	templateRouter := opts.Router.PathPrefix("/v1/template").Subrouter()
+	templateRouter.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleDeleteTemplateV1))).Methods(http.MethodDelete)
+	templateRouter.Handle("/{templateId}", requiresAuth(http.HandlerFunc(handleGetTemplateV1))).Methods(http.MethodGet)
+	templateRouter.Handle("", requiresAuth(http.HandlerFunc(handleSubmitTemplateV1))).Methods(http.MethodPost)
+	templateRouter.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateTemplateInvitationV1))).Methods(http.MethodPatch)
+	templateRouter.Handle("/{templateId}/user", requiresAuth(http.HandlerFunc(handleCreateTemplateUserV1))).Methods(http.MethodPost)
+	templateRouter.Handle("/{templateId}/users", requiresAuth(http.HandlerFunc(handleListTemplateUsersV1))).Methods(http.MethodGet)
+	templateRouter.Handle("/{templateId}/user/{userId}", requiresAuth(http.HandlerFunc(handleDeleteTemplateUsersV1))).Methods(http.MethodDelete)
+	templateRouter.Handle("/{templateId}/versions", requiresAuth(http.HandlerFunc(handleListTemplateVersionsV1))).Methods(http.MethodGet)
+	templateRouter.Handle("/{templateId}/version", requiresAuth(http.HandlerFunc(handleUpdateTemplateVersionV1))).Methods(http.MethodPut)
 }
 
 type handleSubmitTemplateV1Output struct {
@@ -71,7 +69,7 @@ func handleSubmitTemplateV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	automationTemplateVersion, err := models.SubmitTemplateV1(models.SubmitTemplateV1Opts{
+	automationTemplateVersion, err := models.CreateTemplateVersionV1(models.CreateTemplateVersionV1Opts{
 		Db:       db,
 		Template: template,
 		UserId:   session.UserId,

@@ -215,6 +215,9 @@ func parseInsertMap(insertMap map[string]any) (fieldNames []string, fieldValues 
 		case []byte, string, uint, uint32, uint64, int, int32, int64, float32, float64, bool, time.Time:
 			fieldValues = append(fieldValues, value)
 			fieldValuePlaceholders = append(fieldValuePlaceholders, "?")
+		case *string, *uint, *uint32, *uint64, *int, *int32, *int64, *float32, *float64, *bool, *time.Time:
+			fieldValues = append(fieldValues, value)
+			fieldValuePlaceholders = append(fieldValuePlaceholders, "?")
 		case DatabaseFunction:
 			fieldValues = append(fieldValues, value)
 			fieldValuePlaceholders = append(fieldValuePlaceholders, string(value))

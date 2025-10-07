@@ -87,6 +87,9 @@ type Org struct {
 
 	// Users contains the user sof this organisation when loaded
 	Users OrgUsers `json:"users"`
+
+	// Templates contains the templates of this organisation when loaded
+	Templates []Template `json:"templates" yaml:"templates"`
 }
 
 func (o Org) assertIdDefined() error {

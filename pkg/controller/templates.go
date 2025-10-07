@@ -150,6 +150,48 @@ func (c Client) ListTemplatesV1(input ListTemplatesV1Input) (*ListTemplatesV1Out
 	return output, err
 }
 
+type ListOrgTemplatesV1Output struct {
+	Data ListTemplatesV1OutputData
+
+	http.Response
+}
+
+type ListOrgTemplatesV1Input struct {
+	OrgId string `json:"-"`
+	Limit int    `json:"limit"`
+}
+
+func (c Client) ListOrgTemplatesV1(input ListOrgTemplatesV1Input) (*ListOrgTemplatesV1Output, error) {
+	if _, err := uuid.Parse(input.OrgId); err != nil {
+		return nil, fmt.Errorf("%w: organization id not a uuid", ErrorInvalidInput)
+	}
+	var outputData ListTemplatesV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/org/%s/templates", input.OrgId),
+		Data:   input,
+		Output: &outputData,
+	})
+	var output *ListOrgTemplatesV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) && outputClient != nil {
+		output = &ListOrgTemplatesV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		case ErrorInsufficientPermissions.Error():
+			err = ErrorInsufficientPermissions
+		case ErrorNotFound.Error():
+			err = ErrorNotFound
+		}
+	}
+	return output, err
+}
+
 type ListUserTemplateInvitationsV1Output struct {
 	Data ListUserTemplateInvitationsV1OutputData
 	http.Response
@@ -366,6 +408,38 @@ func (c Client) SubmitTemplateV1(input SubmitTemplateV1Input) (*SubmitTemplateV1
 	outputClient, err := c.do(request{
 		Method: http.MethodPost,
 		Path:   "/api/v1/template",
+		Data:   input,
+		Output: &outputData,
+	})
+	var output *SubmitTemplateV1Output = nil
+	if !errors.Is(err, ErrorOutputNil) {
+		output = &SubmitTemplateV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorDatabaseIssue.Error():
+			err = ErrorDatabaseIssue
+		}
+	}
+	return output, err
+}
+
+type SubmitOrgTemplateV1Input struct {
+	OrgId string `json:"-"`
+	Data  []byte `json:"data"`
+}
+
+func (c Client) SubmitOrgTemplateV1(input SubmitOrgTemplateV1Input) (*SubmitTemplateV1Output, error) {
+	if input.OrgId == "" {
+		return nil, fmt.Errorf("%w: missing organization identifier", ErrorInvalidInput)
+	}
+	var outputData SubmitTemplateV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodPost,
+		Path:   fmt.Sprintf("/api/v1/org/%s/template", input.OrgId),
 		Data:   input,
 		Output: &outputData,
 	})
