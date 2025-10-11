@@ -32,12 +32,13 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 
 	v1.Handle("/member/types", requiresAuth(http.HandlerFunc(handleListOrgMemberTypesV1))).Methods(http.MethodGet)
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleCreateOrgV1))).Methods(http.MethodPost)
-	v1.Handle("/{orgCode}", requiresAuth(http.HandlerFunc(handleGetOrgV1))).Methods(http.MethodGet)
+	v1.Handle("/{orgRef}", requiresAuth(http.HandlerFunc(handleGetOrgV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleCreateOrgUserV1))).Methods(http.MethodPost)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleGetOrgCurrentUserV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleUpdateOrgUserV1))).Methods(http.MethodPatch)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleLeaveOrgV1))).Methods(http.MethodDelete)
 	v1.Handle("/{orgId}/member/{userId}", requiresAuth(http.HandlerFunc(handleDeleteOrgUserV1))).Methods(http.MethodDelete)
+	v1.Handle("/{orgId}/member/{userId}/can/{action}/{resource}", requiresAuth(http.HandlerFunc(handleCanOrgUserActionV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/members", requiresAuth(http.HandlerFunc(handleListOrgUsersV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/roles", requiresAuth(http.HandlerFunc(handleListOrgRolesV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/template", requiresAuth(http.HandlerFunc(handleSubmitOrgTemplateV1))).Methods(http.MethodPost)
@@ -101,6 +102,8 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// create organisation
+
 	orgInstance, err := models.CreateOrgV1(models.CreateOrgV1Opts{
 		Db:     db,
 		Code:   input.Code,
@@ -117,6 +120,9 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("created org[%s] with id[%s]", input.Code, orgInstance.GetId()))
+
+	// add user who is making request to the organisation as user #1
+
 	log(common.LogLevelDebug, fmt.Sprintf("adding user[%s] to org[%s]", session.UserId, orgInstance.GetId()))
 	if err := orgInstance.AddUserV1(models.AddUserToOrgV1{
 		Db:         db,
@@ -129,20 +135,21 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("added user[%s] to org[%s] as admin", session.UserId, orgInstance.GetId()))
 
-	log(common.LogLevelDebug, fmt.Sprintf("adding default role to org[%s]", orgInstance.GetId()))
-	orgRole, err := orgInstance.CreateRoleV1(models.CreateOrgRoleV1Input{
+	// add a default administrator role
+
+	log(common.LogLevelDebug, fmt.Sprintf("adding default admin role to org[%s]...", orgInstance.GetId()))
+	defaultAdminRole, err := orgInstance.CreateRoleV1(models.CreateOrgRoleV1Input{
 		DatabaseConnection: models.DatabaseConnection{Db: db},
-		RoleName:           models.DefaultOrgRoleName,
+		RoleName:           models.DefaultOrgRoleAdminName,
 		UserId:             session.UserId,
 	})
 	if err != nil {
-		log(common.LogLevelError, fmt.Sprintf("failed to add default role to org[%s]: %s", orgRole.GetId(), err))
+		log(common.LogLevelError, fmt.Sprintf("failed to add default admin role to org[%s]: %s", defaultAdminRole.GetId(), err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add role to org", ErrorDatabaseIssue)
 		return
 	}
-	log(common.LogLevelDebug, fmt.Sprintf("added default role[%s] to org[%s]", orgRole.GetId(), orgInstance.GetId()))
-
-	log(common.LogLevelDebug, fmt.Sprintf("adding default permissions to orgRole[%s]", orgRole.GetId()))
+	log(common.LogLevelDebug, fmt.Sprintf("added default admin role[%s] to org[%s]", defaultAdminRole.GetId(), orgInstance.GetId()))
+	log(common.LogLevelDebug, fmt.Sprintf("adding permissions to admin role[%s]...", defaultAdminRole.GetId()))
 	resources := []models.Resource{
 		models.ResourceAutomationLogs,
 		models.ResourceAutomations,
@@ -154,7 +161,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	}
 	permissionErrs := []error{}
 	for _, resource := range resources {
-		if err := orgRole.CreatePermissionV1(models.CreateOrgRolePermissionV1Input{
+		if err := defaultAdminRole.CreatePermissionV1(models.CreateOrgRolePermissionV1Input{
 			Allows:             models.ActionSetAdmin,
 			Resource:           resource,
 			DatabaseConnection: models.DatabaseConnection{Db: db},
@@ -163,21 +170,62 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(permissionErrs) > 0 {
-		log(common.LogLevelError, fmt.Sprintf("failed to add permissions to orgRole[%s]: %s", orgRole.GetId(), errors.Join(permissionErrs...)))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add permissions to org role", ErrorDatabaseIssue)
+		log(common.LogLevelError, fmt.Sprintf("failed to add permissions to admin role[%s]: %s", defaultAdminRole.GetId(), errors.Join(permissionErrs...)))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add permissions to admin org role", ErrorDatabaseIssue)
 		return
 	}
+
+	// create deafult role for workers to assume
+
+	log(common.LogLevelDebug, fmt.Sprintf("adding default worker role to org[%s]...", orgInstance.GetId()))
+	defaultWorkerRole, err := orgInstance.CreateRoleV1(models.CreateOrgRoleV1Input{
+		DatabaseConnection: models.DatabaseConnection{Db: db},
+		RoleName:           models.DefaultOrgRoleWorkerName,
+		UserId:             session.UserId,
+	})
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to add default worker role to org[%s]: %s", defaultWorkerRole.GetId(), err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add role to org", ErrorDatabaseIssue)
+		return
+	}
+	log(common.LogLevelDebug, fmt.Sprintf("added default worker role[%s] to org[%s]", defaultWorkerRole.GetId(), orgInstance.GetId()))
+	log(common.LogLevelDebug, fmt.Sprintf("adding permissions to worker orgRole[%s]...", defaultWorkerRole.GetId()))
+	workerResourceActionMap := map[models.Resource]models.Action{
+		models.ResourceAutomationLogs: models.ActionCreate | models.ActionUpdate | models.ActionView | models.ActionManage,
+		models.ResourceAutomations:    models.ActionCreate | models.ActionUpdate | models.ActionView,
+		models.ResourceTemplates:      models.ActionView,
+	}
+	permissionErrs = []error{}
+	for resourceType, allowedActions := range workerResourceActionMap {
+		if err := defaultWorkerRole.CreatePermissionV1(models.CreateOrgRolePermissionV1Input{
+			Allows:             allowedActions,
+			Resource:           resourceType,
+			DatabaseConnection: models.DatabaseConnection{Db: db},
+		}); err != nil {
+			permissionErrs = append(permissionErrs, err)
+		}
+	}
+	if len(permissionErrs) > 0 {
+		log(common.LogLevelError, fmt.Sprintf("failed to add permissions to default worker orgRole[%s]: %s", defaultWorkerRole.GetId(), errors.Join(permissionErrs...)))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add permissions to default worker org role", ErrorDatabaseIssue)
+		return
+	}
+
+	// let the user making the request have adminsitrator permissions
+
 	assigner := session.UserId
-	if err := orgRole.AssignUserV1(models.AssignOrgRoleV1Input{
+	if err := defaultAdminRole.AssignUserV1(models.AssignOrgRoleV1Input{
 		DatabaseConnection: models.DatabaseConnection{Db: db},
 		OrgId:              orgInstance.GetId(),
 		UserId:             session.UserId,
 		AssignedBy:         &assigner,
 	}); err != nil {
-		log(common.LogLevelError, fmt.Sprintf("failed to assign default role[%s] to user[%s]: %s", orgRole.GetId(), session.UserId, err))
+		log(common.LogLevelError, fmt.Sprintf("failed to assign default administrator role[%s] to user[%s]: %s", defaultAdminRole.GetId(), session.UserId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to assign org role", ErrorDatabaseIssue)
 		return
 	}
+
+	// provision a ca for the org for signing client certificates
 
 	log(common.LogLevelDebug, fmt.Sprintf("creating certificate authority for org[%s]", orgInstance.GetId()))
 	if _, err := orgInstance.CreateCertificateAuthorityV1(models.CreateOrgCertificateAuthorityV1Input{
@@ -222,20 +270,28 @@ func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(authRequestContext).(identity)
 
 	vars := mux.Vars(r)
-	orgCode := vars["orgCode"]
+	orgRef := vars["orgRef"]
 
-	if err := validate.OrgCode(orgCode); err != nil {
-		log(common.LogLevelDebug, fmt.Sprintf("user[%s] entered an invalid orgCode[%s]: %s", session.UserId, orgCode, err))
+	isorgRefUuid := false
+	if err := validate.Uuid(orgRef); err == nil {
+		isorgRefUuid = true
+	} else if err := validate.OrgCode(orgRef); err != nil {
+		log(common.LogLevelDebug, fmt.Sprintf("user[%s] entered an invalid reference[%s]: %s", session.UserId, orgRef, err))
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org code is invalid", ErrorInvalidInput)
 		return
 	}
 
 	// retrieve the org
+	getOrgOpts := models.GetOrgV1Opts{
+		Db: db,
+	}
+	if isorgRefUuid {
+		getOrgOpts.Id = &orgRef
+	} else {
+		getOrgOpts.Code = &orgRef
+	}
 
-	org, err := models.GetOrgV1(models.GetOrgV1Opts{
-		Db:   db,
-		Code: &orgCode,
-	})
+	org, err := models.GetOrgV1(getOrgOpts)
 	if err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", ErrorDatabaseIssue)
@@ -244,7 +300,7 @@ func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org", ErrorDatabaseIssue)
 		return
 	}
-	log(common.LogLevelDebug, fmt.Sprintf("successfully retrieved org[%s] with id[%s]", orgCode, org.GetId()))
+	log(common.LogLevelDebug, fmt.Sprintf("successfully retrieved org[%s] with reference[%s]", orgRef, org.GetId()))
 
 	// only return the information if the user is part of the org
 
@@ -1639,6 +1695,81 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleDeleteOrgUserV1Output{IsSuccessful: true})
 }
 
+type CanOrgUserActionV1OutputData struct {
+	Action    string `json:"action"`
+	Allows    uint64 `json:"allows"`
+	Denys     uint64 `json:"denys"`
+	IsAllowed bool   `json:"isAllowed"`
+	OrgId     string `json:"orgId"`
+	Resource  string `json:"resource"`
+	UserId    string `json:"userId"`
+}
+
+func handleCanOrgUserActionV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+	vars := mux.Vars(r)
+
+	orgId := vars["orgId"]
+	userId := vars["userId"]
+	actionRaw := vars["action"]
+	resourceRaw := vars["resource"]
+
+	if err := validate.Uuid(orgId); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		return
+	}
+	if err := validate.Uuid(userId); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user id", ErrorInvalidInput)
+		return
+	}
+
+	actionValue, actionCanonical, err := mapOrgPermissionAction(actionRaw)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] provided invalid action[%s]: %s", session.UserId, actionRaw, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid action", ErrorInvalidInput)
+		return
+	}
+	resourceValue, resourceCanonical, err := mapOrgPermissionResource(resourceRaw)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] provided invalid resource[%s]: %s", session.UserId, resourceRaw, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid resource", ErrorInvalidInput)
+		return
+	}
+
+	org := models.Org{Id: &orgId}
+	orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: userId})
+	if err != nil {
+		if errors.Is(err, models.ErrorNotFound) {
+			log(common.LogLevelWarn, fmt.Sprintf("user[%s] requested permissions for user[%s] not found in org[%s]", session.UserId, userId, orgId))
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "user not found", ErrorNotFound)
+			return
+		}
+		log(common.LogLevelError, fmt.Sprintf("failed to load org user[%s] in org[%s]: %s", userId, orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user", ErrorDatabaseIssue)
+		return
+	}
+
+	allowsMask, denysMask, isAllowed, err := orgUser.CanV1(models.DatabaseConnection{Db: db}, resourceValue, actionValue)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed evaluating permissions for user[%s] in org[%s] action[%s] resource[%s]: %s", userId, orgId, actionCanonical, resourceCanonical, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to evaluate permissions", ErrorDatabaseIssue)
+		return
+	}
+
+	output := CanOrgUserActionV1OutputData{
+		Action:    actionCanonical,
+		Allows:    uint64(allowsMask),
+		Denys:     uint64(denysMask),
+		IsAllowed: isAllowed,
+		OrgId:     orgId,
+		Resource:  resourceCanonical,
+		UserId:    userId,
+	}
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
+}
+
 type handleUpdateOrgUserV1Output struct {
 	IsSuccessful bool `json:"isSuccessful"`
 }
@@ -1780,6 +1911,49 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		DstHost:      &r.Host,
 	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", handleUpdateOrgUserV1Output{IsSuccessful: true})
+}
+
+func mapOrgPermissionAction(action string) (models.Action, string, error) {
+	value := strings.ToLower(strings.TrimSpace(action))
+	switch value {
+	case "create":
+		return models.ActionCreate, "create", nil
+	case "view", "read", "get":
+		return models.ActionView, "view", nil
+	case "update", "patch", "put":
+		return models.ActionUpdate, "update", nil
+	case "delete", "remove":
+		return models.ActionDelete, "delete", nil
+	case "execute", "run":
+		return models.ActionExecute, "execute", nil
+	case "manage", "admin":
+		return models.ActionManage, "manage", nil
+	default:
+		return 0, "", fmt.Errorf("unsupported action: %s", action)
+	}
+}
+
+func mapOrgPermissionResource(resource string) (models.Resource, string, error) {
+	value := strings.ToLower(strings.TrimSpace(resource))
+	value = strings.ReplaceAll(value, "-", "_")
+	switch value {
+	case string(models.ResourceTemplates):
+		return models.ResourceTemplates, value, nil
+	case string(models.ResourceAutomations):
+		return models.ResourceAutomations, value, nil
+	case string(models.ResourceAutomationLogs):
+		return models.ResourceAutomationLogs, value, nil
+	case string(models.ResourceOrg):
+		return models.ResourceOrg, value, nil
+	case string(models.ResourceOrgBilling):
+		return models.ResourceOrgBilling, value, nil
+	case string(models.ResourceOrgConfig):
+		return models.ResourceOrgConfig, value, nil
+	case string(models.ResourceOrgUser):
+		return models.ResourceOrgUser, value, nil
+	default:
+		return models.Resource(""), "", fmt.Errorf("unsupported resource: %s", resource)
+	}
 }
 
 func handleListOrgMemberTypesV1(w http.ResponseWriter, r *http.Request) {

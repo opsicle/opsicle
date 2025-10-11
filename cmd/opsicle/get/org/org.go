@@ -65,9 +65,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create client for approver service: %w", err)
 		}
 
-		org, err := client.GetOrgV1(controller.GetOrgV1Input{
-			Code: viper.GetString("org"),
-		})
+		org, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: viper.GetString("org")})
 		if err != nil {
 			if org.StatusCode == http.StatusUnauthorized {
 				if err := controller.DeleteSessionToken(); err != nil {

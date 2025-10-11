@@ -34,7 +34,7 @@ type HandleUserSelectionOptsUser struct {
 
 // HandleUserSelection handles the selection of an organsation
 // in the CLI
-func HandleUserSelection(opts HandleUserSelectionOpts) (userId *string, err error) {
+func HandleUserSelection(opts HandleUserSelectionOpts) (userId *string, userEmail *string, err error) {
 	var logs chan<- common.ServiceLog
 	if opts.ServiceLog == nil {
 		initNoopServiceLog()
@@ -53,15 +53,17 @@ func HandleUserSelection(opts HandleUserSelectionOpts) (userId *string, err erro
 			isUserInputValid = false
 		}
 	}
+	userIdToEmailMap := map[string]string{}
 	choices := []SelectorChoice{}
 	for _, user := range opts.Users {
+		userIdToEmailMap[user.Id] = user.Email
 		if isUserInputValid {
 			selector := user.Id
 			if !isUserInputUuid {
 				selector = user.Email
 			}
 			if selector == opts.UserInput {
-				return &user.Id, nil
+				return &user.Id, &user.Email, nil
 			}
 		}
 		choices = append(choices, SelectorChoice{
@@ -81,12 +83,13 @@ func HandleUserSelection(opts HandleUserSelectionOpts) (userId *string, err erro
 	userSelector := tea.NewProgram(userSelection)
 	if _, err := userSelector.Run(); err != nil {
 		logs <- common.ServiceLogf(common.LogLevelError, "failed to get user input: %s", err)
-		return nil, fmt.Errorf("failed to get user input: %w", err)
+		return nil, nil, fmt.Errorf("failed to get user input: %w", err)
 	}
 	if userSelection.GetExitCode() == PromptCancelled {
-		return nil, errors.New("user cancelled")
+		return nil, nil, errors.New("user cancelled")
 	}
-	selectedUser := userSelection.GetValue()
+	selectedUserId := userSelection.GetValue()
+	selectedUserEmail := userIdToEmailMap[selectedUserId]
 
-	return &selectedUser, nil
+	return &selectedUserId, &selectedUserEmail, nil
 }

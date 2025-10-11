@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	DefaultOrgRoleName = "Administrator (Default)"
+	DefaultOrgRoleAdminName  = "Administrator (Default)"
+	DefaultOrgRoleWorkerName = "Worker (Default)"
 )
 
 type CreateOrgRoleV1Input struct {

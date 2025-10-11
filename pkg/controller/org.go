@@ -134,8 +134,52 @@ func (c Client) DeleteOrgUserV1(input DeleteOrgUserV1Input) (*DeleteOrgUserV1Out
 	return output, err
 }
 
+type CanUserV1Output struct {
+	Data CanUserV1OutputData `json:"data" yaml:"data"`
+
+	http.Response
+}
+
+type CanUserV1OutputData controller.CanOrgUserActionV1OutputData
+
+type CanUserV1Input struct {
+	Action   string `json:"-"`
+	OrgId    string `json:"-"`
+	Resource string `json:"-"`
+	UserId   string `json:"-"`
+}
+
+func (c Client) CanUserV1(opts CanUserV1Input) (*CanUserV1Output, error) {
+	if opts.Action == "" {
+		return nil, fmt.Errorf("action undefined: %w", ErrorInvalidInput)
+	}
+	if opts.OrgId == "" {
+		return nil, fmt.Errorf("org undefined: %w", ErrorInvalidInput)
+	}
+	if opts.Resource == "" {
+		return nil, fmt.Errorf("resource undefined: %w", ErrorInvalidInput)
+	}
+	if opts.UserId == "" {
+		return nil, fmt.Errorf("user undefined: %w", ErrorInvalidInput)
+	}
+	var outputData CanUserV1OutputData
+	outputClient, err := c.do(request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/api/v1/org/%s/member/%s/can/%s/%s", opts.OrgId, opts.UserId, opts.Action, opts.Resource),
+		Output: &outputData,
+	})
+	var output *CanUserV1Output
+	if !errors.Is(err, ErrorOutputNil) && outputClient != nil {
+		output = &CanUserV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	return output, err
+}
+
 type GetOrgV1Input struct {
-	Code string `json:"-"`
+	Ref string `json:"-"`
 }
 type GetOrgV1Output struct {
 	Data GetOrgV1OutputData
@@ -156,7 +200,7 @@ func (c Client) GetOrgV1(input GetOrgV1Input) (*GetOrgV1Output, error) {
 	var outputData GetOrgV1OutputData
 	outputClient, err := c.do(request{
 		Method: http.MethodGet,
-		Path:   fmt.Sprintf("/api/v1/org/%s", input.Code),
+		Path:   fmt.Sprintf("/api/v1/org/%s", input.Ref),
 		Output: &outputData,
 	})
 	var output *GetOrgV1Output = nil

@@ -1,0 +1,192 @@
+package user
+
+import (
+	"encoding/json"
+	"fmt"
+	"opsicle/internal/cli"
+	"opsicle/pkg/controller"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+)
+
+var flags cli.Flags = cli.Flags{
+	{
+		Name:         "controller-url",
+		Short:        'u',
+		DefaultValue: "http://localhost:54321",
+		Usage:        "defines the url where the controller service is accessible at",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "org",
+		DefaultValue: "",
+		Usage:        "codeword of the organisation to check permissions in",
+		Type:         cli.FlagTypeString,
+	},
+	{
+		Name:         "user",
+		DefaultValue: "",
+		Usage:        "ID or email of the user to check permissions for",
+		Type:         cli.FlagTypeString,
+	},
+}
+
+func init() {
+	flags.AddToCommand(Command)
+}
+
+var Command = &cobra.Command{
+	Use:   "user [action] [resourceType]",
+	Short: "Checks if an organisation user can perform an action on a resource type",
+	Args:  cobra.ExactArgs(2),
+	PreRun: func(cmd *cobra.Command, args []string) {
+		flags.BindViper(cmd)
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		action := args[0]
+		resource := args[1]
+		controllerUrl := viper.GetString("controller-url")
+		methodId := "opsicle/can/org/user"
+
+	enforceAuth:
+		sessionToken, err := cli.RequireAuth(controllerUrl, methodId)
+		if err != nil {
+			rootCmd := cmd.Root()
+			rootCmd.SetArgs([]string{"login"})
+			if _, err := rootCmd.ExecuteC(); err != nil {
+				return err
+			}
+			goto enforceAuth
+		}
+
+		client, err := controller.NewClient(controller.NewClientOpts{
+			ControllerUrl: controllerUrl,
+			BearerAuth: &controller.NewClientBearerAuthOpts{
+				Token: sessionToken,
+			},
+			Id: methodId,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create controller client: %w", err)
+		}
+
+		orgCode, err := cli.HandleOrgSelection(cli.HandleOrgSelectionOpts{
+			Client:    client,
+			UserInput: viper.GetString("org"),
+		})
+		if err != nil {
+			return fmt.Errorf("org selection failed: %w", err)
+		}
+
+		org, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: *orgCode})
+		if err != nil {
+			return fmt.Errorf("org retrieval failed: %w", err)
+		}
+
+		orgUsers, err := client.ListOrgUsersV1(controller.ListOrgUsersV1Input{OrgId: org.Data.Id})
+		if err != nil {
+			return fmt.Errorf("org users retrieval failed: %w", err)
+		}
+
+		userSelections := make([]cli.HandleUserSelectionOptsUser, 0, len(orgUsers.Data))
+		userIdEmailMap := make(map[string]string, len(orgUsers.Data))
+		for _, orgUser := range orgUsers.Data {
+			userSelections = append(userSelections, cli.HandleUserSelectionOptsUser{
+				Id:    orgUser.UserId,
+				Email: orgUser.UserEmail,
+			})
+			userIdEmailMap[orgUser.UserId] = orgUser.UserEmail
+		}
+
+		selectedUserId, selectedUserEmail, err := cli.HandleUserSelection(cli.HandleUserSelectionOpts{
+			Client:    client,
+			UserInput: viper.GetString("user"),
+			Users:     userSelections,
+		})
+		if err != nil {
+			return fmt.Errorf("user selection failed: %w", err)
+		}
+		if selectedUserId == nil {
+			return fmt.Errorf("user selection returned nil user identifier")
+		}
+
+		canOutput, err := client.CanUserV1(controller.CanUserV1Input{
+			OrgId:    org.Data.Id,
+			UserId:   *selectedUserId,
+			Action:   action,
+			Resource: resource,
+		})
+		if err != nil {
+			return fmt.Errorf("permission check failed: %w", err)
+		}
+
+		var result controller.CanUserV1OutputData
+		if canOutput != nil {
+			result = canOutput.Data
+		}
+		if result.Action == "" {
+			result.Action = action
+		}
+		if result.Resource == "" {
+			result.Resource = resource
+		}
+		if result.OrgId == "" {
+			result.OrgId = org.Data.Id
+		}
+		if result.UserId == "" {
+			result.UserId = *selectedUserId
+		}
+
+		switch viper.GetString("output") {
+		case "json":
+			display := struct {
+				OrgId     string `json:"orgId"`
+				OrgName   string `json:"orgName"`
+				UserId    string `json:"userId"`
+				UserEmail string `json:"userEmail"`
+				Action    string `json:"action"`
+				Resource  string `json:"resource"`
+				Allows    uint64 `json:"allows"`
+				Denys     uint64 `json:"denys"`
+				IsAllowed bool   `json:"isAllowed"`
+			}{
+				OrgId:     result.OrgId,
+				OrgName:   org.Data.Name,
+				UserId:    result.UserId,
+				UserEmail: userIdEmailMap[result.UserId],
+				Action:    result.Action,
+				Resource:  result.Resource,
+				Allows:    result.Allows,
+				Denys:     result.Denys,
+				IsAllowed: result.IsAllowed,
+			}
+			encoded, _ := json.MarshalIndent(display, "", "  ")
+			fmt.Println(string(encoded))
+		default:
+			if result.IsAllowed {
+				cli.PrintBoxedSuccessMessage(
+					fmt.Sprintf(
+						"User '%s' in org '%s' can %s %s",
+						*selectedUserEmail,
+						*orgCode,
+						result.Action,
+						result.Resource,
+					),
+				)
+			} else {
+				cli.PrintBoxedErrorMessage(
+					fmt.Sprintf(
+						"User '%s' in org '%s' cannot %s %s",
+						*selectedUserEmail,
+						*orgCode,
+						result.Action,
+						result.Resource,
+					),
+				)
+			}
+		}
+
+		return nil
+	},
+}

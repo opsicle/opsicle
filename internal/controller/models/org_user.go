@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -43,6 +44,27 @@ func (ou OrgUser) validate() error {
 		return fmt.Errorf("user id is not a uuid: %w", ErrorInvalidInput)
 	}
 	return nil
+}
+
+func (ou *OrgUser) CanV1(opts DatabaseConnection, resource Resource, action Action) (Action, Action, bool, error) {
+
+	if ou == nil {
+		return 0, 0, false, fmt.Errorf("org user undefined: %w", ErrorInvalidInput)
+	}
+	if err := ou.validate(); err != nil {
+		return 0, 0, false, err
+	}
+	allowsMask, denysMask, err := ou.resolvePermissionMasks(opts, resource)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	if denysMask&action != 0 {
+		return allowsMask, denysMask, false, nil
+	}
+	if allowsMask&action == 0 {
+		return allowsMask, denysMask, false, nil
+	}
+	return allowsMask, denysMask, true, nil
 }
 
 func (ou *OrgUser) ListRolesV1(opts DatabaseConnection) (OrgRoles, error) {
@@ -159,4 +181,44 @@ func (ou *OrgUser) ListRolesV1(opts DatabaseConnection) (OrgRoles, error) {
 		}
 	}
 	return output, nil
+}
+
+func (ou *OrgUser) resolvePermissionMasks(opts DatabaseConnection, resource Resource) (Action, Action, error) {
+	var (
+		allows sql.NullInt64
+		denys  sql.NullInt64
+	)
+	if err := executeMysqlSelect(mysqlQueryInput{
+		Db: opts.Db,
+		Stmt: `
+			SELECT
+				COALESCE(BIT_OR(orp.allows), 0) AS allows_mask,
+				COALESCE(BIT_OR(orp.denys), 0) AS denys_mask
+			FROM org_user_roles our
+				JOIN org_role_permissions orp ON orp.org_role_id = our.org_role_id
+			WHERE
+				our.org_id = ?
+				AND our.user_id = ?
+				AND orp.resource = ?
+		`,
+		Args:     []any{ou.Org.GetId(), ou.User.GetId(), resource},
+		FnSource: "models.OrgUser.resolvePermissionMasks",
+		ProcessRow: func(row *sql.Row) error {
+			return row.Scan(&allows, &denys)
+		},
+	}); err != nil {
+		if errors.Is(err, ErrorNotFound) || errors.Is(err, sql.ErrNoRows) {
+			return 0, 0, nil
+		}
+		return 0, 0, err
+	}
+	var allowsMask Action
+	if allows.Valid {
+		allowsMask = Action(uint(allows.Int64))
+	}
+	var denysMask Action
+	if denys.Valid {
+		denysMask = Action(uint(denys.Int64))
+	}
+	return allowsMask, denysMask, nil
 }

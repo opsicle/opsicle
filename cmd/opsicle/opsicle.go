@@ -3,6 +3,7 @@ package opsicle
 import (
 	"fmt"
 	"opsicle/cmd/opsicle/admin"
+	"opsicle/cmd/opsicle/can"
 	"opsicle/cmd/opsicle/check"
 	"opsicle/cmd/opsicle/create"
 	"opsicle/cmd/opsicle/explain"
@@ -98,6 +99,7 @@ func init() {
 
 	Command.AddCommand(admin.Command)
 	Command.AddCommand(check.Command)
+	Command.AddCommand(can.Command)
 	Command.AddCommand(create.Command)
 	Command.AddCommand(explain.Command)
 	Command.AddCommand(get.Command)

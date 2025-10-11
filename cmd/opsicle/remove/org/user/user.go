@@ -80,9 +80,7 @@ var Command = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("org selection failed: %w", err)
 		}
-		org, err := client.GetOrgV1(controller.GetOrgV1Input{
-			Code: *orgCode,
-		})
+		org, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: *orgCode})
 		if err != nil {
 			return fmt.Errorf("org retrieval failed: %w", err)
 		}

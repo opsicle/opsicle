@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -69,14 +70,45 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid template", ErrorInvalidInput)
 		return
 	}
-	if canExecute, err := template.CanUserExecuteV1(models.DatabaseConnection{Db: db}, session.UserId); err != nil {
-		log(common.LogLevelError, fmt.Sprintf("failed to check permissions of user[%s] on template[%s]: %s", session.UserId, templateId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", ErrorDatabaseIssue)
-		return
-	} else if !canExecute {
-		log(common.LogLevelError, fmt.Sprintf("user[%s] is not allowed to execute template[%s]: %s", session.UserId, templateId, err))
-		common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "not allowed", ErrorInsufficientPermissions)
-		return
+	if input.OrgId == nil {
+		if canExecute, err := template.CanUserExecuteV1(models.DatabaseConnection{Db: db}, session.UserId); err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to check permissions of user[%s] on template[%s]: %s", session.UserId, templateId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", ErrorDatabaseIssue)
+			return
+		} else if !canExecute {
+			log(common.LogLevelError, fmt.Sprintf("user[%s] is not allowed to execute template[%s]: %s", session.UserId, templateId, err))
+			common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "not allowed", ErrorInsufficientPermissions)
+			return
+		}
+	} else {
+		if err := validate.Uuid(*input.OrgId); err != nil {
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+			return
+		}
+		orgId := *input.OrgId
+		org := models.Org{Id: &orgId}
+		orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: session.UserId})
+		if err != nil {
+			if errors.Is(err, models.ErrorNotFound) {
+				log(common.LogLevelError, fmt.Sprintf("user[%s] is not a member of org[%s]: %s", session.UserId, orgId, err))
+				common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "not allowed", ErrorInsufficientPermissions)
+				return
+			}
+			log(common.LogLevelError, fmt.Sprintf("failed to load org user[%s] in org[%s]: %s", session.UserId, orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", ErrorDatabaseIssue)
+			return
+		}
+		_, _, canExecute, err := orgUser.CanV1(models.DatabaseConnection{Db: db}, models.ResourceTemplates, models.ActionExecute)
+		if err != nil {
+			log(common.LogLevelError, fmt.Sprintf("failed to check permissions of user[%s] in org[%s]: %s", session.UserId, orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", ErrorDatabaseIssue)
+			return
+		}
+		if !canExecute {
+			log(common.LogLevelError, fmt.Sprintf("user[%s] lacks execute permission on templates in org[%s]", session.UserId, orgId))
+			common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "not allowed", ErrorInsufficientPermissions)
+			return
+		}
 	}
 
 	automationParams, err := template.GetAutomationParamsV1(models.DatabaseConnection{Db: db})

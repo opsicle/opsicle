@@ -84,7 +84,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("org selection failed: %w", err)
 		}
 
-		orgOutput, err := client.GetOrgV1(controller.GetOrgV1Input{Code: *orgCode})
+		orgOutput, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: *orgCode})
 		if err != nil {
 			return fmt.Errorf("failed to retrieve org details: %w", err)
 		}

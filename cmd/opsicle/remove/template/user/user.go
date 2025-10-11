@@ -103,7 +103,7 @@ var Command = &cobra.Command{
 				Email: templateUser.Email,
 			})
 		}
-		userId, err := cli.HandleUserSelection(cli.HandleUserSelectionOpts{
+		userId, _, err := cli.HandleUserSelection(cli.HandleUserSelectionOpts{
 			Client:    client,
 			UserInput: viper.GetString("user-id"),
 			Users:     users,

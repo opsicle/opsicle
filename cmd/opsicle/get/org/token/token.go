@@ -30,12 +30,6 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "codeword of the organisation to view tokens for",
 		Type:         cli.FlagTypeString,
 	},
-	{
-		Name:         "token-id",
-		DefaultValue: "",
-		Usage:        "identifier of the token to inspect",
-		Type:         cli.FlagTypeString,
-	},
 }
 
 func init() {
@@ -43,7 +37,7 @@ func init() {
 }
 
 var Command = &cobra.Command{
-	Use:   "token",
+	Use:   "token [token-id]",
 	Short: "Displays details for an organisation token",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
@@ -86,7 +80,7 @@ var Command = &cobra.Command{
 			return errors.New("no organisation selected")
 		}
 
-		orgOutput, err := client.GetOrgV1(controller.GetOrgV1Input{Code: *orgCode})
+		orgOutput, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: *orgCode})
 		if err != nil {
 			return fmt.Errorf("failed to retrieve org details: %w", err)
 		}
@@ -127,7 +121,11 @@ var Command = &cobra.Command{
 			tokenMap[token.Id] = struct{}{}
 		}
 
-		selectedTokenId := strings.TrimSpace(viper.GetString("token-id"))
+		userInputToken := ""
+		if len(args) > 0 {
+			userInputToken = args[0]
+		}
+		selectedTokenId := strings.TrimSpace(userInputToken)
 		if selectedTokenId != "" {
 			if _, err := uuid.Parse(selectedTokenId); err != nil {
 				fmt.Printf("⚠️  The provided token id '%s' is not a valid UUID\n", selectedTokenId)

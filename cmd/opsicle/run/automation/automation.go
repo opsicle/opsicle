@@ -40,6 +40,12 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "ID (or name) of the template to remove a user from",
 		Type:         cli.FlagTypeString,
 	},
+	{
+		Name:         "org",
+		DefaultValue: "",
+		Usage:        "Specifies the organization ID where the automation should be created",
+		Type:         cli.FlagTypeString,
+	},
 }
 
 func init() {
@@ -76,12 +82,28 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
+		orgInput := strings.TrimSpace(viper.GetString("org"))
+		getOrgOutput, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: orgInput})
+		if err != nil {
+			return fmt.Errorf("failed to retrieve org: %w", err)
+		}
+		org := getOrgOutput.Data
+
 		inputTemplateReference := viper.GetString("template-id")
-		templateInstance, err := cli.HandleTemplateSelection(cli.HandleTemplateSelectionOpts{
-			Client:    client,
-			UserInput: inputTemplateReference,
-			// ServiceLog: servicesLogs,
-		})
+		var templateInstance *cli.Template
+		if orgInput != "" {
+			templateInstance, err = cli.HandleOrgTemplateSelection(cli.HandleOrgTemplateSelectionOpts{
+				Client:    client,
+				OrgId:     org.Id,
+				UserInput: inputTemplateReference,
+			})
+		} else {
+			templateInstance, err = cli.HandleTemplateSelection(cli.HandleTemplateSelectionOpts{
+				Client:    client,
+				UserInput: inputTemplateReference,
+				// ServiceLog: servicesLogs,
+			})
+		}
 		if err != nil {
 			if errors.Is(err, cli.ErrorUserCancelled) {
 				cli.PrintBoxedErrorMessage("We failed to get an input from you :/")
@@ -89,11 +111,14 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to select a template: %w", err)
 		}
 
-		// 1. trigger the POST /api/v1/automation endpoint
-
-		automationOutput, err := client.CreateAutomationV1(controller.CreateAutomationV1Input{
+		createAutomationInput := controller.CreateAutomationV1Input{
 			TemplateId: templateInstance.Id,
-		})
+		}
+		if orgInput != "" {
+			createAutomationInput.OrgId = &org.Id
+		}
+
+		automationOutput, err := client.CreateAutomationV1(createAutomationInput)
 		if err != nil {
 			return fmt.Errorf("failed to trigger automation: %w", err)
 		}

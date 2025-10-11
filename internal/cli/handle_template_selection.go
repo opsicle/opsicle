@@ -42,6 +42,20 @@ type Template struct {
 	LastUpdatedByEmail *string
 }
 
+type HandleOrgTemplateSelectionOpts struct {
+	Client *controller.Client
+
+	OrgId string
+
+	UserInput string
+
+	ServiceLog chan<- common.ServiceLog
+
+	Prompt string
+
+	StartWithoutFilter bool
+}
+
 // HandleTemplateSelection is a convenience function that handles the
 // selection of a template and returns the selected template
 func HandleTemplateSelection(opts HandleTemplateSelectionOpts) (template *Template, err error) {
@@ -133,6 +147,108 @@ func HandleTemplateSelection(opts HandleTemplateSelectionOpts) (template *Templa
 		template = &templateInstance
 
 		err = nil
+	}
+	return template, err
+}
+
+func HandleOrgTemplateSelection(opts HandleOrgTemplateSelectionOpts) (template *Template, err error) {
+	template = &Template{}
+	orgId := strings.TrimSpace(opts.OrgId)
+	if orgId == "" {
+		return nil, fmt.Errorf("%w: organization id missing", controller.ErrorInvalidInput)
+	}
+	var logs chan<- common.ServiceLog
+	if opts.ServiceLog == nil {
+		initNoopServiceLog()
+		logs = noopServiceLog
+		go startNoopServiceLog()
+		defer stopNoopServiceLog()
+	} else {
+		logs = opts.ServiceLog
+	}
+	logs <- common.ServiceLogf(common.LogLevelDebug, "retrieving available templates for organization[%s]", orgId)
+	templates, err := opts.Client.ListOrgTemplatesV1(controller.ListOrgTemplatesV1Input{
+		OrgId: orgId,
+		Limit: 20,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list organization templates: %w", err)
+	}
+	isTemplateReferenceValid := false
+	isConflictingTemplateReference := false
+	matchedTemplates := []Template{}
+	templateMap := map[string]Template{}
+	filterItems := []FilterItem{}
+	for _, t := range templates.Data {
+		filterItems = append(filterItems, FilterItem{
+			Description: fmt.Sprintf("  %s", t.Description),
+			Label:       fmt.Sprintf("[ %s ] @ v%v by <%s>", t.Name, t.Version, t.CreatedBy.Email),
+			Value:       strings.Join([]string{t.Name, t.Id}, ":"),
+		})
+		templateInstance := Template{
+			Id:        t.Id,
+			Name:      t.Name,
+			Version:   int64(t.Version),
+			CreatedAt: t.CreatedAt,
+		}
+		if t.CreatedBy != nil {
+			templateInstance.CreatedByEmail = &t.CreatedBy.Email
+			templateInstance.CreatedAt = t.CreatedAt
+		}
+		if t.LastUpdatedBy != nil {
+			templateInstance.LastUpdatedByEmail = &t.LastUpdatedBy.Email
+			templateInstance.LastUpdatedAt = t.LastUpdatedAt
+		}
+		templateMap[t.Id] = templateInstance
+		if t.Name == opts.UserInput || t.Id == opts.UserInput {
+			isTemplateReferenceValid = true
+			template = &templateInstance
+			matchedTemplates = append(matchedTemplates, templateInstance)
+			break
+		}
+	}
+	if len(templates.Data) == 0 {
+		return nil, controller.ErrorNotFound
+	}
+	if len(matchedTemplates) >= 2 {
+		isConflictingTemplateReference = true
+	}
+	if !isTemplateReferenceValid || isConflictingTemplateReference {
+		sort.Slice(filterItems, func(i, j int) bool {
+			return filterItems[i].Label < filterItems[j].Label
+		})
+		promptTitle := "💬 " + opts.Prompt
+		if opts.Prompt == "" {
+			promptTitle = "💬 Which template do you need?"
+		}
+		if isConflictingTemplateReference {
+			ShowAlert(ShowAlertOpts{
+				Title:   "OOPS",
+				Message: fmt.Sprintf("It looks like we have conflicting template name '%s', we'll need you to select the exact intended template", opts.UserInput),
+			})
+		}
+		templateFiltering := CreateFilter(FilterOpts{
+			Items:              filterItems,
+			Title:              promptTitle,
+			StartWithoutFilter: opts.StartWithoutFilter,
+		})
+		templateFilter := tea.NewProgram(templateFiltering)
+		if _, err := templateFilter.Run(); err != nil {
+			return nil, fmt.Errorf("failed to get user input: %w", err)
+		}
+		if templateFiltering.GetExitCode() == PromptCancelled {
+			return nil, ErrorUserCancelled
+		}
+		selectedTemplate := templateFiltering.GetSelectedItem()
+		templateValues := strings.Split(selectedTemplate.Value, ":")
+		if len(templateValues) < 2 {
+			return nil, fmt.Errorf("%w: invalid template reference received", controller.ErrorInvalidInput)
+		}
+		templateInstance, exists := templateMap[templateValues[1]]
+		if !exists {
+			return nil, controller.ErrorNotFound
+		}
+		template = &templateInstance
 	}
 	return template, err
 }
