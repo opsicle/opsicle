@@ -199,6 +199,8 @@ var Command = &cobra.Command{
 		logrus.Debugf("started logging engine")
 
 		connectionId := "opsicle/controller"
+		hostname, _ := os.Hostname()
+		userId := os.Getuid()
 
 		/*
 		    _  _   _ ___ ___ _____   ___   _ _____ _   ___   _   ___ ___
@@ -288,8 +290,6 @@ var Command = &cobra.Command{
 		if auditModuleError = audit.InitMongo(auditDatabaseConnection); auditModuleError != nil {
 			return fmt.Errorf("failed to initialise audit module: %w", auditModuleError)
 		}
-		hostname, _ := os.Hostname()
-		userId := os.Getuid()
 		audit.Log(audit.LogEntry{
 			EntityId:     fmt.Sprintf("%v@%s", userId, hostname),
 			EntityType:   audit.ControllerEntity,

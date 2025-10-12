@@ -77,6 +77,7 @@ var Command = &cobra.Command{
 		serviceLogs := make(chan common.ServiceLog, 64)
 		common.StartServiceLogLoop(serviceLogs)
 
+		logrus.Debugf("connecting to mysql database...")
 		databaseConnection, err := database.ConnectMysql(database.ConnectOpts{
 			ConnectionId: "opsicle/migrator",
 			Host:         viper.GetString("db-host"),
@@ -92,6 +93,7 @@ var Command = &cobra.Command{
 
 		if cmd.Flags().Changed("steps") {
 			inputSteps := viper.GetInt("steps")
+			logrus.Debugf("steps was defined, using value %v", inputSteps)
 			steps = &inputSteps
 		} else {
 			logrus.Infof("steps not specified, migration will be to the latest")

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,6 +33,7 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 
 	v1.Handle("/member/types", requiresAuth(http.HandlerFunc(handleListOrgMemberTypesV1))).Methods(http.MethodGet)
 	v1.Handle("", requiresAuth(http.HandlerFunc(handleCreateOrgV1))).Methods(http.MethodPost)
+	v1.Handle("/{orgId}", requiresAuth(http.HandlerFunc(handleDeleteOrgV1))).Methods(http.MethodDelete)
 	v1.Handle("/{orgRef}", requiresAuth(http.HandlerFunc(handleGetOrgV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleCreateOrgUserV1))).Methods(http.MethodPost)
 	v1.Handle("/{orgId}/member", requiresAuth(http.HandlerFunc(handleGetOrgCurrentUserV1))).Methods(http.MethodGet)
@@ -61,6 +63,94 @@ type CreateOrgV1Output struct {
 type CreateOrgV1Input struct {
 	Name string `json:"name"`
 	Code string `json:"code"`
+}
+
+type DeleteOrgV1Output struct {
+	IsSuccessful bool `json:"isSuccessful"`
+}
+
+// handleDeleteOrgV1 godoc
+// @Summary      Deletes an organisation
+// @Description  Deletes the organisation identified by the supplied ID if the requester is authorized to do so
+// @Tags         controller-service
+// @Produce      json
+// @Param        orgId path string true "Organisation ID"
+// @Success      200 {object} commonHttpResponse "ok"
+// @Failure      400 {object} commonHttpResponse "invalid input"
+// @Failure      403 {object} commonHttpResponse "forbidden"
+// @Failure      404 {object} commonHttpResponse "not found"
+// @Failure      500 {object} commonHttpResponse "internal server error"
+// @Router       /api/v1/org/{orgId} [delete]
+func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	session := r.Context().Value(authRequestContext).(identity)
+
+	vars := mux.Vars(r)
+	orgId := vars["orgId"]
+	if err := validate.Uuid(orgId); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid org id[%s]: %s", session.UserId, orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		return
+	}
+
+	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested deletion of org[%s]", session.UserId, orgId))
+
+	orgInstance, err := models.GetOrgV1(models.GetOrgV1Opts{Db: db, Id: &orgId})
+	if err != nil {
+		switch {
+		case errors.Is(err, models.ErrorNotFound):
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "org not found", ErrorNotFound)
+		default:
+			log(common.LogLevelError, fmt.Sprintf("failed to load org[%s]: %s", orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load org", ErrorDatabaseIssue)
+		}
+		return
+	}
+
+	orgUser, err := orgInstance.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: session.UserId})
+	if err != nil {
+		switch {
+		case errors.Is(err, models.ErrorNotFound):
+			log(common.LogLevelWarn, fmt.Sprintf("user[%s] attempted to delete org[%s] without membership", session.UserId, orgId))
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", ErrorInsufficientPermissions)
+		default:
+			log(common.LogLevelError, fmt.Sprintf("failed to verify membership for user[%s] in org[%s]: %s", session.UserId, orgId, err))
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+		}
+		return
+	}
+
+	_, _, canDelete, err := orgUser.CanV1(models.DatabaseConnection{Db: db}, models.ResourceOrg, models.ActionDelete)
+	if err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to evaluate delete permissions for user[%s] in org[%s]: %s", session.UserId, orgId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+		return
+	}
+	if !canDelete {
+		log(common.LogLevelWarn, fmt.Sprintf("user[%s] is not authorized to delete org[%s]", session.UserId, orgId))
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "insufficient permissions", ErrorInsufficientPermissions)
+		return
+	}
+
+	if err := orgInstance.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
+		log(common.LogLevelError, fmt.Sprintf("failed to delete org[%s] by user[%s]: %s", orgId, session.UserId, err))
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete org", ErrorDatabaseIssue)
+		return
+	}
+
+	audit.Log(audit.LogEntry{
+		EntityId:     session.UserId,
+		EntityType:   audit.UserEntity,
+		Verb:         audit.Delete,
+		ResourceId:   orgId,
+		ResourceType: audit.OrgResource,
+		Status:       audit.Success,
+		SrcIp:        &session.SourceIp,
+		SrcUa:        &session.UserAgent,
+		DstHost:      &r.Host,
+	})
+
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", DeleteOrgV1Output{IsSuccessful: true})
 }
 
 // handleCreateOrgV1 godoc
@@ -1020,18 +1110,21 @@ func handleGetOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }
 
-type handleCreateOrgTokenV1Input struct {
-	Name        string  `json:"name"`
+type CreateOrgTokenV1Input struct {
 	Description *string `json:"description"`
+	Name        string  `json:"name"`
 	RoleId      string  `json:"roleId"`
+	OrgId       string  `json:"-"`
 }
 
-type handleCreateOrgTokenV1Output struct {
-	TokenId     string `json:"tokenId"`
-	Name        string `json:"name"`
-	ApiKey      string `json:"apiKey"`
-	Certificate string `json:"certificatePem"`
-	PrivateKey  string `json:"privateKeyPem"`
+type CreateOrgTokenV1Output struct {
+	TokenId           string `json:"tokenId"`
+	Name              string `json:"name"`
+	ApiKey            string `json:"apiKey"`
+	CertificatePem    string `json:"certificatePem"`
+	CertificateBase64 string `json:"certificateB64"`
+	PrivateKeyPem     string `json:"privateKeyPem"`
+	PrivateKeyBase64  string `json:"privateKeyB64"`
 }
 
 func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
@@ -1045,7 +1138,7 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", ErrorInvalidInput)
 		return
 	}
-	var input handleCreateOrgTokenV1Input
+	var input CreateOrgTokenV1Input
 	if err := json.Unmarshal(requestBody, &input); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", ErrorInvalidInput)
 		return
@@ -1172,12 +1265,14 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 		DstHost:      &r.Host,
 	})
 
-	output := handleCreateOrgTokenV1Output{
-		TokenId:     orgToken.GetId(),
-		Name:        orgToken.Name,
-		ApiKey:      apiKey,
-		Certificate: string(certificate.Pem),
-		PrivateKey:  string(key.Pem),
+	output := CreateOrgTokenV1Output{
+		TokenId:           orgToken.GetId(),
+		Name:              orgToken.Name,
+		ApiKey:            apiKey,
+		CertificateBase64: base64.StdEncoding.EncodeToString(certificate.Pem),
+		CertificatePem:    string(certificate.Pem),
+		PrivateKeyBase64:  base64.StdEncoding.EncodeToString(key.Pem),
+		PrivateKeyPem:     string(key.Pem),
 	}
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 }

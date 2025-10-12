@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"opsicle/internal/controller"
+	"opsicle/internal/validate"
 )
 
 type CreateOrgV1Output struct {
@@ -95,18 +96,18 @@ func (c Client) CreateOrgUserV1(input CreateOrgUserV1Input) (*CreateOrgUserV1Out
 }
 
 type DeleteOrgUserV1Input struct {
-	OrgId  string `json:"-"`
-	UserId string `json:"-"`
+	OrgId  string `json:"-" yaml:"-"`
+	UserId string `json:"-" yaml:"-"`
 }
 
 type DeleteOrgUserV1Output struct {
-	Data DeleteOrgUserV1OutputData
+	Data DeleteOrgUserV1OutputData `json:"data" yaml:"data"`
 
 	http.Response
 }
 
 type DeleteOrgUserV1OutputData struct {
-	IsSuccessful bool `json:"isSuccessful"`
+	IsSuccessful bool `json:"isSuccessful" yaml:"isSuccessful"`
 }
 
 func (c Client) DeleteOrgUserV1(input DeleteOrgUserV1Input) (*DeleteOrgUserV1Output, error) {
@@ -129,6 +130,47 @@ func (c Client) DeleteOrgUserV1(input DeleteOrgUserV1Input) (*DeleteOrgUserV1Out
 			err = ErrorOrgRequiresOneAdmin
 		case ErrorInsufficientPermissions.Error():
 			err = ErrorInsufficientPermissions
+		}
+	}
+	return output, err
+}
+
+type DeleteOrgV1Input struct {
+	OrgId string `json:"-" yaml:"-"`
+}
+
+type DeleteOrgV1Output struct {
+	Data controller.DeleteOrgV1Output `json:"data" yaml:"data"`
+
+	http.Response
+}
+
+func (c Client) DeleteOrgV1(input DeleteOrgV1Input) (*DeleteOrgV1Output, error) {
+	if input.OrgId == "" {
+		return nil, fmt.Errorf("org id undefined: %w", ErrorInvalidInput)
+	}
+	if err := validate.Uuid(input.OrgId); err != nil {
+		return nil, fmt.Errorf("org id invalid: %w", ErrorInvalidInput)
+	}
+	var outputData controller.DeleteOrgV1Output
+	outputClient, err := c.do(request{
+		Method: http.MethodDelete,
+		Path:   fmt.Sprintf("/api/v1/org/%s", input.OrgId),
+		Output: &outputData,
+	})
+	var output *DeleteOrgV1Output
+	if !errors.Is(err, ErrorOutputNil) && outputClient != nil {
+		output = &DeleteOrgV1Output{
+			Data:     outputData,
+			Response: outputClient.Response,
+		}
+	}
+	if err != nil && outputClient != nil {
+		switch outputClient.GetErrorCode().Error() {
+		case ErrorInsufficientPermissions.Error():
+			err = ErrorInsufficientPermissions
+		case ErrorNotFound.Error():
+			err = ErrorNotFound
 		}
 	}
 	return output, err
@@ -551,12 +593,7 @@ func (c Client) GetOrgTokenV1(input GetOrgTokenV1Input) (*GetOrgTokenV1Output, e
 	return output, err
 }
 
-type CreateOrgTokenV1Input struct {
-	OrgId       string  `json:"-"`
-	Name        string  `json:"name"`
-	Description *string `json:"description,omitempty"`
-	RoleId      string  `json:"roleId"`
-}
+type CreateOrgTokenV1Input controller.CreateOrgTokenV1Input
 
 type CreateOrgTokenV1Output struct {
 	Data CreateOrgTokenV1OutputData
@@ -564,13 +601,7 @@ type CreateOrgTokenV1Output struct {
 	http.Response
 }
 
-type CreateOrgTokenV1OutputData struct {
-	TokenId        string `json:"tokenId" yaml:"tokenId"`
-	Name           string `json:"name" yaml:"name"`
-	ApiKey         string `json:"apiKey" yaml:"apiKey"`
-	CertificatePem string `json:"certificatePem" yaml:"certificatePem"`
-	PrivateKeyPem  string `json:"privateKeyPem" yaml:"privateKeyPem"`
-}
+type CreateOrgTokenV1OutputData controller.CreateOrgTokenV1Output
 
 func (c Client) CreateOrgTokenV1(input CreateOrgTokenV1Input) (*CreateOrgTokenV1Output, error) {
 	var outputData CreateOrgTokenV1OutputData

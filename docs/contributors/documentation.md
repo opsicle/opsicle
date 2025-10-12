@@ -16,7 +16,7 @@ npm install docsify-cli --global;
 Then serve the `./docs` directory by running:
 
 ```sh
-docsify serve ./docs;
+make docs_site;
 ```
 
 ## CLI documentation generation
@@ -24,7 +24,7 @@ docsify serve ./docs;
 The CLI documentation is done via the `github.com/spf13/cobra/docs` package. To generate the documentation, run:
 
 ```sh
-go run ./cmd/docsgen;
+make docs_cli
 ```
 
 ## Sitemap generation

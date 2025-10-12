@@ -245,11 +245,16 @@ var Command = &cobra.Command{
 			return nil
 		}
 
+		fmt.Printf("\n🧍 API Key ID:\n%s\n", createTokenOutput.Data.TokenId)
 		fmt.Printf("\n🔑 API Key:\n%s\n\n", createTokenOutput.Data.ApiKey)
 		fmt.Println("📄 Certificate PEM:")
 		fmt.Println(createTokenOutput.Data.CertificatePem)
-		fmt.Println("🔐 Private Key PEM:")
+		fmt.Println("📄 Certificate (Base64):")
+		fmt.Println(createTokenOutput.Data.CertificateBase64)
+		fmt.Println("\n🔐 Private Key PEM:")
 		fmt.Println(createTokenOutput.Data.PrivateKeyPem)
+		fmt.Println("🔐 Private Key (Base64):")
+		fmt.Println(createTokenOutput.Data.PrivateKeyBase64)
 
 		return nil
 	},

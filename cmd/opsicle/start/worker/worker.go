@@ -18,10 +18,10 @@ import (
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "controller-url",
+		Name:         "coordinator-url",
 		Short:        'u',
 		DefaultValue: "localhost:12345",
-		Usage:        "the url of the controller",
+		Usage:        "the url of the coordinator",
 		Type:         cli.FlagTypeString,
 	},
 
@@ -57,12 +57,12 @@ func init() {
 var Command = &cobra.Command{
 	Use:   "worker",
 	Short: "Starts the worker component",
-	Long:  "Starts the worker component that subscribes to the controller and polls for jobs to start",
+	Long:  "Starts the worker component that subscribes to the coordinator and polls for jobs to start",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		flags.BindViper(cmd)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		controllerUrl := viper.GetString("controller-url")
+		coordinatorUrl := viper.GetString("coordinator-url")
 		filesystemPath := viper.GetString("filesystem-path")
 		pollInterval := viper.GetDuration("poll-interval")
 		runtime := viper.GetString("runtime")
@@ -71,12 +71,12 @@ var Command = &cobra.Command{
 		mode := worker.ModeFilesystem
 		if filesystemPath != "" {
 			source = filesystemPath
-		} else if controllerUrl != "" {
+		} else if coordinatorUrl != "" {
 			mode = worker.ModeController
-			source = controllerUrl
+			source = coordinatorUrl
 		}
 		if source == "" {
-			return fmt.Errorf("failed to identify a worker mode, specify only the controller url or the filesystem path")
+			return fmt.Errorf("failed to identify a worker mode, specify only the coordinator url or the filesystem path")
 		}
 		serviceLogs := make(chan common.ServiceLog, 64)
 		go func() {

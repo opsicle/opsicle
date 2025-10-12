@@ -35,10 +35,11 @@ const (
 type EntityType string
 
 const (
-	UserEntity       EntityType = "user"
-	OrgEntity        EntityType = "org"
-	ControllerEntity EntityType = "controller"
-	WorkerEntity     EntityType = "worker"
+	UserEntity        EntityType = "user"
+	OrgEntity         EntityType = "org"
+	ControllerEntity  EntityType = "controller"
+	CoordinatorEntity EntityType = "coordinator"
+	WorkerEntity      EntityType = "worker"
 )
 
 type ResourceType string
