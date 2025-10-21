@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package coordinator;
+
+import "internal/automations/proto/automations.proto";
+
+option go_package = "opsicle/internal/coordinator/pb;pb";
+
+// CoordinatorService exposes gRPC endpoints for worker-coordinator communication.
+service CoordinatorService {
+  // GetNextJob retrieves the next pending automation job from the queue.
+  rpc GetNextJob(GetNextJobRequest) returns (stream GetNextJobResponse);
+  // UpdateExecution accepts execution status updates and logs from a worker.
+  rpc UpdateExecution(UpdateExecutionRequest) returns (stream UpdateExecutionResponse);
+}
+
+// GetNextJobRequest identifies the worker requesting a job.
+message GetNextJobRequest {
+  // worker_id indicates which worker is requesting work.
+  string worker_id = 1;
+}
+
+// GetNextJobResponse contains the automation payload for the worker to execute.
+message GetNextJobResponse {
+  // automation holds the JSON representation of the Automation that should be executed next.
+  automations.AutomationEnvelope automation = 1;
+}
+
+// UpdateExecutionRequest reports execution progress and logs for an Automation.
+message UpdateExecutionRequest {
+  // worker_id indicates which worker is reporting the execution updates.
+  string worker_id = 1;
+  // automation_id identifies the Automation execution instance.
+  string automation_id = 2;
+  // status provides the latest execution status as reported by the worker.
+  string status = 3;
+  // log_entries contains the log lines emitted during execution.
+  repeated ExecutionLogEntry log_entries = 4;
+}
+
+// ExecutionLogEntry captures a single log line produced during execution.
+message ExecutionLogEntry {
+  // timestamp_unix records when the log entry was created in seconds since epoch.
+  int64 timestamp_unix = 1;
+  // level represents the severity level (e.g. info, warn, error) of the log entry.
+  string level = 2;
+  // message holds the textual log content.
+  string message = 3;
+}
+
+// UpdateExecutionResponse acknowledges receipt of execution updates.
+message UpdateExecutionResponse {
+  // accepted indicates whether the update was successfully processed.
+  bool accepted = 1;
+}

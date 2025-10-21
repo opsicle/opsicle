@@ -1,8 +1,8 @@
 package worker
 
 import (
+	"crypto/tls"
 	"fmt"
-	"net/url"
 	"opsicle/internal/automations"
 	"opsicle/internal/common"
 	"os"
@@ -14,15 +14,23 @@ import (
 )
 
 const (
-	ModeController string = "controller"
-	ModeFilesystem string = "filesystem"
+	ModeCoordinator string = "coordinator"
+	ModeFilesystem  string = "filesystem"
 )
 
 type Worker struct {
-	// ControllerUrl defines the URL of the controller which
+	// CoordinatorUrl defines the URL of the controller which
 	// it should connect to for retrieving jobs, this is used
-	// when the Mode is set to `ModeController`
-	ControllerUrl string
+	// when the Mode is set to `ModeCoordinator`
+	CoordinatorUrl string
+
+	// Cert is used for connecting to a coordinator when the
+	// Mode is set to ModeCoordinator
+	Cert tls.Certificate
+
+	// Ca is used during the connection to a coordinator when the
+	// Mode is set to ModeCoordinator
+	Ca []byte
 
 	// DoneChannel will tell the worker to gracefully exit
 	// when it's possible to do so
@@ -32,6 +40,9 @@ type Worker struct {
 	// manifests will be placed for execution, this is used when
 	// the Mode is set to `ModeFilesystem`
 	FilesystemPath string
+
+	// Id is an ID that can be used to identify the worker
+	Id string
 
 	// ServiceLogs is a channel where service-level logs are emitted to
 	ServiceLogs *chan common.ServiceLog
@@ -90,22 +101,9 @@ func (w *Worker) Start() error {
 		defer lifecycleWaiter.Done()
 		serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "worker is starting in mode[%s] using runtime[%s]", w.Mode, w.Runtime)
 		switch w.Mode {
-		case ModeController:
-			if strings.Index(w.ControllerUrl, "://") < 0 {
-				w.ControllerUrl = "http://" + w.ControllerUrl
-			} else if strings.Index(w.ControllerUrl, "://") == 0 {
-				w.ControllerUrl = "http" + w.ControllerUrl
-			}
-			controllerUrl, err := url.Parse(w.ControllerUrl)
-			if err != nil {
-				return
-			}
-			serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "starting polling from url[%s]", controllerUrl.String())
-			for {
-				serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "querying url[%s] for new automations...", controllerUrl.String())
+		case ModeCoordinator:
+			panic("TODO")
 
-				<-time.After(w.PollInterval)
-			}
 		case ModeFilesystem:
 			directoryToWatch := w.FilesystemPath
 			if !path.IsAbs(directoryToWatch) {
@@ -193,6 +191,14 @@ type NewWorkerOpts struct {
 	// **automation runtime** logs are emitted to
 	AutomationLogs *chan string
 
+	// Cert is used for connecting to a coordinator when the
+	// Mode is set to ModeCoordinator
+	Cert tls.Certificate
+
+	// Ca is used during the connection to a coordinator when the
+	// Mode is set to ModeCoordinator
+	Ca []byte
+
 	// DoneChannel will tell the worker to gracefully exit
 	// when it's possible to do so
 	DoneChannel chan common.Done
@@ -224,8 +230,10 @@ func NewWorker(opts NewWorkerOpts) *Worker {
 		PollInterval:   opts.PollInterval,
 	}
 	switch opts.Mode {
-	case ModeController:
-		worker.ControllerUrl = opts.Source
+	case ModeCoordinator:
+		worker.CoordinatorUrl = opts.Source
+		worker.Cert = opts.Cert
+		worker.Ca = opts.Ca
 	case ModeFilesystem:
 		worker.FilesystemPath = opts.Source
 	}

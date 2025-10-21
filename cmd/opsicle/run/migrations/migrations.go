@@ -93,7 +93,7 @@ var Command = &cobra.Command{
 
 		if cmd.Flags().Changed("steps") {
 			inputSteps := viper.GetInt("steps")
-			logrus.Debugf("steps was defined, using value %v", inputSteps)
+			logrus.Infof("steps was defined, using value %v", inputSteps)
 			steps = &inputSteps
 		} else {
 			logrus.Infof("steps not specified, migration will be to the latest")
@@ -102,6 +102,8 @@ var Command = &cobra.Command{
 		if force != 0 {
 			logrus.Warnf("forcing a migration")
 		}
+
+		logrus.Debugf("running migrations...")
 		migrateOutput, err := database.MigrateMysql(database.MigrateOpts{
 			Connection:  databaseConnection,
 			Force:       force,

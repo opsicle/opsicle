@@ -2,14 +2,6 @@
 
 ## Styling and guidelines
 
-### Code style (universal)
-- Langauges: use only Go for software code, use `/bin/sh`-compatible Shell for all scripts
-- Third-party libraries: keep minimal, use the standard library as far as possible, for all dependencies, ensure minimal sub-dependencies and ensure it was last updated less than a year ago and has multiple contributors
-- Comments: concise, follow best practices for Go, no fillter
-- Naming: use `cameCase` for all JSON and YAML struct tags
-- When instantiating slices, do not use `make(T, 0)`, use the `[]T{}` semantics for standardisation
-- When documenting APIs use comment notation from `swaggo`
-
 #### Actions nomenclature
 - As far as possible, use the following verbs for any function that manipulates/reads data:
   - Create*: for functions involving creation of a resource
@@ -21,7 +13,13 @@
 - Also use the above pattern for implementing any permissions involving actions
 
 #### Go conventions
+- Langauges: use only Go for software code, use `/bin/sh`-compatible Shell for all scripts
 - Target Go: 1.24+
+- Third-party libraries: keep minimal, use the standard library as far as possible, for all dependencies, ensure minimal sub-dependencies and ensure it was last updated less than a year ago and has multiple contributors
+- Comments: concise, follow best practices for Go, no fillter
+- Naming: use `cameCase` for all JSON and YAML struct tags
+- When instantiating slices, do not use `make(T, 0)`, use the `[]T{}` semantics for standardisation
+- When documenting APIs use comment notation from `swaggo`
 - Use `go fmt` and `go vet`, no PR if `go vet` fails
 - Use `gorilla/mux` for creation of any HTTP-based servers
 - Use `spf13/cobra` for structuring commands
@@ -31,7 +29,9 @@
 - Commands go into `/cmd/*`; the root command package is contained in a directory in `./cmd`, with each subfolder being a sub-command
 - SDKs for other Go apps to use is in `./pkg`
 - Internal controllers are in `./internal`
-- Do not use inline structs, always define structs outside of the function conusming it
+- Do not use inline structs, always define structs separately from the function conusming it
+- Define types in a `types.go` when generating code for a package
+- Define constants in a `constants.go` when generating code for a package
 
 #### Error messages
 - All errors should be in americaniZed english, meaning use 'z' over 's' in examples like 'authorized', 'unauthorized'

@@ -94,32 +94,21 @@ var Command = &cobra.Command{
 			return fmt.Errorf("someone's got to own this man")
 		}
 
-		users := []cli.HandleUserSelectionOptsUser{}
-		userEmailMap := map[string]string{}
-		for _, templateUser := range templateUsers.Data.Users {
-			userEmailMap[templateUser.Id] = templateUser.Email
-			users = append(users, cli.HandleUserSelectionOptsUser{
-				Id:    templateUser.Id,
-				Email: templateUser.Email,
-			})
-		}
-		userId, _, err := cli.HandleUserSelection(cli.HandleUserSelectionOpts{
-			Client:    client,
-			UserInput: viper.GetString("user-id"),
-			Users:     users,
-			// ServiceLog: servicesLogs,
-		})
+		selectedUser, err := cli.HandleTemplateUserSelection(
+			cli.HandleTemplateUserSelectionOpts{
+				Client:     client,
+				UserInput:  viper.GetString("user-id"),
+				TemplateId: templateInstance.Id,
+				// ServiceLog: servicesLogs,
+			},
+		)
 		if err != nil {
-			return err
-		}
-		userEmail, ok := userEmailMap[*userId]
-		if !ok {
-			return fmt.Errorf("failed to get email of user[%s]", *userId)
+			return fmt.Errorf("failed to select template user: %w", err)
 		}
 
 		warningMessage := fmt.Sprintf(
 			"You are about to remove <%s>'s access to template <%s>",
-			userEmail,
+			selectedUser.Email,
 			templateInstance.Name,
 		)
 		warningMessage += "\n\nHit OK below to confirm"
@@ -130,21 +119,21 @@ var Command = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("⏳ Removing user[%s] with id[%s] from template[%s]...\n", userEmail, *userId, templateInstance.Id)
+		fmt.Printf("⏳ Removing user[%s] with id[%s] from template[%s]...\n", selectedUser.Email, selectedUser.Id, templateInstance.Id)
 
 		deleteUserOutput, err := client.DeleteTemplateUserV1(controller.DeleteTemplateUserV1Input{
 			TemplateId: templateInstance.Id,
-			UserId:     *userId,
+			UserId:     selectedUser.Id,
 		})
 		if err != nil {
 			if errors.Is(err, controller.ErrorLastUserInResource) {
 				cli.PrintBoxedErrorMessage(
-					fmt.Sprintf("<%s> is the last user associated with template <%s> and cannot be removed", userEmail, templateInstance.Name),
+					fmt.Sprintf("<%s> is the last user associated with template <%s> and cannot be removed", selectedUser.Email, templateInstance.Name),
 				)
 				return err
 			} else if errors.Is(err, controller.ErrorLastManagerOfResource) {
 				cli.PrintBoxedErrorMessage(
-					fmt.Sprintf("<%s> is the last manager of template <%s> and cannot be removed", userEmail, templateInstance.Name),
+					fmt.Sprintf("<%s> is the last manager of template <%s> and cannot be removed", selectedUser.Email, templateInstance.Name),
 				)
 				return err
 			} else if errors.Is(err, controller.ErrorInsufficientPermissions) {
@@ -154,7 +143,7 @@ var Command = &cobra.Command{
 				return err
 			} else if errors.Is(err, controller.ErrorNotFound) {
 				cli.PrintBoxedErrorMessage(
-					fmt.Sprintf("User <%s> doesn't seem to have access to template <%s>", userEmail, templateInstance.Name),
+					fmt.Sprintf("User <%s> doesn't seem to have access to template <%s>", selectedUser.Email, templateInstance.Name),
 				)
 				return err
 			}
@@ -163,21 +152,9 @@ var Command = &cobra.Command{
 
 		if deleteUserOutput.Data.IsSuccessful {
 			cli.PrintBoxedSuccessMessage(
-				fmt.Sprintf("Removed user <%s> from template <%s>", userEmail, templateInstance.Id),
+				fmt.Sprintf("Removed user <%s> from template <%s>", selectedUser.Email, templateInstance.Id),
 			)
 		}
-
-		// deleteTemplateOutput, err := client.DeleteTemplateV1(controller.DeleteTemplateV1Input{
-		// 	TemplateId: templateInstance.Id,
-		// })
-		// if err != nil {
-		// 	return fmt.Errorf("failed to delete template: %w", err)
-		// }
-		// if deleteTemplateOutput.Data.IsSuccessful {
-		// 	cli.PrintBoxedSuccessMessage(
-		// 		fmt.Sprintf("Successfully deleted automation template <%s>", deleteTemplateOutput.Data.TemplateName),
-		// 	)
-		// }
 
 		return nil
 	},

@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package automations;
+
+option go_package = "opsicle/internal/automations/pb;pb";
+
+// AutomationEnvelope provides a container for the JSON representation of an Automation.
+message AutomationEnvelope {
+  // automation_json stores the Automation serialized as a JSON string.
+  string automation_json = 1;
+}

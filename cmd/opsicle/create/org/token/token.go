@@ -76,7 +76,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
-		orgCode, err := cli.HandleOrgSelection(cli.HandleOrgSelectionOpts{
+		selectedOrg, err := cli.HandleOrgSelection(cli.HandleOrgSelectionOpts{
 			Client:    client,
 			UserInput: viper.GetString("org"),
 		})
@@ -84,7 +84,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("org selection failed: %w", err)
 		}
 
-		orgOutput, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: *orgCode})
+		orgOutput, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: selectedOrg.Code})
 		if err != nil {
 			return fmt.Errorf("failed to retrieve org details: %w", err)
 		}

@@ -71,7 +71,7 @@ var Command = &cobra.Command{
 			return fmt.Errorf("failed to create controller client: %w", err)
 		}
 
-		orgCode, err := cli.HandleOrgSelection(cli.HandleOrgSelectionOpts{
+		selectedOrg, err := cli.HandleOrgSelection(cli.HandleOrgSelectionOpts{
 			Client:    client,
 			UserInput: viper.GetString("org"),
 		})
@@ -79,41 +79,23 @@ var Command = &cobra.Command{
 			return fmt.Errorf("org selection failed: %w", err)
 		}
 
-		org, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: *orgCode})
+		org, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: selectedOrg.Code})
 		if err != nil {
 			return fmt.Errorf("org retrieval failed: %w", err)
 		}
 
-		orgUsers, err := client.ListOrgUsersV1(controller.ListOrgUsersV1Input{OrgId: org.Data.Id})
-		if err != nil {
-			return fmt.Errorf("org users retrieval failed: %w", err)
-		}
-
-		userSelections := make([]cli.HandleUserSelectionOptsUser, 0, len(orgUsers.Data))
-		userIdEmailMap := make(map[string]string, len(orgUsers.Data))
-		for _, orgUser := range orgUsers.Data {
-			userSelections = append(userSelections, cli.HandleUserSelectionOptsUser{
-				Id:    orgUser.UserId,
-				Email: orgUser.UserEmail,
-			})
-			userIdEmailMap[orgUser.UserId] = orgUser.UserEmail
-		}
-
-		selectedUserId, selectedUserEmail, err := cli.HandleUserSelection(cli.HandleUserSelectionOpts{
+		selectedUser, err := cli.HandleOrgUserSelection(cli.HandleOrgUserSelectionOpts{
 			Client:    client,
+			OrgId:     org.Data.Id,
 			UserInput: viper.GetString("user"),
-			Users:     userSelections,
 		})
 		if err != nil {
-			return fmt.Errorf("user selection failed: %w", err)
-		}
-		if selectedUserId == nil {
-			return fmt.Errorf("user selection returned nil user identifier")
+			return fmt.Errorf("org user retrieval failed: %w", err)
 		}
 
 		canOutput, err := client.CanUserV1(controller.CanUserV1Input{
 			OrgId:    org.Data.Id,
-			UserId:   *selectedUserId,
+			UserId:   selectedUser.Id,
 			Action:   action,
 			Resource: resource,
 		})
@@ -135,7 +117,7 @@ var Command = &cobra.Command{
 			result.OrgId = org.Data.Id
 		}
 		if result.UserId == "" {
-			result.UserId = *selectedUserId
+			result.UserId = selectedUser.Id
 		}
 
 		switch viper.GetString("output") {
@@ -153,8 +135,8 @@ var Command = &cobra.Command{
 			}{
 				OrgId:     result.OrgId,
 				OrgName:   org.Data.Name,
-				UserId:    result.UserId,
-				UserEmail: userIdEmailMap[result.UserId],
+				UserId:    selectedUser.Id,
+				UserEmail: selectedUser.Email,
 				Action:    result.Action,
 				Resource:  result.Resource,
 				Allows:    result.Allows,
@@ -168,8 +150,8 @@ var Command = &cobra.Command{
 				cli.PrintBoxedSuccessMessage(
 					fmt.Sprintf(
 						"User '%s' in org '%s' can %s %s",
-						*selectedUserEmail,
-						*orgCode,
+						selectedUser.Email,
+						selectedOrg.Code,
 						result.Action,
 						result.Resource,
 					),
@@ -178,8 +160,8 @@ var Command = &cobra.Command{
 				cli.PrintBoxedErrorMessage(
 					fmt.Sprintf(
 						"User '%s' in org '%s' cannot %s %s",
-						*selectedUserEmail,
-						*orgCode,
+						selectedUser.Email,
+						selectedOrg.Code,
 						result.Action,
 						result.Resource,
 					),

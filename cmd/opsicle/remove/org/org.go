@@ -67,25 +67,19 @@ var Command = &cobra.Command{
 		}
 
 		orgFlag := viper.GetString("org")
-		var orgCode *string
-		if orgFlag == "" {
-			orgCode, err = cli.HandleOrgSelection(cli.HandleOrgSelectionOpts{
-				Client: client,
-			})
-		} else {
-			orgCode, err = cli.HandleOrgSelection(cli.HandleOrgSelectionOpts{
-				Client:    client,
-				UserInput: orgFlag,
-			})
+		var selectedOrg *cli.SelectedOrg
+		orgSelectionOpts := cli.HandleOrgSelectionOpts{
+			Client: client,
 		}
+		if orgFlag != "" {
+			orgSelectionOpts.UserInput = orgFlag
+		}
+		selectedOrg, err = cli.HandleOrgSelection(orgSelectionOpts)
 		if err != nil {
 			return fmt.Errorf("org selection failed: %w", err)
 		}
-		if orgCode == nil {
-			return fmt.Errorf("failed to determine organisation to delete")
-		}
 
-		orgDetails, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: *orgCode})
+		orgDetails, err := client.GetOrgV1(controller.GetOrgV1Input{Ref: selectedOrg.Code})
 		if err != nil {
 			if orgDetails != nil && orgDetails.StatusCode == http.StatusUnauthorized {
 				if err := controller.DeleteSessionToken(); err != nil {

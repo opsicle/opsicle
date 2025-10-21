@@ -72,7 +72,7 @@ var Command = &cobra.Command{
 		if filesystemPath != "" {
 			source = filesystemPath
 		} else if coordinatorUrl != "" {
-			mode = worker.ModeController
+			mode = worker.ModeCoordinator
 			source = coordinatorUrl
 		}
 		if source == "" {
