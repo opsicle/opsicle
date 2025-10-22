@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"opsicle/internal/common"
 	"opsicle/internal/controller/models"
+	"opsicle/internal/types"
 	"strings"
 )
 
@@ -32,7 +33,7 @@ func getRouteAuther(serviceLogs chan<- common.ServiceLog) func(http.Handler) htt
 			serviceLogs <- common.ServiceLogf(common.LogLevelTrace, "auth middleware is executing")
 			authorizationHeader := r.Header.Get("Authorization")
 			if strings.Index(authorizationHeader, "Bearer ") != 0 {
-				common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to receive an authorization header", ErrorAuthRequired)
+				common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to receive an authorization header", types.ErrorAuthRequired)
 				return
 			}
 			authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
@@ -41,7 +42,7 @@ func getRouteAuther(serviceLogs chan<- common.ServiceLog) func(http.Handler) htt
 				CachePrefix: sessionCachePrefix,
 			})
 			if err != nil {
-				common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to retrieve session", ErrorAuthRequired)
+				common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to retrieve session", types.ErrorAuthRequired)
 				return
 			}
 			log(common.LogLevelInfo, fmt.Sprintf("request from user[%s]", sessionInfo.Username))

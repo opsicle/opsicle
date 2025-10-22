@@ -16,6 +16,7 @@ import (
 	"opsicle/internal/controller/templates"
 	"opsicle/internal/email"
 	"opsicle/internal/tls"
+	"opsicle/internal/types"
 	"opsicle/internal/validate"
 	"sort"
 	"strings"
@@ -89,7 +90,7 @@ func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
 	orgId := vars["orgId"]
 	if err := validate.Uuid(orgId); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid org id[%s]: %s", session.UserId, orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", types.ErrorInvalidInput)
 		return
 	}
 
@@ -99,10 +100,10 @@ func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, models.ErrorNotFound):
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, "org not found", ErrorNotFound)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "org not found", types.ErrorNotFound)
 		default:
 			log(common.LogLevelError, fmt.Sprintf("failed to load org[%s]: %s", orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load org", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load org", types.ErrorDatabaseIssue)
 		}
 		return
 	}
@@ -112,10 +113,10 @@ func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, models.ErrorNotFound):
 			log(common.LogLevelWarn, fmt.Sprintf("user[%s] attempted to delete org[%s] without membership", session.UserId, orgId))
-			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", ErrorInsufficientPermissions)
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", types.ErrorInsufficientPermissions)
 		default:
 			log(common.LogLevelError, fmt.Sprintf("failed to verify membership for user[%s] in org[%s]: %s", session.UserId, orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", types.ErrorDatabaseIssue)
 		}
 		return
 	}
@@ -123,18 +124,18 @@ func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
 	_, _, canDelete, err := orgUser.CanV1(models.DatabaseConnection{Db: db}, models.ResourceOrg, models.ActionDelete)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to evaluate delete permissions for user[%s] in org[%s]: %s", session.UserId, orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", types.ErrorDatabaseIssue)
 		return
 	}
 	if !canDelete {
 		log(common.LogLevelWarn, fmt.Sprintf("user[%s] is not authorized to delete org[%s]", session.UserId, orgId))
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "insufficient permissions", ErrorInsufficientPermissions)
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "insufficient permissions", types.ErrorInsufficientPermissions)
 		return
 	}
 
 	if err := orgInstance.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to delete org[%s] by user[%s]: %s", orgId, session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete org", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete org", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -169,13 +170,13 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(authRequestContext).(identity)
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", types.ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, "successfully read body into bytes")
 	var input CreateOrgV1Input
 	if err := json.Unmarshal(requestBody, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", types.ErrorInvalidInput)
 		return
 	}
 
@@ -183,12 +184,12 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	if err := validate.OrgName(input.Name); err != nil {
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s] entered an invalid orgName[%s]: %s", session.UserId, input.Name, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org name is invalid", ErrorInvalidInput, err.Error())
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org name is invalid", types.ErrorInvalidInput, err.Error())
 		return
 	}
 	if err := validate.OrgCode(input.Code); err != nil {
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s] entered an invalid orgCode[%s]: %s", session.UserId, input.Code, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org code is invalid", ErrorInvalidInput, err.Error())
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org code is invalid", types.ErrorInvalidInput, err.Error())
 		return
 	}
 
@@ -203,10 +204,10 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, models.ErrorDuplicateEntry) {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org already exists", ErrorOrgExists)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org already exists", types.ErrorOrgExists)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create org", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create org", types.ErrorDatabaseIssue)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("created org[%s] with id[%s]", input.Code, orgInstance.GetId()))
@@ -220,7 +221,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		MemberType: string(models.TypeOrgAdmin),
 	}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to add user[%s] to org[%s]: %s", session.UserId, orgInstance.GetId(), err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add user to org", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add user to org", types.ErrorDatabaseIssue)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("added user[%s] to org[%s] as admin", session.UserId, orgInstance.GetId()))
@@ -235,7 +236,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to add default admin role to org[%s]: %s", defaultAdminRole.GetId(), err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add role to org", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add role to org", types.ErrorDatabaseIssue)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("added default admin role[%s] to org[%s]", defaultAdminRole.GetId(), orgInstance.GetId()))
@@ -261,7 +262,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(permissionErrs) > 0 {
 		log(common.LogLevelError, fmt.Sprintf("failed to add permissions to admin role[%s]: %s", defaultAdminRole.GetId(), errors.Join(permissionErrs...)))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add permissions to admin org role", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add permissions to admin org role", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -275,7 +276,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to add default worker role to org[%s]: %s", defaultWorkerRole.GetId(), err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add role to org", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add role to org", types.ErrorDatabaseIssue)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("added default worker role[%s] to org[%s]", defaultWorkerRole.GetId(), orgInstance.GetId()))
@@ -297,7 +298,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(permissionErrs) > 0 {
 		log(common.LogLevelError, fmt.Sprintf("failed to add permissions to default worker orgRole[%s]: %s", defaultWorkerRole.GetId(), errors.Join(permissionErrs...)))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add permissions to default worker org role", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add permissions to default worker org role", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -311,7 +312,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		AssignedBy:         &assigner,
 	}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to assign default administrator role[%s] to user[%s]: %s", defaultAdminRole.GetId(), session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to assign org role", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to assign org role", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -325,7 +326,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		},
 	}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to create certificate authority for org[%s]: %s", orgInstance.GetId(), err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create certificate authority", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create certificate authority", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -367,7 +368,7 @@ func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 		isorgRefUuid = true
 	} else if err := validate.OrgCode(orgRef); err != nil {
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s] entered an invalid reference[%s]: %s", session.UserId, orgRef, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org code is invalid", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "org code is invalid", types.ErrorInvalidInput)
 		return
 	}
 
@@ -384,10 +385,10 @@ func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 	org, err := models.GetOrgV1(getOrgOpts)
 	if err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", types.ErrorDatabaseIssue)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org", types.ErrorDatabaseIssue)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("successfully retrieved org[%s] with reference[%s]", orgRef, org.GetId()))
@@ -401,11 +402,11 @@ func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
 			log(common.LogLevelError, fmt.Sprintf("unauthorized user[%s] requested data about org[%s]: %s", session.UserId, org.GetId(), err))
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", types.ErrorDatabaseIssue)
 			return
 		}
 		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s] in org[%s]: %s", session.UserId, org.GetId(), err))
-		common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", types.ErrorDatabaseIssue)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("successfully retrieved user[%s] in org[%s]", orgUser.User.GetId(), orgUser.Org.GetId()))
@@ -547,20 +548,20 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get user[%s] from org[%s]: %s", session.UserId, orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, fmt.Sprintf("refused to list users in org[%s] at user[%s]'s request", orgId, session.UserId), ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, fmt.Sprintf("refused to list users in org[%s] at user[%s]'s request", orgId, session.UserId), types.ErrorInvalidInput)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org users", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org users", types.ErrorDatabaseIssue)
 		return
 	}
 	orgUsers, err := org.ListUsersV1(models.DatabaseConnection{Db: db})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list users from org[%s]: %s", orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org users", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org users", types.ErrorDatabaseIssue)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org users", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org users", types.ErrorDatabaseIssue)
 		return
 	}
 	output := handleListOrgUsersV1Output{}
@@ -568,7 +569,7 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 		userRoles, err := orgUser.ListRolesV1(models.DatabaseConnection{Db: db})
 		if err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to list roles for user[%s] in org[%s]: %s", orgUser.User.GetId(), orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user roles", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user roles", types.ErrorDatabaseIssue)
 			return
 		}
 		roles := make([]handleListOrgUsersV1OutputUserRole, 0, len(userRoles))
@@ -663,20 +664,20 @@ func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
 	if _, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: session.UserId}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get user[%s] from org[%s]: %s", session.UserId, orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, fmt.Sprintf("refused to list roles in org[%s] at user[%s]'s request", orgId, session.UserId), ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, fmt.Sprintf("refused to list roles in org[%s] at user[%s]'s request", orgId, session.UserId), types.ErrorInvalidInput)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org roles", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org roles", types.ErrorDatabaseIssue)
 		return
 	}
 	orgRoles, err := org.ListRolesV1(models.DatabaseConnection{Db: db})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list roles from org[%s]: %s", orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org roles", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org roles", types.ErrorDatabaseIssue)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org roles", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org roles", types.ErrorDatabaseIssue)
 		return
 	}
 	output := make(ListOrgRolesV1Output, 0, len(orgRoles))
@@ -735,11 +736,11 @@ func handleSubmitOrgTemplateV1(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
 	if orgId == "" {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id was not provided", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id was not provided", types.ErrorInvalidInput)
 		return
 	}
 	if _, err := uuid.Parse(orgId); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id is not a valid uuid", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id is not a valid uuid", types.ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is creating an automation template for org[%s]", session.UserId, orgId))
@@ -751,27 +752,27 @@ func handleSubmitOrgTemplateV1(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to verify membership of user[%s] in org[%s]: %s", session.UserId, orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusForbidden, "user is not part of organization", ErrorInsufficientPermissions)
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "user is not part of organization", types.ErrorInsufficientPermissions)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "organization membership verification failed", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "organization membership verification failed", types.ErrorDatabaseIssue)
 		return
 	}
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
 		return
 	}
 	var input handleSubmitTemplateV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", types.ErrorInvalidInput)
 		return
 	}
 
 	var template automations.Template
 	if err := yaml.Unmarshal(input.Data, &template); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse automation tempalte data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse automation tempalte data", types.ErrorInvalidInput)
 		return
 	}
 
@@ -783,7 +784,7 @@ func handleSubmitOrgTemplateV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to create automation template in db: %s", err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create automation tempalte", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create automation tempalte", types.ErrorDatabaseIssue)
 		return
 	}
 	output := handleSubmitTemplateV1Output{
@@ -816,11 +817,11 @@ func handleListOrgTemplatesV1(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
 	if orgId == "" {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id was not provided", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id was not provided", types.ErrorInvalidInput)
 		return
 	}
 	if _, err := uuid.Parse(orgId); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id is not a valid uuid", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "organization id is not a valid uuid", types.ErrorInvalidInput)
 		return
 	}
 
@@ -832,18 +833,18 @@ func handleListOrgTemplatesV1(w http.ResponseWriter, r *http.Request) {
 		UserId: session.UserId,
 	}); err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusForbidden, "user is not authorized to access organization templates", ErrorInsufficientPermissions)
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "user is not authorized to access organization templates", types.ErrorInsufficientPermissions)
 			return
 		}
 		log(common.LogLevelError, fmt.Sprintf("failed to verify membership of user[%s] in org[%s]: %s", session.UserId, orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "organization membership verification failed", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "organization membership verification failed", types.ErrorDatabaseIssue)
 		return
 	}
 
 	templates, err := org.ListTemplatesV1(models.DatabaseConnection{Db: db})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list org templates for org[%s]: %s", orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list automation templates", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list automation templates", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -919,17 +920,17 @@ func handleListOrgTokensV1(w http.ResponseWriter, r *http.Request) {
 		RequesterUserId: session.UserId,
 	}); err != nil {
 		switch {
-		case errors.Is(err, ErrorInsufficientPermissions):
+		case errors.Is(err, types.ErrorInsufficientPermissions):
 			log(common.LogLevelError, fmt.Sprintf("user[%s] is not authorized to list tokens for org[%s]", session.UserId, orgId))
-			common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not authorized to list tokens", ErrorInsufficientPermissions)
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not authorized to list tokens", types.ErrorInsufficientPermissions)
 			return
-		case errors.Is(err, ErrorDatabaseIssue):
+		case errors.Is(err, types.ErrorDatabaseIssue):
 			log(common.LogLevelError, fmt.Sprintf("failed to verify requester permissions for org[%s]: %s", orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", types.ErrorDatabaseIssue)
 			return
 		default:
 			log(common.LogLevelError, fmt.Sprintf("unexpected error verifying requester permissions for org[%s]: %s", orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", ErrorUnknown)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", types.ErrorUnknown)
 			return
 		}
 	}
@@ -938,7 +939,7 @@ func handleListOrgTokensV1(w http.ResponseWriter, r *http.Request) {
 	orgTokens, err := org.ListTokensV1(models.ListOrgTokensV1Opts{DatabaseConnection: models.DatabaseConnection{Db: db}})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list tokens for org[%s]: %s", orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org tokens", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org tokens", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -1019,7 +1020,7 @@ func handleGetOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 
 	if err := validate.Uuid(tokenId); err != nil {
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s] provided invalid tokenId[%s]: %s", session.UserId, tokenId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "token id is invalid", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "token id is invalid", types.ErrorInvalidInput)
 		return
 	}
 
@@ -1030,17 +1031,17 @@ func handleGetOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 		RequesterUserId: session.UserId,
 	}); err != nil {
 		switch {
-		case errors.Is(err, ErrorInsufficientPermissions):
+		case errors.Is(err, types.ErrorInsufficientPermissions):
 			log(common.LogLevelError, fmt.Sprintf("user[%s] is not authorized to view token[%s] for org[%s]", session.UserId, tokenId, orgId))
-			common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not authorized to view token", ErrorInsufficientPermissions)
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not authorized to view token", types.ErrorInsufficientPermissions)
 			return
-		case errors.Is(err, ErrorDatabaseIssue):
+		case errors.Is(err, types.ErrorDatabaseIssue):
 			log(common.LogLevelError, fmt.Sprintf("failed to verify requester permissions for org[%s]: %s", orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", types.ErrorDatabaseIssue)
 			return
 		default:
 			log(common.LogLevelError, fmt.Sprintf("unexpected error verifying requester permissions for org[%s]: %s", orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", ErrorUnknown)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester permissions", types.ErrorUnknown)
 			return
 		}
 	}
@@ -1054,11 +1055,11 @@ func handleGetOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, models.ErrorNotFound):
 			log(common.LogLevelDebug, fmt.Sprintf("token[%s] in org[%s] not found", tokenId, orgId))
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, "token was not found", ErrorNotFound)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "token was not found", types.ErrorNotFound)
 			return
 		default:
 			log(common.LogLevelError, fmt.Sprintf("failed to load token[%s] for org[%s]: %s", tokenId, orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org token", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org token", types.ErrorDatabaseIssue)
 			return
 		}
 	}
@@ -1135,27 +1136,27 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", types.ErrorInvalidInput)
 		return
 	}
 	var input CreateOrgTokenV1Input
 	if err := json.Unmarshal(requestBody, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", types.ErrorInvalidInput)
 		return
 	}
 	if input.Name == "" {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "token name is required", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "token name is required", types.ErrorInvalidInput)
 		return
 	}
 	if input.RoleId == "" {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "role id is required", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "role id is required", types.ErrorInvalidInput)
 		return
 	}
 	if err := validateRequesterCanManageOrgUsers(validateRequesterCanManageOrgUsersOpts{
 		OrgId:           orgId,
 		RequesterUserId: session.UserId,
 	}); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not authorized to manage tokens", ErrorInsufficientPermissions)
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "requester is not authorized to manage tokens", types.ErrorInsufficientPermissions)
 		return
 	}
 
@@ -1164,10 +1165,10 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get org[%s]: %s", orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", ErrorNotFound)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org", types.ErrorNotFound)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -1178,10 +1179,10 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to load role[%s] for org[%s]: %s", input.RoleId, orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, "specified role was not found", ErrorNotFound)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "specified role was not found", types.ErrorNotFound)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load org role", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load org role", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -1197,7 +1198,7 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to prepare certificate authority for org[%s]: %s", orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to prepare certificate authority", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to prepare certificate authority", types.ErrorDatabaseIssue)
 			return
 		}
 	}
@@ -1205,14 +1206,14 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	caCert, caKey, err := ca.GetCryptoMaterials()
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to parse certificate authority for org[%s]: %s", orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load certificate authority", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load certificate authority", types.ErrorDatabaseIssue)
 		return
 	}
 
 	apiKey, err := generateApiKey(constants.ApiKeyLength - len(constants.ApiKeyPrefix))
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to generate api key for org[%s]: %s", orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to generate api key", ErrorUnknown)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to generate api key", types.ErrorUnknown)
 		return
 	}
 	apiKey = constants.ApiKeyPrefix + apiKey
@@ -1231,7 +1232,7 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	certificate, key, err := tls.GenerateCertificate(&certOpts, caCert, caKey)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to generate certificate for org[%s]: %s", orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to generate certificate", ErrorUnknown)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to generate certificate", types.ErrorUnknown)
 		return
 	}
 
@@ -1249,7 +1250,7 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to create org token for org[%s]: %s", orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create org token", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create org token", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -1299,13 +1300,13 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", types.ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, "successfully read body into bytes")
 	var input handleCreateOrgUserV1Input
 	if err := json.Unmarshal(requestBody, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse request body", types.ErrorInvalidInput)
 		return
 	}
 
@@ -1313,7 +1314,7 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 
 	if err := validate.Email(input.Email); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to validate invitee's email: %s", err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive valid email", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive valid email", types.ErrorInvalidInput)
 		return
 	}
 
@@ -1323,10 +1324,10 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate org", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate org", types.ErrorInvalidInput)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -1335,13 +1336,13 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		RequesterUserId: session.UserId,
 	}); err != nil {
 		switch true {
-		case errors.Is(err, ErrorInsufficientPermissions):
+		case errors.Is(err, types.ErrorInsufficientPermissions):
 			log(common.LogLevelError, fmt.Sprintf("user[%s] doesn't have permissions to add a member to org[%s]: %s", session.UserId, orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", ErrorInsufficientPermissions)
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", types.ErrorInsufficientPermissions)
 			return
-		case errors.Is(err, ErrorDatabaseIssue):
+		case errors.Is(err, types.ErrorDatabaseIssue):
 			log(common.LogLevelError, fmt.Sprintf("encountered database issue while processing request by user[%s] to add user with email[%s] to org[%s]: %s", session.UserId, input.Email, orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", types.ErrorDatabaseIssue)
 			return
 		}
 	}
@@ -1350,7 +1351,7 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	acceptor := models.User{Email: input.Email}
 	if err := acceptor.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
 		if !errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve acceptor", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve acceptor", types.ErrorDatabaseIssue)
 			return
 		}
 	} else {
@@ -1376,7 +1377,7 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 			UserId: session.UserId,
 		}); err != nil {
 			if !errors.Is(err, models.ErrorNotFound) {
-				common.SendHttpFailResponse(w, r, http.StatusBadRequest, "user already in org", ErrorUserExistsInOrg)
+				common.SendHttpFailResponse(w, r, http.StatusBadRequest, "user already in org", types.ErrorUserExistsInOrg)
 				return
 			}
 		}
@@ -1387,7 +1388,7 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	invitationOutput, err := org.InviteUserV1(invitationOpts)
 	if err != nil {
 		if errors.Is(err, models.ErrorDuplicateEntry) {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invitation exists", ErrorInvitationExists)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invitation exists", types.ErrorInvitationExists)
 			return
 		}
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create invitation", err)
@@ -1480,7 +1481,7 @@ func handleGetOrgCurrentUserV1(w http.ResponseWriter, r *http.Request) {
 	orgId := vars["orgId"]
 	if _, err := uuid.Parse(orgId); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid org id: %s", session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", types.ErrorInvalidInput)
 		return
 	}
 
@@ -1494,10 +1495,10 @@ func handleGetOrgCurrentUserV1(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s] from org[%s]: %s", session.UserId, orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user", types.ErrorInvalidInput)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user", types.ErrorDatabaseIssue)
 		return
 	}
 	audit.Log(audit.LogEntry{
@@ -1548,33 +1549,33 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
 		return
 	}
 
 	var input handleUpdateOrgInvitationV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", types.ErrorInvalidInput)
 		return
 	}
 
 	orgInvite := models.OrgUserInvitation{Id: invitationId}
 	if err := orgInvite.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed find invitation", ErrorInvitationInvalid)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed find invitation", types.ErrorInvitationInvalid)
 			return
 		}
 		log(common.LogLevelError, fmt.Sprintf("failed to load invitation: %s", err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to load", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to load", types.ErrorInvalidInput)
 		return
 	}
 
 	if !strings.EqualFold(*orgInvite.AcceptorId, session.UserId) {
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "user not allowed", ErrorInvitationInvalid)
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "user not allowed", types.ErrorInvitationInvalid)
 		return
 	}
 	if strings.Compare(orgInvite.JoinCode, input.JoinCode) != 0 {
-		common.SendHttpFailResponse(w, r, http.StatusForbidden, "invalid join code", ErrorInvitationInvalid)
+		common.SendHttpFailResponse(w, r, http.StatusForbidden, "invalid join code", types.ErrorInvitationInvalid)
 		return
 	}
 
@@ -1586,12 +1587,12 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 			MemberType: orgInvite.Type,
 		}); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to add user to org: %s", err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add user", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to add user", types.ErrorDatabaseIssue)
 			return
 		}
 
 		if err := orgInvite.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", types.ErrorDatabaseIssue)
 			return
 		}
 
@@ -1601,10 +1602,10 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			if errors.Is(err, models.ErrorNotFound) {
-				common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org user", ErrorDatabaseIssue)
+				common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to retrieve org user", types.ErrorDatabaseIssue)
 				return
 			}
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user", types.ErrorDatabaseIssue)
 			return
 		}
 
@@ -1630,7 +1631,7 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 	} else {
 		if err := orgInvite.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", types.ErrorDatabaseIssue)
 			return
 		}
 		audit.Log(audit.LogEntry{
@@ -1660,7 +1661,7 @@ func handleLeaveOrgV1(w http.ResponseWriter, r *http.Request) {
 	orgId := vars["orgId"]
 	if _, err := uuid.Parse(orgId); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid org id: %s", session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", types.ErrorInvalidInput)
 		return
 	}
 
@@ -1670,7 +1671,7 @@ func handleLeaveOrgV1(w http.ResponseWriter, r *http.Request) {
 	orgUser.Org.Id = &orgId
 	orgUser.User.Id = &session.UserId
 	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", types.ErrorDatabaseIssue)
 		return
 	}
 	if err := validateUserIsNotLastAdmin(validateUserIsNotLastAdminOpts{
@@ -1678,7 +1679,7 @@ func handleLeaveOrgV1(w http.ResponseWriter, r *http.Request) {
 		UserId: session.UserId,
 	}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] is the last admin and cannot leave the organisation: %s", session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "user is last admin", ErrorOrgRequiresOneAdmin)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "user is last admin", types.ErrorLastOrgAdmin)
 		return
 	}
 
@@ -1686,7 +1687,7 @@ func handleLeaveOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	if err := orgUser.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to remove user[%s] from org[%s]: %s", session.UserId, orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove member", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove member", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -1716,18 +1717,18 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	orgId := vars["orgId"]
 	if _, err := uuid.Parse(orgId); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid org id: %s", session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", types.ErrorInvalidInput)
 		return
 	}
 
 	userId := vars["userId"]
 	if _, err := uuid.Parse(userId); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid user id: %s", session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user id", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user id", types.ErrorInvalidInput)
 		return
 	}
 	if userId == session.UserId {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "a user cannot delete itself", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "a user cannot delete itself", types.ErrorInvalidInput)
 		return
 	}
 
@@ -1740,13 +1741,13 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		RequesterUserId: session.UserId,
 	}); err != nil {
 		switch true {
-		case errors.Is(err, ErrorInsufficientPermissions):
+		case errors.Is(err, types.ErrorInsufficientPermissions):
 			log(common.LogLevelError, fmt.Sprintf("user[%s] doesn't have permissions to delete user[%s] from org[%s]: %s", session.UserId, userId, orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", ErrorInsufficientPermissions)
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", types.ErrorInsufficientPermissions)
 			return
-		case errors.Is(err, ErrorDatabaseIssue):
+		case errors.Is(err, types.ErrorDatabaseIssue):
 			log(common.LogLevelError, fmt.Sprintf("encountered database issue while processing request by user[%s] to delete user[%s] from org[%s]: %s", session.UserId, userId, orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", types.ErrorDatabaseIssue)
 			return
 		}
 	}
@@ -1756,7 +1757,7 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	orgUser.Org.Id = &orgId
 	orgUser.User.Id = &session.UserId
 	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", types.ErrorDatabaseIssue)
 		return
 	}
 	if err := validateUserIsNotLastAdmin(validateUserIsNotLastAdminOpts{
@@ -1764,7 +1765,7 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		UserId: session.UserId,
 	}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] is the last admin and cannot leave the organisation: %s", session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "user is last admin", ErrorOrgRequiresOneAdmin)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "user is last admin", types.ErrorLastOrgAdmin)
 		return
 	}
 
@@ -1772,7 +1773,7 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 
 	if err := orgUser.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to remove user[%s] from org[%s]: %s", userId, orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove member", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove member", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -1811,24 +1812,24 @@ func handleCanOrgUserActionV1(w http.ResponseWriter, r *http.Request) {
 	resourceRaw := vars["resource"]
 
 	if err := validate.Uuid(orgId); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", types.ErrorInvalidInput)
 		return
 	}
 	if err := validate.Uuid(userId); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user id", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user id", types.ErrorInvalidInput)
 		return
 	}
 
 	actionValue, actionCanonical, err := mapOrgPermissionAction(actionRaw)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] provided invalid action[%s]: %s", session.UserId, actionRaw, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid action", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid action", types.ErrorInvalidInput)
 		return
 	}
 	resourceValue, resourceCanonical, err := mapOrgPermissionResource(resourceRaw)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] provided invalid resource[%s]: %s", session.UserId, resourceRaw, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid resource", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid resource", types.ErrorInvalidInput)
 		return
 	}
 
@@ -1837,18 +1838,18 @@ func handleCanOrgUserActionV1(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
 			log(common.LogLevelWarn, fmt.Sprintf("user[%s] requested permissions for user[%s] not found in org[%s]", session.UserId, userId, orgId))
-			common.SendHttpFailResponse(w, r, http.StatusNotFound, "user not found", ErrorNotFound)
+			common.SendHttpFailResponse(w, r, http.StatusNotFound, "user not found", types.ErrorNotFound)
 			return
 		}
 		log(common.LogLevelError, fmt.Sprintf("failed to load org user[%s] in org[%s]: %s", userId, orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user", types.ErrorDatabaseIssue)
 		return
 	}
 
 	allowsMask, denysMask, isAllowed, err := orgUser.CanV1(models.DatabaseConnection{Db: db}, resourceValue, actionValue)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed evaluating permissions for user[%s] in org[%s] action[%s] resource[%s]: %s", userId, orgId, actionCanonical, resourceCanonical, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to evaluate permissions", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to evaluate permissions", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -1882,19 +1883,19 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	orgId := vars["orgId"]
 	if _, err := uuid.Parse(orgId); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid org id: %s", session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", types.ErrorInvalidInput)
 		return
 	}
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
 		return
 	}
 
 	var input handleUpdateOrgUserV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", types.ErrorInvalidInput)
 		return
 	}
 
@@ -1902,7 +1903,7 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	if _, err := uuid.Parse(input.User); err != nil {
 		if err := validate.Email(input.User); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid user id: %s", session.UserId, err))
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user id", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user id", types.ErrorInvalidInput)
 			return
 		} else {
 			isUserEmail = true
@@ -1915,7 +1916,7 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		user := models.User{Email: input.User}
 		if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid user email: %s", session.UserId, err))
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user identifier", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user identifier", types.ErrorInvalidInput)
 			return
 		}
 		userId = user.GetId()
@@ -1932,11 +1933,11 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		RequesterUserId: session.UserId,
 	}); err != nil {
 		switch true {
-		case errors.Is(err, ErrorInsufficientPermissions):
-			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", ErrorInsufficientPermissions)
+		case errors.Is(err, types.ErrorInsufficientPermissions):
+			common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to verify requester", types.ErrorInsufficientPermissions)
 			return
-		case errors.Is(err, ErrorDatabaseIssue):
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+		case errors.Is(err, types.ErrorDatabaseIssue):
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", types.ErrorDatabaseIssue)
 			return
 		}
 	}
@@ -1946,7 +1947,7 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	orgUser.User.Id = &session.UserId
 	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to load user[%s] in org[%s]: %s", userId, orgId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -1964,11 +1965,11 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 				})
 				if err != nil {
 					log(common.LogLevelError, fmt.Sprintf("encountered database issue while retrieving member count from org[%s]: %s", orgId, err))
-					common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", ErrorDatabaseIssue)
+					common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", types.ErrorDatabaseIssue)
 					return
 				}
 				if adminsCount == 1 {
-					common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update membership type of the only administrator", ErrorInvalidInput)
+					common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update membership type of the only administrator", types.ErrorInvalidInput)
 					return
 				}
 			}
@@ -1982,15 +1983,15 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		FieldsToSet: input.Update,
 	}); err != nil {
 		if errors.Is(err, models.ErrorInvalidInput) {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update org user", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update org user", types.ErrorInvalidInput)
 			return
 		}
 		log(common.LogLevelError, fmt.Sprintf("request by user[%s] to update user[%s] in org[%s] failed: %s", session.UserId, userId, orgId, err))
 		if errors.Is(err, models.ErrorInvalidInput) {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update org user", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to update org user", types.ErrorInvalidInput)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to update org user", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to update org user", types.ErrorDatabaseIssue)
 		return
 	}
 

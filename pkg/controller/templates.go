@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"opsicle/internal/types"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,7 +41,7 @@ func (c Client) CreateTemplateUserV1(input CreateTemplateUserV1Input) (*CreateTe
 		Output: &outputData,
 	})
 	var output *CreateTemplateUserV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &CreateTemplateUserV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -48,10 +49,10 @@ func (c Client) CreateTemplateUserV1(input CreateTemplateUserV1Input) (*CreateTe
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
-		case ErrorInsufficientPermissions.Error():
-			err = ErrorInsufficientPermissions
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
+		case types.ErrorInsufficientPermissions.Error():
+			err = types.ErrorInsufficientPermissions
 		}
 	}
 	return output, err
@@ -74,7 +75,7 @@ type DeleteTemplateV1Input struct {
 
 func (c *Client) DeleteTemplateV1(input DeleteTemplateV1Input) (*DeleteTemplateV1Output, error) {
 	if _, err := uuid.Parse(input.TemplateId); err != nil {
-		return nil, fmt.Errorf("%w: template id not a uuid", ErrorInvalidInput)
+		return nil, fmt.Errorf("%w: template id not a uuid", types.ErrorInvalidInput)
 	}
 	var outputData DeleteTemplateV1OutputData
 	outputClient, err := c.do(request{
@@ -83,7 +84,7 @@ func (c *Client) DeleteTemplateV1(input DeleteTemplateV1Input) (*DeleteTemplateV
 		Output: &outputData,
 	})
 	var output *DeleteTemplateV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &DeleteTemplateV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -91,8 +92,8 @@ func (c *Client) DeleteTemplateV1(input DeleteTemplateV1Input) (*DeleteTemplateV
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
 		}
 	}
 	return output, err
@@ -135,7 +136,7 @@ func (c Client) ListTemplatesV1(input ListTemplatesV1Input) (*ListTemplatesV1Out
 		Output: &outputData,
 	})
 	var output *ListTemplatesV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &ListTemplatesV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -143,8 +144,8 @@ func (c Client) ListTemplatesV1(input ListTemplatesV1Input) (*ListTemplatesV1Out
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
 		}
 	}
 	return output, err
@@ -163,7 +164,7 @@ type ListOrgTemplatesV1Input struct {
 
 func (c Client) ListOrgTemplatesV1(input ListOrgTemplatesV1Input) (*ListOrgTemplatesV1Output, error) {
 	if _, err := uuid.Parse(input.OrgId); err != nil {
-		return nil, fmt.Errorf("%w: organization id not a uuid", ErrorInvalidInput)
+		return nil, fmt.Errorf("%w: organization id not a uuid", types.ErrorInvalidInput)
 	}
 	var outputData ListTemplatesV1OutputData
 	outputClient, err := c.do(request{
@@ -173,7 +174,7 @@ func (c Client) ListOrgTemplatesV1(input ListOrgTemplatesV1Input) (*ListOrgTempl
 		Output: &outputData,
 	})
 	var output *ListOrgTemplatesV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) && outputClient != nil {
+	if !errors.Is(err, types.ErrorOutputNil) && outputClient != nil {
 		output = &ListOrgTemplatesV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -181,12 +182,12 @@ func (c Client) ListOrgTemplatesV1(input ListOrgTemplatesV1Input) (*ListOrgTempl
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
-		case ErrorInsufficientPermissions.Error():
-			err = ErrorInsufficientPermissions
-		case ErrorNotFound.Error():
-			err = ErrorNotFound
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
+		case types.ErrorInsufficientPermissions.Error():
+			err = types.ErrorInsufficientPermissions
+		case types.ErrorNotFound.Error():
+			err = types.ErrorNotFound
 		}
 	}
 	return output, err
@@ -219,7 +220,7 @@ func (c Client) ListUserTemplateInvitationsV1() (*ListUserTemplateInvitationsV1O
 		Output: &outputData,
 	})
 	var output *ListUserTemplateInvitationsV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &ListUserTemplateInvitationsV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -227,8 +228,8 @@ func (c Client) ListUserTemplateInvitationsV1() (*ListUserTemplateInvitationsV1O
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
 		}
 	}
 	return output, err
@@ -268,7 +269,7 @@ func (c Client) ListTemplateUsersV1(input ListTemplateUsersV1Input) (*ListTempla
 		Output: &outputData,
 	})
 	var output *ListTemplateUsersV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &ListTemplateUsersV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -276,8 +277,8 @@ func (c Client) ListTemplateUsersV1(input ListTemplateUsersV1Input) (*ListTempla
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
 		}
 	}
 	return output, err
@@ -328,7 +329,7 @@ func (c Client) ListTemplateVersionsV1(input ListTemplateVersionsV1Input) (*List
 		Output: &outputData,
 	})
 	var output *ListTemplateVersionsV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &ListTemplateVersionsV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -336,8 +337,8 @@ func (c Client) ListTemplateVersionsV1(input ListTemplateVersionsV1Input) (*List
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
 		}
 	}
 	return output, err
@@ -365,7 +366,7 @@ func (c Client) DeleteTemplateUserV1(input DeleteTemplateUserV1Input) (*DeleteTe
 		Output: &outputData,
 	})
 	var output *DeleteTemplateUserV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &DeleteTemplateUserV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -373,16 +374,16 @@ func (c Client) DeleteTemplateUserV1(input DeleteTemplateUserV1Input) (*DeleteTe
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorLastUserInResource.Error():
-			err = ErrorLastUserInResource
-		case ErrorLastManagerOfResource.Error():
-			err = ErrorLastManagerOfResource
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
-		case ErrorInsufficientPermissions.Error():
-			err = ErrorInsufficientPermissions
-		case ErrorNotFound.Error():
-			err = ErrorNotFound
+		case types.ErrorLastUserInResource.Error():
+			err = types.ErrorLastUserInResource
+		case types.ErrorLastManagerOfResource.Error():
+			err = types.ErrorLastManagerOfResource
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
+		case types.ErrorInsufficientPermissions.Error():
+			err = types.ErrorInsufficientPermissions
+		case types.ErrorNotFound.Error():
+			err = types.ErrorNotFound
 		}
 	}
 	return output, err
@@ -412,7 +413,7 @@ func (c Client) SubmitTemplateV1(input SubmitTemplateV1Input) (*SubmitTemplateV1
 		Output: &outputData,
 	})
 	var output *SubmitTemplateV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &SubmitTemplateV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -420,8 +421,8 @@ func (c Client) SubmitTemplateV1(input SubmitTemplateV1Input) (*SubmitTemplateV1
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
 		}
 	}
 	return output, err
@@ -434,7 +435,7 @@ type SubmitOrgTemplateV1Input struct {
 
 func (c Client) SubmitOrgTemplateV1(input SubmitOrgTemplateV1Input) (*SubmitTemplateV1Output, error) {
 	if input.OrgId == "" {
-		return nil, fmt.Errorf("%w: missing organization identifier", ErrorInvalidInput)
+		return nil, fmt.Errorf("%w: missing organization identifier", types.ErrorInvalidInput)
 	}
 	var outputData SubmitTemplateV1OutputData
 	outputClient, err := c.do(request{
@@ -444,7 +445,7 @@ func (c Client) SubmitOrgTemplateV1(input SubmitOrgTemplateV1Input) (*SubmitTemp
 		Output: &outputData,
 	})
 	var output *SubmitTemplateV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &SubmitTemplateV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -452,8 +453,8 @@ func (c Client) SubmitOrgTemplateV1(input SubmitOrgTemplateV1Input) (*SubmitTemp
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
 		}
 	}
 	return output, err
@@ -486,7 +487,7 @@ func (c Client) UpdateTemplateDefaultVersionV1(input UpdateTemplateDefaultVersio
 		Output: &outputData,
 	})
 	var output *UpdateTemplateDefaultVersionV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &UpdateTemplateDefaultVersionV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -494,10 +495,10 @@ func (c Client) UpdateTemplateDefaultVersionV1(input UpdateTemplateDefaultVersio
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
-		case ErrorNotFound.Error():
-			err = ErrorNotFound
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
+		case types.ErrorNotFound.Error():
+			err = types.ErrorNotFound
 		}
 	}
 	return output, err
@@ -541,7 +542,7 @@ func (c Client) UpdateTemplateInvitationV1(input UpdateTemplateInvitationV1Input
 		Output: &outputData,
 	})
 	var output *UpdateTemplateInvitationV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &UpdateTemplateInvitationV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -549,10 +550,10 @@ func (c Client) UpdateTemplateInvitationV1(input UpdateTemplateInvitationV1Input
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorDatabaseIssue.Error():
-			err = ErrorDatabaseIssue
-		case ErrorNotFound.Error():
-			err = ErrorNotFound
+		case types.ErrorDatabaseIssue.Error():
+			err = types.ErrorDatabaseIssue
+		case types.ErrorNotFound.Error():
+			err = types.ErrorNotFound
 		}
 	}
 	return output, err

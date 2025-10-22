@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"net/http"
+	"opsicle/internal/types"
 )
 
 type HealthcheckPingOutput struct {
@@ -25,7 +26,7 @@ func (c Client) HealthcheckPing() (*HealthcheckPingOutput, error) {
 		Output: &outputData,
 	})
 	if err != nil {
-		if errors.Is(err, ErrorOutputNil) {
+		if errors.Is(err, types.ErrorOutputNil) {
 			return nil, err
 		}
 	}

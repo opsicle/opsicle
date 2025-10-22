@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"opsicle/internal/auth"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 
 	"github.com/sirupsen/logrus"
@@ -65,7 +66,7 @@ var Command = &cobra.Command{
 				return fmt.Errorf("failed to create controller client: %w", err)
 			}
 			if _, err := client.ValidateSessionV1(); err != nil {
-				if errors.Is(err, controller.ErrorAuthRequired) || errors.Is(err, controller.ErrorSessionExpired) {
+				if errors.Is(err, types.ErrorAuthRequired) || errors.Is(err, types.ErrorSessionExpired) {
 					if err := controller.DeleteSessionToken(); err != nil {
 						return fmt.Errorf("failed to delete session token at `%s`: %s\ndo it yourself before re-running this command:\n```\nrm -rf %s\n```", sessionFilePath, err, sessionFilePath)
 					}

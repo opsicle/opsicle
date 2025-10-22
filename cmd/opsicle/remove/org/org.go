@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"opsicle/cmd/opsicle/remove/org/user"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 
 	"github.com/spf13/cobra"
@@ -114,10 +115,10 @@ var Command = &cobra.Command{
 
 		if _, err := client.DeleteOrgV1(controller.DeleteOrgV1Input{OrgId: orgDetails.Data.Id}); err != nil {
 			switch {
-			case errors.Is(err, controller.ErrorInsufficientPermissions):
+			case errors.Is(err, types.ErrorInsufficientPermissions):
 				cli.PrintBoxedErrorMessage("You are not authorized to delete this organisation.")
 				return fmt.Errorf("insufficient permissions")
-			case errors.Is(err, controller.ErrorNotFound):
+			case errors.Is(err, types.ErrorNotFound):
 				cli.PrintBoxedErrorMessage("The organisation no longer exists.")
 				return fmt.Errorf("organisation not found")
 			default:

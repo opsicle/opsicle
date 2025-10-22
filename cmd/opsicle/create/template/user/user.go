@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/internal/validate"
 	"opsicle/pkg/controller"
 
@@ -158,7 +159,7 @@ var Command = &cobra.Command{
 			StartWithoutFilter: true,
 		})
 		if err != nil {
-			if errors.Is(err, controller.ErrorNotFound) {
+			if errors.Is(err, types.ErrorNotFound) {
 				cli.PrintBoxedInfoMessage(
 					"You have no available templates to add users to -- submit a template first with `opsicle create template`",
 				)

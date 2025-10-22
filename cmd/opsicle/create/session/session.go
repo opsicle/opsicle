@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"opsicle/internal/auth"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 	"os"
 
@@ -136,33 +137,33 @@ var Command = &cobra.Command{
 		createSessionOutput, err := client.CreateSessionV1(createSessionInput)
 		if err != nil {
 			switch true {
-			case errors.Is(err, controller.ErrorInvalidCredentials):
+			case errors.Is(err, types.ErrorInvalidCredentials):
 				fallthrough
-			case errors.Is(err, controller.ErrorNotFound):
+			case errors.Is(err, types.ErrorNotFound):
 				cli.PrintBoxedErrorMessage(
 					"Credentials were invalid, please try again",
 				)
 				return fmt.Errorf("invalid credentials")
 
-			case errors.Is(err, controller.ErrorConnectionTimedOut):
+			case errors.Is(err, types.ErrorConnectionTimedOut):
 				cli.PrintBoxedErrorMessage(
 					"Seems like the controller service is under heavy load, try again later?",
 				)
 				return fmt.Errorf("request timed out")
 
-			case errors.Is(err, controller.ErrorConnectionRefused):
+			case errors.Is(err, types.ErrorConnectionRefused):
 				cli.PrintBoxedErrorMessage(
 					"Seems like the controller service is offline",
 				)
 				return fmt.Errorf("controller unreachable")
 
-			case errors.Is(err, controller.ErrorEmailUnverified):
+			case errors.Is(err, types.ErrorEmailUnverified):
 				cli.PrintBoxedWarningMessage(
 					"Verify your email first using `opsicle verify email`",
 				)
 				return fmt.Errorf("email has not been verified")
 
-			case errors.Is(err, controller.ErrorMfaRequired):
+			case errors.Is(err, types.ErrorMfaRequired):
 				fmt.Println("💡 We've detected that MFA is enabled on your account, please enter your MFA token:")
 				loginId := *createSessionOutput.Data.LoginId
 				mfaType := *createSessionOutput.Data.MfaType
@@ -206,7 +207,7 @@ var Command = &cobra.Command{
 					})
 					if err != nil {
 						fmt.Println("⚠️ Unfortunately, we couldn't authenticate you")
-						if errors.Is(err, controller.ErrorMfaTokenInvalid) {
+						if errors.Is(err, types.ErrorMfaTokenInvalid) {
 							return errors.New("invalid mfa token")
 						}
 						logrus.Debugf("failed to start session: %s", err)

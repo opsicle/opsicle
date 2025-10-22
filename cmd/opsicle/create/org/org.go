@@ -7,6 +7,7 @@ import (
 	"opsicle/cmd/opsicle/create/org/token"
 	"opsicle/cmd/opsicle/create/org/user"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/internal/validate"
 	"opsicle/pkg/controller"
 	"strings"
@@ -182,7 +183,7 @@ var Command = &cobra.Command{
 			Code: orgCode,
 		})
 		if err != nil {
-			if errors.Is(err, controller.ErrorOrgExists) {
+			if errors.Is(err, types.ErrorOrgExists) {
 				fmt.Printf("🙇 The organisation codeword[%s] is already in use, please pick another:\n\n", orgCode)
 				orgCode = ""
 				goto askUser

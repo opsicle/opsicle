@@ -9,6 +9,7 @@ import (
 	"opsicle/internal/automations"
 	"opsicle/internal/common"
 	"opsicle/internal/controller/models"
+	"opsicle/internal/types"
 	"opsicle/internal/validate"
 
 	"github.com/gorilla/mux"
@@ -44,19 +45,19 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
 		return
 	}
 	var input CreateAutomationV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", types.ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is preparing to execute automation using template[%s]", session.UserId, input.TemplateId))
 
 	templateId := input.TemplateId
 	if err := validate.Uuid(templateId); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid template id", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid template id", types.ErrorInvalidInput)
 		return
 	}
 
@@ -67,22 +68,22 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get template[%s]: %s", templateId, err))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid template", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid template", types.ErrorInvalidInput)
 		return
 	}
 	if input.OrgId == nil {
 		if canExecute, err := template.CanUserExecuteV1(models.DatabaseConnection{Db: db}, session.UserId); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to check permissions of user[%s] on template[%s]: %s", session.UserId, templateId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", types.ErrorDatabaseIssue)
 			return
 		} else if !canExecute {
 			log(common.LogLevelError, fmt.Sprintf("user[%s] is not allowed to execute template[%s]: %s", session.UserId, templateId, err))
-			common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "not allowed", ErrorInsufficientPermissions)
+			common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "not allowed", types.ErrorInsufficientPermissions)
 			return
 		}
 	} else {
 		if err := validate.Uuid(*input.OrgId); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid org id", types.ErrorInvalidInput)
 			return
 		}
 		orgId := *input.OrgId
@@ -91,22 +92,22 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if errors.Is(err, models.ErrorNotFound) {
 				log(common.LogLevelError, fmt.Sprintf("user[%s] is not a member of org[%s]: %s", session.UserId, orgId, err))
-				common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "not allowed", ErrorInsufficientPermissions)
+				common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "not allowed", types.ErrorInsufficientPermissions)
 				return
 			}
 			log(common.LogLevelError, fmt.Sprintf("failed to load org user[%s] in org[%s]: %s", session.UserId, orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", types.ErrorDatabaseIssue)
 			return
 		}
 		_, _, canExecute, err := orgUser.CanV1(models.DatabaseConnection{Db: db}, models.ResourceTemplates, models.ActionExecute)
 		if err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to check permissions of user[%s] in org[%s]: %s", session.UserId, orgId, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", types.ErrorDatabaseIssue)
 			return
 		}
 		if !canExecute {
 			log(common.LogLevelError, fmt.Sprintf("user[%s] lacks execute permission on templates in org[%s]", session.UserId, orgId))
-			common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "not allowed", ErrorInsufficientPermissions)
+			common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "not allowed", types.ErrorInsufficientPermissions)
 			return
 		}
 	}
@@ -114,13 +115,13 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 	automationParams, err := template.GetAutomationParamsV1(models.DatabaseConnection{Db: db})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to create pending automation based on template[%s]: %s", templateId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create pending automation", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create pending automation", types.ErrorDatabaseIssue)
 		return
 	}
 	user := models.User{Id: &session.UserId}
 	if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s]: %s", session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "db query failed", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "db query failed", types.ErrorDatabaseIssue)
 		return
 	}
 	redactedUser := user.GetRedacted()
@@ -135,14 +136,14 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to create automation based on template[%s]: %s", templateId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create automation", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create automation", types.ErrorDatabaseIssue)
 		return
 	}
 
 	sourceTemplate, err := pendingAutomation.GetTemplate()
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to parse template content for automation[%s]: %s", *pendingAutomation.Id, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to parse template", ErrorInvalidTemplate)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to parse template", types.ErrorInvalidTemplate)
 		return
 	}
 	variableMap := sourceTemplate.GetVariables()
@@ -182,19 +183,19 @@ func handleRunAutomationV1(w http.ResponseWriter, r *http.Request) {
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
 		return
 	}
 	var input RunAutomationV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", types.ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is executing automation[%s]", session.UserId, automationId))
 	var orgId *string = nil
 	if input.OrgId != nil {
 		if err := validate.Uuid(*input.OrgId); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate org id", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate org id", types.ErrorInvalidInput)
 			return
 		}
 		orgId = input.OrgId
@@ -202,7 +203,7 @@ func handleRunAutomationV1(w http.ResponseWriter, r *http.Request) {
 
 	automation := models.Automation{Id: &automationId}
 	if err := automation.LoadPendingV1(models.DatabaseConnection{Db: db}); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve automation", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve automation", types.ErrorInvalidInput)
 		return
 	}
 	queueRunOpts := models.QueueAutomationRunV1Opts{
@@ -215,7 +216,7 @@ func handleRunAutomationV1(w http.ResponseWriter, r *http.Request) {
 	queuedAutomationRun, err := automation.RunV1(queueRunOpts)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to run automation: %s", err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to insert automation into the queue", ErrorQueueIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to insert automation into the queue", types.ErrorQueueIssue)
 		return
 	}
 	output := RunAutomationV1Output{

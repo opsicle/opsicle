@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 	"os"
 	"strconv"
@@ -95,10 +96,10 @@ var Command = &cobra.Command{
 		})
 		if err != nil {
 			switch {
-			case errors.Is(err, controller.ErrorInsufficientPermissions):
+			case errors.Is(err, types.ErrorInsufficientPermissions):
 				cli.PrintBoxedErrorMessage("You are not authorized to list templates for this organization")
 				return fmt.Errorf("not authorized to list org templates")
-			case errors.Is(err, controller.ErrorNotFound):
+			case errors.Is(err, types.ErrorNotFound):
 				cli.PrintBoxedErrorMessage("The organization could not be found")
 				return fmt.Errorf("organization not found")
 			default:

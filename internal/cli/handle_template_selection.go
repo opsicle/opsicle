@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"opsicle/internal/common"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 	"sort"
 	"strings"
@@ -110,7 +111,7 @@ func HandleTemplateSelection(opts HandleTemplateSelectionOpts) (template *Templa
 		}
 	}
 	if len(templates.Data) == 0 {
-		return nil, controller.ErrorNotFound
+		return nil, types.ErrorNotFound
 	}
 	if len(matchedTemplates) >= 2 {
 		isConflictingTemplateReference = true
@@ -155,7 +156,7 @@ func HandleOrgTemplateSelection(opts HandleOrgTemplateSelectionOpts) (template *
 	template = &Template{}
 	orgId := strings.TrimSpace(opts.OrgId)
 	if orgId == "" {
-		return nil, fmt.Errorf("%w: organization id missing", controller.ErrorInvalidInput)
+		return nil, fmt.Errorf("%w: organization id missing", types.ErrorInvalidInput)
 	}
 	var logs chan<- common.ServiceLog
 	if opts.ServiceLog == nil {
@@ -208,7 +209,7 @@ func HandleOrgTemplateSelection(opts HandleOrgTemplateSelectionOpts) (template *
 		}
 	}
 	if len(templates.Data) == 0 {
-		return nil, controller.ErrorNotFound
+		return nil, types.ErrorNotFound
 	}
 	if len(matchedTemplates) >= 2 {
 		isConflictingTemplateReference = true
@@ -242,11 +243,11 @@ func HandleOrgTemplateSelection(opts HandleOrgTemplateSelectionOpts) (template *
 		selectedTemplate := templateFiltering.GetSelectedItem()
 		templateValues := strings.Split(selectedTemplate.Value, ":")
 		if len(templateValues) < 2 {
-			return nil, fmt.Errorf("%w: invalid template reference received", controller.ErrorInvalidInput)
+			return nil, fmt.Errorf("%w: invalid template reference received", types.ErrorInvalidInput)
 		}
 		templateInstance, exists := templateMap[templateValues[1]]
 		if !exists {
-			return nil, controller.ErrorNotFound
+			return nil, types.ErrorNotFound
 		}
 		template = &templateInstance
 	}

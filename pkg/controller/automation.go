@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"opsicle/internal/controller"
+	"opsicle/internal/types"
 )
 
 type CreateAutomationV1Output struct {
@@ -23,7 +24,7 @@ func (c Client) CreateAutomationV1(input CreateAutomationV1Input) (*CreateAutoma
 		Output: &outputData,
 	})
 	var output *CreateAutomationV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &CreateAutomationV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -31,8 +32,8 @@ func (c Client) CreateAutomationV1(input CreateAutomationV1Input) (*CreateAutoma
 	}
 	if err != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorOrgExists.Error():
-			err = ErrorOrgExists
+		case types.ErrorOrgExists.Error():
+			err = types.ErrorOrgExists
 		}
 	}
 	return output, err
@@ -54,7 +55,7 @@ func (c Client) RunAutomationV1(input RunAutomationV1Input) (*RunAutomationV1Out
 		Output: &outputData,
 	})
 	var output *RunAutomationV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &RunAutomationV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -62,8 +63,8 @@ func (c Client) RunAutomationV1(input RunAutomationV1Input) (*RunAutomationV1Out
 	}
 	if err != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorOrgExists.Error():
-			err = ErrorOrgExists
+		case types.ErrorOrgExists.Error():
+			err = types.ErrorOrgExists
 		}
 	}
 	return output, err

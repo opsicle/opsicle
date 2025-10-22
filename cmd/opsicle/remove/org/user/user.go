@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/internal/validate"
 	"opsicle/pkg/controller"
 
@@ -164,12 +165,12 @@ var Command = &cobra.Command{
 			UserId: userIdentifier,
 		}); err != nil {
 			switch true {
-			case errors.Is(err, controller.ErrorInsufficientPermissions):
+			case errors.Is(err, types.ErrorInsufficientPermissions):
 				{
 					cli.PrintBoxedErrorMessage("You don't have sufficient permissions to remove a user")
 					return fmt.Errorf("insufficient permissions")
 				}
-			case errors.Is(err, controller.ErrorOrgRequiresOneAdmin):
+			case errors.Is(err, types.ErrorLastOrgAdmin):
 				{
 					cli.PrintBoxedErrorMessage(
 						"The user you are trying to remove is the last administrator which cannot be removed\n\n" +

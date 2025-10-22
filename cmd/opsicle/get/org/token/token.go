@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -94,10 +95,10 @@ var Command = &cobra.Command{
 		listOutput, err := client.ListOrgTokensV1(controller.ListOrgTokensV1Input{OrgId: orgOutput.Data.Id})
 		if err != nil {
 			switch {
-			case errors.Is(err, controller.ErrorInsufficientPermissions):
+			case errors.Is(err, types.ErrorInsufficientPermissions):
 				cli.PrintBoxedErrorMessage("You are not authorized to view tokens for this organization")
 				return fmt.Errorf("not authorized to list tokens")
-			case errors.Is(err, controller.ErrorNotFound):
+			case errors.Is(err, types.ErrorNotFound):
 				cli.PrintBoxedErrorMessage("The organization could not be found")
 				return fmt.Errorf("organization not found")
 			default:
@@ -169,10 +170,10 @@ var Command = &cobra.Command{
 		})
 		if err != nil {
 			switch {
-			case errors.Is(err, controller.ErrorInsufficientPermissions):
+			case errors.Is(err, types.ErrorInsufficientPermissions):
 				cli.PrintBoxedErrorMessage("You are not authorized to view tokens for this organization")
 				return fmt.Errorf("not authorized to view token")
-			case errors.Is(err, controller.ErrorNotFound):
+			case errors.Is(err, types.ErrorNotFound):
 				cli.PrintBoxedErrorMessage("The token could not be found")
 				return fmt.Errorf("token not found")
 			default:

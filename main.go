@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"opsicle/cmd/opsicle"
 	"opsicle/internal/cli"
-	"opsicle/pkg/controller"
+	"opsicle/internal/types"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -29,7 +29,7 @@ func handleError(err error) {
 		logrus.Debugf("exitting because of error:\n```\n%s\n```\n", err)
 	}
 	switch true {
-	case errors.Is(err, controller.ErrorDatabaseIssue):
+	case errors.Is(err, types.ErrorDatabaseIssue):
 		cli.PrintBoxedErrorMessage(
 			`Unfortunately something went wrong on our side, our team has likely been alerted and will handle it`,
 		)
@@ -37,7 +37,7 @@ func handleError(err error) {
 	case errors.Is(err, cli.ErrorClientUnavailable):
 		message := bytes.Buffer{}
 		switch true {
-		case errors.Is(err, controller.ErrorInvalidInput):
+		case errors.Is(err, types.ErrorInvalidInput):
 			fmt.Fprint(&message, "Encountered errors while trying to create the controller client, check your parameters and try again")
 		}
 		cli.PrintBoxedErrorMessage(message.String())
@@ -46,10 +46,10 @@ func handleError(err error) {
 		message := bytes.Buffer{}
 		fmt.Fprint(&message, "The controller instance you are trying to connect to does not seem accessible")
 		switch true {
-		case errors.Is(err, controller.ErrorConnectionRefused):
+		case errors.Is(err, types.ErrorConnectionRefused):
 			fmt.Fprint(&message, " (couldn't reach the controller URL)\n\n")
 			fmt.Fprint(&message, "Verify your controller URL specified at --controller-url is valid, ")
-		case errors.Is(err, controller.ErrorConnectionTimedOut):
+		case errors.Is(err, types.ErrorConnectionTimedOut):
 			fmt.Fprint(&message, " (timed out while trying to reach the controller URL)\n")
 			fmt.Fprint(&message, "Verify that you aren't being blocked by a firewall, ")
 		}

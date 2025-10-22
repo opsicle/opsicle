@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 
 	"github.com/spf13/cobra"
@@ -29,9 +30,9 @@ tryAuth:
 		Id: methodId,
 	})
 	if err != nil {
-		if errors.Is(err, controller.ErrorInvalidInput) {
+		if errors.Is(err, types.ErrorInvalidInput) {
 			return "", errors.Join(ErrorClientUnavailable, err)
-		} else if errors.Is(err, controller.ErrorHealthcheckFailed) {
+		} else if errors.Is(err, types.ErrorHealthcheckFailed) {
 			return "", errors.Join(ErrorControllerUnavailable, err)
 		} else if len(runOnUnauth) > 0 {
 			remediate := runOnUnauth[0]

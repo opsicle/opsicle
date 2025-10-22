@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"opsicle/internal/types"
 )
 
 type ResetPasswordV1Input struct {
@@ -31,10 +32,10 @@ func (c Client) ResetPasswordV1(opts ResetPasswordV1Input) (*ResetPasswordV1Outp
 	})
 	if err != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorInvalidInput.Error():
-			err = ErrorInvalidInput
-		case ErrorInvalidCredentials.Error():
-			err = ErrorInvalidCredentials
+		case types.ErrorInvalidInput.Error():
+			err = types.ErrorInvalidInput
+		case types.ErrorInvalidCredentials.Error():
+			err = types.ErrorInvalidCredentials
 		}
 	}
 	return &ResetPasswordV1Output{

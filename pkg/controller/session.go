@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"opsicle/internal/types"
 	"time"
 )
 
@@ -50,14 +51,14 @@ func (c Client) CreateSessionV1(opts CreateSessionV1Input) (*CreateSessionV1Outp
 			return nil, err
 		}
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorNotFound.Error():
-			err = ErrorNotFound
-		case ErrorEmailUnverified.Error():
-			err = ErrorEmailUnverified
-		case ErrorInvalidCredentials.Error():
-			err = ErrorInvalidCredentials
-		case ErrorMfaRequired.Error():
-			err = ErrorMfaRequired
+		case types.ErrorNotFound.Error():
+			err = types.ErrorNotFound
+		case types.ErrorEmailUnverified.Error():
+			err = types.ErrorEmailUnverified
+		case types.ErrorInvalidCredentials.Error():
+			err = types.ErrorInvalidCredentials
+		case types.ErrorMfaRequired.Error():
+			err = types.ErrorMfaRequired
 		}
 	}
 	return &CreateSessionV1Output{
@@ -83,8 +84,8 @@ func (c Client) StartSessionWithMfaV1(opts StartSessionWithMfaV1Input) (*CreateS
 	})
 	if err != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorMfaTokenInvalid.Error():
-			err = ErrorMfaTokenInvalid
+		case types.ErrorMfaTokenInvalid.Error():
+			err = types.ErrorMfaTokenInvalid
 		}
 	}
 	return &CreateSessionV1Output{
@@ -114,14 +115,14 @@ func (c Client) DeleteSessionV1() (*DeleteSessionV1Output, error) {
 	})
 	if err != nil {
 		switch true {
-		case err.Error() == ErrorJwtTokenSignature.Error():
-			return nil, ErrorJwtTokenSignature
-		case err.Error() == ErrorJwtClaimsInvalid.Error():
-			return nil, ErrorJwtClaimsInvalid
-		case err.Error() == ErrorJwtTokenExpired.Error():
-			return nil, ErrorJwtTokenExpired
-		case err.Error() == ErrorUnknown.Error():
-			return nil, ErrorUnknown
+		case err.Error() == types.ErrorJwtTokenSignature.Error():
+			return nil, types.ErrorJwtTokenSignature
+		case err.Error() == types.ErrorJwtClaimsInvalid.Error():
+			return nil, types.ErrorJwtClaimsInvalid
+		case err.Error() == types.ErrorJwtTokenExpired.Error():
+			return nil, types.ErrorJwtTokenExpired
+		case err.Error() == types.ErrorUnknown.Error():
+			return nil, types.ErrorUnknown
 		}
 	}
 	return &DeleteSessionV1Output{
@@ -152,10 +153,10 @@ func (c Client) ValidateSessionV1() (*ValidateSessionV1Output, error) {
 	})
 	if err != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorAuthRequired.Error():
-			err = ErrorAuthRequired
-		case ErrorSessionExpired.Error():
-			err = ErrorSessionExpired
+		case types.ErrorAuthRequired.Error():
+			err = types.ErrorAuthRequired
+		case types.ErrorSessionExpired.Error():
+			err = types.ErrorSessionExpired
 		}
 	}
 	return &ValidateSessionV1Output{

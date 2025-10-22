@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"opsicle/internal/controller"
+	"opsicle/internal/types"
 	"opsicle/internal/validate"
 )
 
@@ -35,7 +36,7 @@ func (c Client) CreateOrgV1(input CreateOrgV1Input) (*CreateOrgV1Output, error) 
 		Output: &outputData,
 	})
 	var output *CreateOrgV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &CreateOrgV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -43,8 +44,8 @@ func (c Client) CreateOrgV1(input CreateOrgV1Input) (*CreateOrgV1Output, error) 
 	}
 	if err != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorOrgExists.Error():
-			err = ErrorOrgExists
+		case types.ErrorOrgExists.Error():
+			err = types.ErrorOrgExists
 		}
 	}
 	return output, err
@@ -78,7 +79,7 @@ func (c Client) CreateOrgUserV1(input CreateOrgUserV1Input) (*CreateOrgUserV1Out
 		Output: &outputData,
 	})
 	var output *CreateOrgUserV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &CreateOrgUserV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -86,10 +87,10 @@ func (c Client) CreateOrgUserV1(input CreateOrgUserV1Input) (*CreateOrgUserV1Out
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorInvitationExists.Error():
-			err = ErrorInvitationExists
-		case ErrorUserExistsInOrg.Error():
-			err = ErrorUserExistsInOrg
+		case types.ErrorInvitationExists.Error():
+			err = types.ErrorInvitationExists
+		case types.ErrorUserExistsInOrg.Error():
+			err = types.ErrorUserExistsInOrg
 		}
 	}
 	return output, err
@@ -118,7 +119,7 @@ func (c Client) DeleteOrgUserV1(input DeleteOrgUserV1Input) (*DeleteOrgUserV1Out
 		Output: &outputData,
 	})
 	var output *DeleteOrgUserV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &DeleteOrgUserV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -126,10 +127,10 @@ func (c Client) DeleteOrgUserV1(input DeleteOrgUserV1Input) (*DeleteOrgUserV1Out
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorOrgRequiresOneAdmin.Error():
-			err = ErrorOrgRequiresOneAdmin
-		case ErrorInsufficientPermissions.Error():
-			err = ErrorInsufficientPermissions
+		case types.ErrorLastOrgAdmin.Error():
+			err = types.ErrorLastOrgAdmin
+		case types.ErrorInsufficientPermissions.Error():
+			err = types.ErrorInsufficientPermissions
 		}
 	}
 	return output, err
@@ -147,10 +148,10 @@ type DeleteOrgV1Output struct {
 
 func (c Client) DeleteOrgV1(input DeleteOrgV1Input) (*DeleteOrgV1Output, error) {
 	if input.OrgId == "" {
-		return nil, fmt.Errorf("org id undefined: %w", ErrorInvalidInput)
+		return nil, fmt.Errorf("org id undefined: %w", types.ErrorInvalidInput)
 	}
 	if err := validate.Uuid(input.OrgId); err != nil {
-		return nil, fmt.Errorf("org id invalid: %w", ErrorInvalidInput)
+		return nil, fmt.Errorf("org id invalid: %w", types.ErrorInvalidInput)
 	}
 	var outputData controller.DeleteOrgV1Output
 	outputClient, err := c.do(request{
@@ -159,7 +160,7 @@ func (c Client) DeleteOrgV1(input DeleteOrgV1Input) (*DeleteOrgV1Output, error) 
 		Output: &outputData,
 	})
 	var output *DeleteOrgV1Output
-	if !errors.Is(err, ErrorOutputNil) && outputClient != nil {
+	if !errors.Is(err, types.ErrorOutputNil) && outputClient != nil {
 		output = &DeleteOrgV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -167,10 +168,10 @@ func (c Client) DeleteOrgV1(input DeleteOrgV1Input) (*DeleteOrgV1Output, error) 
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorInsufficientPermissions.Error():
-			err = ErrorInsufficientPermissions
-		case ErrorNotFound.Error():
-			err = ErrorNotFound
+		case types.ErrorInsufficientPermissions.Error():
+			err = types.ErrorInsufficientPermissions
+		case types.ErrorNotFound.Error():
+			err = types.ErrorNotFound
 		}
 	}
 	return output, err
@@ -193,16 +194,16 @@ type CanUserV1Input struct {
 
 func (c Client) CanUserV1(opts CanUserV1Input) (*CanUserV1Output, error) {
 	if opts.Action == "" {
-		return nil, fmt.Errorf("action undefined: %w", ErrorInvalidInput)
+		return nil, fmt.Errorf("action undefined: %w", types.ErrorInvalidInput)
 	}
 	if opts.OrgId == "" {
-		return nil, fmt.Errorf("org undefined: %w", ErrorInvalidInput)
+		return nil, fmt.Errorf("org undefined: %w", types.ErrorInvalidInput)
 	}
 	if opts.Resource == "" {
-		return nil, fmt.Errorf("resource undefined: %w", ErrorInvalidInput)
+		return nil, fmt.Errorf("resource undefined: %w", types.ErrorInvalidInput)
 	}
 	if opts.UserId == "" {
-		return nil, fmt.Errorf("user undefined: %w", ErrorInvalidInput)
+		return nil, fmt.Errorf("user undefined: %w", types.ErrorInvalidInput)
 	}
 	var outputData CanUserV1OutputData
 	outputClient, err := c.do(request{
@@ -211,7 +212,7 @@ func (c Client) CanUserV1(opts CanUserV1Input) (*CanUserV1Output, error) {
 		Output: &outputData,
 	})
 	var output *CanUserV1Output
-	if !errors.Is(err, ErrorOutputNil) && outputClient != nil {
+	if !errors.Is(err, types.ErrorOutputNil) && outputClient != nil {
 		output = &CanUserV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -246,7 +247,7 @@ func (c Client) GetOrgV1(input GetOrgV1Input) (*GetOrgV1Output, error) {
 		Output: &outputData,
 	})
 	var output *GetOrgV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &GetOrgV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -286,7 +287,7 @@ func (c Client) GetOrgMembershipV1(input GetOrgMembershipV1Input) (*GetOrgMember
 		Output: &outputData,
 	})
 	var output *GetOrgMembershipV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &GetOrgMembershipV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -317,7 +318,7 @@ func (c Client) LeaveOrgV1(input LeaveOrgV1Input) (*LeaveOrgV1Output, error) {
 		Output: &outputData,
 	})
 	var output *LeaveOrgV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &LeaveOrgV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -325,8 +326,8 @@ func (c Client) LeaveOrgV1(input LeaveOrgV1Input) (*LeaveOrgV1Output, error) {
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorOrgRequiresOneAdmin.Error():
-			err = ErrorOrgRequiresOneAdmin
+		case types.ErrorLastOrgAdmin.Error():
+			err = types.ErrorLastOrgAdmin
 		}
 	}
 	return output, err
@@ -359,7 +360,7 @@ func (c Client) ListOrgsV1() (*ListOrgsV1Output, error) {
 		Output: &outputData,
 	})
 	var output *ListOrgsV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &ListOrgsV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -397,7 +398,7 @@ func (c Client) ListOrgInvitationsV1() (*ListOrgInvitationsV1Output, error) {
 		Output: &outputData,
 	})
 	var output *ListOrgInvitationsV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &ListOrgInvitationsV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -458,7 +459,7 @@ func (c Client) ListOrgUsersV1(input ListOrgUsersV1Input) (*ListOrgUsersV1Output
 		Output: &outputData,
 	})
 	var output *ListOrgUsersV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &ListOrgUsersV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -546,10 +547,10 @@ func (c Client) ListOrgTokensV1(input ListOrgTokensV1Input) (*ListOrgTokensV1Out
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorInsufficientPermissions.Error():
-			err = ErrorInsufficientPermissions
-		case ErrorNotFound.Error():
-			err = ErrorNotFound
+		case types.ErrorInsufficientPermissions.Error():
+			err = types.ErrorInsufficientPermissions
+		case types.ErrorNotFound.Error():
+			err = types.ErrorNotFound
 		}
 	}
 	return output, err
@@ -584,10 +585,10 @@ func (c Client) GetOrgTokenV1(input GetOrgTokenV1Input) (*GetOrgTokenV1Output, e
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorInsufficientPermissions.Error():
-			err = ErrorInsufficientPermissions
-		case ErrorNotFound.Error():
-			err = ErrorNotFound
+		case types.ErrorInsufficientPermissions.Error():
+			err = types.ErrorInsufficientPermissions
+		case types.ErrorNotFound.Error():
+			err = types.ErrorNotFound
 		}
 	}
 	return output, err
@@ -637,7 +638,7 @@ func (c Client) ListOrgMemberTypesV1() (*ListOrgMemberTypesV1Output, error) {
 		Output: &outputData,
 	})
 	var output *ListOrgMemberTypesV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &ListOrgMemberTypesV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -675,7 +676,7 @@ func (c Client) UpdateOrgInvitationV1(input UpdateOrgInvitationV1Input) (*Update
 		Output: &outputData,
 	})
 	var output *UpdateOrgInvitationV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &UpdateOrgInvitationV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -709,7 +710,7 @@ func (c Client) UpdateOrgUserV1(input UpdateOrgUserV1Input) (*UpdateOrgUserV1Out
 		Output: &outputData,
 	})
 	var output *UpdateOrgUserV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &UpdateOrgUserV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"opsicle/internal/audit"
 	"opsicle/internal/common"
+	"opsicle/internal/types"
 	"time"
 )
 
@@ -45,7 +46,7 @@ func (c Client) CreateUserV1(input CreateUserV1Input) (*CreateUserV1Output, erro
 		Output: &outputData,
 	})
 	var output *CreateUserV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &CreateUserV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -53,8 +54,8 @@ func (c Client) CreateUserV1(input CreateUserV1Input) (*CreateUserV1Output, erro
 	}
 	if err != nil && outputClient != nil {
 		switch outputClient.GetErrorCode().Error() {
-		case ErrorEmailExists.Error():
-			err = ErrorEmailExists
+		case types.ErrorEmailExists.Error():
+			err = types.ErrorEmailExists
 		}
 	}
 	return output, err
@@ -83,7 +84,7 @@ func (c Client) ListUserAuditLogsV1(input ListUserAuditLogsV1Input) (*ListUserAu
 		Output: &outputData,
 	})
 	var output *ListUserAuditLogsV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &ListUserAuditLogsV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,
@@ -184,7 +185,7 @@ func (c Client) VerifyUserV1(opts VerifyUserV1Input) (*VerifyUserV1Output, error
 		Output: &outputData,
 	})
 	var output *VerifyUserV1Output = nil
-	if !errors.Is(err, ErrorOutputNil) {
+	if !errors.Is(err, types.ErrorOutputNil) {
 		output = &VerifyUserV1Output{
 			Data:     outputData,
 			Response: outputClient.Response,

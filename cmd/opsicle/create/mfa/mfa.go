@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"opsicle/internal/auth"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -64,7 +65,7 @@ var Command = &cobra.Command{
 		logrus.Debug("retrieving current user's registered mfa methods...")
 		listUserMfasOutput, err := client.ListUserMfasV1(controller.ListUserMfasV1Input{})
 		if err != nil {
-			if errors.Is(err, controller.ErrorAuthRequired) {
+			if errors.Is(err, types.ErrorAuthRequired) {
 				controller.DeleteSessionToken()
 			}
 			return fmt.Errorf("failed to list user mfas: %w", err)
@@ -175,7 +176,7 @@ var Command = &cobra.Command{
 			MfaType:  mfaType,
 		})
 		if err != nil {
-			if errors.Is(err, controller.ErrorInvalidCredentials) {
+			if errors.Is(err, types.ErrorInvalidCredentials) {
 				fmt.Println("❌ Your password didn't seem to match, try again maybe?")
 				return fmt.Errorf("primary authentication failed")
 			}

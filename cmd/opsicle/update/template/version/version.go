@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 	"sort"
 	"strconv"
@@ -151,7 +152,7 @@ var Command = &cobra.Command{
 			Version:    selectedTemplateVersion,
 		})
 		if err != nil {
-			if errors.Is(err, controller.ErrorNotFound) {
+			if errors.Is(err, types.ErrorNotFound) {
 				cli.PrintBoxedErrorMessage(
 					"The template you specified could not be found",
 				)

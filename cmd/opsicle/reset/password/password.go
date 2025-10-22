@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"opsicle/internal/auth"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -132,10 +133,10 @@ var Command = &cobra.Command{
 			})
 			if err != nil {
 				logrus.Debugf("failed to update password: %s", err)
-				if errors.Is(err, controller.ErrorInvalidCredentials) {
+				if errors.Is(err, types.ErrorInvalidCredentials) {
 					fmt.Println("⚠️ Your current password doesn't seem valid")
 					return fmt.Errorf("current password is invalid")
-				} else if errors.Is(err, controller.ErrorInvalidInput) {
+				} else if errors.Is(err, types.ErrorInvalidInput) {
 					fmt.Println("⚠️ One or both of your passwords aren't valid")
 					return fmt.Errorf("one or both passwords are invalid")
 				}

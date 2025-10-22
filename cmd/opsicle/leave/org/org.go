@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 
 	"github.com/sirupsen/logrus"
@@ -113,7 +114,7 @@ var Command = &cobra.Command{
 		if _, err := client.LeaveOrgV1(controller.LeaveOrgV1Input{
 			OrgId: org.Data.Id,
 		}); err != nil {
-			if errors.Is(err, controller.ErrorOrgRequiresOneAdmin) {
+			if errors.Is(err, types.ErrorLastOrgAdmin) {
 				cli.PrintBoxedErrorMessage(
 					"You are the last administrator of the organisation and cannot be removed\n\n" +
 						"Assign another user with the <admin> role before trying again",

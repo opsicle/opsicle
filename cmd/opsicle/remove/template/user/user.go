@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 
 	"github.com/spf13/cobra"
@@ -126,22 +127,22 @@ var Command = &cobra.Command{
 			UserId:     selectedUser.Id,
 		})
 		if err != nil {
-			if errors.Is(err, controller.ErrorLastUserInResource) {
+			if errors.Is(err, types.ErrorLastUserInResource) {
 				cli.PrintBoxedErrorMessage(
 					fmt.Sprintf("<%s> is the last user associated with template <%s> and cannot be removed", selectedUser.Email, templateInstance.Name),
 				)
 				return err
-			} else if errors.Is(err, controller.ErrorLastManagerOfResource) {
+			} else if errors.Is(err, types.ErrorLastManagerOfResource) {
 				cli.PrintBoxedErrorMessage(
 					fmt.Sprintf("<%s> is the last manager of template <%s> and cannot be removed", selectedUser.Email, templateInstance.Name),
 				)
 				return err
-			} else if errors.Is(err, controller.ErrorInsufficientPermissions) {
+			} else if errors.Is(err, types.ErrorInsufficientPermissions) {
 				cli.PrintBoxedErrorMessage(
 					fmt.Sprintf("You do not have sufficient permissions to remove a user from template <%s>", templateInstance.Name),
 				)
 				return err
-			} else if errors.Is(err, controller.ErrorNotFound) {
+			} else if errors.Is(err, types.ErrorNotFound) {
 				cli.PrintBoxedErrorMessage(
 					fmt.Sprintf("User <%s> doesn't seem to have access to template <%s>", selectedUser.Email, templateInstance.Name),
 				)

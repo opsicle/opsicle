@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"opsicle/internal/common"
+	"opsicle/internal/types"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -66,20 +67,20 @@ func NewClient(opts NewClientOpts) (*Client, error) {
 
 	controllerUrl, err := url.Parse(opts.ControllerUrl)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to parse provided controllerUrl[%s]: %w", ErrorInvalidInput, opts.ControllerUrl, err)
+		return nil, fmt.Errorf("%w: failed to parse provided controllerUrl[%s]: %w", types.ErrorInvalidInput, opts.ControllerUrl, err)
 	}
 
 	if controllerUrl.Scheme == "" {
-		return nil, fmt.Errorf("%w: failed to determine url scheme of controllerUrl[%s]", ErrorInvalidInput, opts.ControllerUrl)
+		return nil, fmt.Errorf("%w: failed to determine url scheme of controllerUrl[%s]", types.ErrorInvalidInput, opts.ControllerUrl)
 	}
 	client.ControllerUrl = controllerUrl
 
 	healthcheckOutput, err := client.HealthcheckPing()
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to check health of controller: %w", ErrorHealthcheckFailed, err)
+		return nil, fmt.Errorf("%w: failed to check health of controller: %w", types.ErrorHealthcheckFailed, err)
 	}
 	if healthcheckOutput.Data.Status != "ok" {
-		return nil, fmt.Errorf("%w: controller repsonded with unhealthy: %w", ErrorHealthcheckFailed, err)
+		return nil, fmt.Errorf("%w: controller repsonded with unhealthy: %w", types.ErrorHealthcheckFailed, err)
 	}
 
 	return client, nil
@@ -95,9 +96,9 @@ type request struct {
 func (c request) Validate() error {
 	errs := []error{}
 	if c.Output == nil {
-		errs = append(errs, ErrorOutputNil)
+		errs = append(errs, types.ErrorOutputNil)
 	} else if reflect.TypeOf(c.Output).Kind() != reflect.Ptr {
-		errs = append(errs, ErrorOutputNotPointer)
+		errs = append(errs, types.ErrorOutputNotPointer)
 	}
 	if len(errs) > 0 {
 		return errors.Join(errs...)
@@ -121,14 +122,14 @@ func (c clientOutput) Error() error {
 
 func (c clientOutput) GetErrorCode() error {
 	switch c.code.Error() {
-	case ErrorInvalidCredentials.Error():
-		return ErrorInvalidCredentials
-	case ErrorInvalidInput.Error():
-		return ErrorInvalidInput
-	case ErrorInsufficientPermissions.Error():
-		return ErrorInsufficientPermissions
-	case ErrorDatabaseIssue.Error():
-		return ErrorDatabaseIssue
+	case types.ErrorInvalidCredentials.Error():
+		return types.ErrorInvalidCredentials
+	case types.ErrorInvalidInput.Error():
+		return types.ErrorInvalidInput
+	case types.ErrorInsufficientPermissions.Error():
+		return types.ErrorInsufficientPermissions
+	case types.ErrorDatabaseIssue.Error():
+		return types.ErrorDatabaseIssue
 	}
 	return c.code
 }
@@ -190,7 +191,7 @@ func (c Client) do(input request) (*clientOutput, error) {
 	if input.Data != nil {
 		inputData, err := json.Marshal(input.Data)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrorClientMarshalInput, err)
+			return nil, fmt.Errorf("%w: %w", types.ErrorClientMarshalInput, err)
 		}
 		requestBody = bytes.NewBuffer(inputData)
 	}
@@ -210,47 +211,47 @@ func (c Client) do(input request) (*clientOutput, error) {
 		)
 	}
 	if httpRequestError != nil {
-		return nil, fmt.Errorf("%w: %w: %w", ErrorClientRequestCreation, ErrorOutputNil, httpRequestError)
+		return nil, fmt.Errorf("%w: %w: %w", types.ErrorClientRequestCreation, types.ErrorOutputNil, httpRequestError)
 	}
 	c.addRequiredHeaders(httpRequest)
 	httpResponse, err := c.HttpClient.Do(httpRequest)
 	if err != nil {
 		if isConnectionRefused(err) {
-			return nil, fmt.Errorf("%w: %w: %w", ErrorConnectionRefused, ErrorOutputNil, err)
+			return nil, fmt.Errorf("%w: %w: %w", types.ErrorConnectionRefused, types.ErrorOutputNil, err)
 		} else if isTimeout(err) {
-			return nil, fmt.Errorf("%w: %w: %w", ErrorConnectionTimedOut, ErrorOutputNil, err)
+			return nil, fmt.Errorf("%w: %w: %w", types.ErrorConnectionTimedOut, types.ErrorOutputNil, err)
 		}
-		return nil, fmt.Errorf("%w: %w: %w", ErrorClientRequestExecution, ErrorOutputNil, err)
+		return nil, fmt.Errorf("%w: %w: %w", types.ErrorClientRequestExecution, types.ErrorOutputNil, err)
 	}
 	defer httpResponse.Body.Close()
 	output := &clientOutput{Response: *httpResponse}
 	if !isControllerResponse(httpResponse) {
-		return output, ErrorClientResponseNotFromController
+		return output, types.ErrorClientResponseNotFromController
 	}
 	if httpResponse.StatusCode == http.StatusMethodNotAllowed {
-		return output, ErrorInvalidEndpoint
+		return output, types.ErrorInvalidEndpoint
 	}
 	responseBody, err := io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return output, fmt.Errorf("%w: %w", ErrorClientResponseReading, err)
+		return output, fmt.Errorf("%w: %w", types.ErrorClientResponseReading, err)
 	}
 	var response common.HttpResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return output, fmt.Errorf("%w: %w", ErrorClientUnmarshalResponse, err)
+		return output, fmt.Errorf("%w: %w", types.ErrorClientUnmarshalResponse, err)
 	}
 	output.message = response.Message
 	output.code = errors.New(response.Code)
 	if response.Data != nil && input.Output != nil {
 		responseData, err := json.Marshal(response.Data)
 		if err != nil {
-			return output, fmt.Errorf("%w: %w", ErrorClientMarshalResponseData, err)
+			return output, fmt.Errorf("%w: %w", types.ErrorClientMarshalResponseData, err)
 		}
 		if err := json.Unmarshal(responseData, &input.Output); err != nil {
-			return output, fmt.Errorf("%w: %w", ErrorClientUnmarshalOutput, err)
+			return output, fmt.Errorf("%w: %w", types.ErrorClientUnmarshalOutput, err)
 		}
 	}
 	if !response.Success {
-		return output, fmt.Errorf("%w: received status code %v ('%s'): %w", ErrorClientUnsuccessfulResponse, output.GetStatusCode(), output.GetMessage(), output.GetErrorCode())
+		return output, fmt.Errorf("%w: received status code %v ('%s'): %w", types.ErrorClientUnsuccessfulResponse, output.GetStatusCode(), output.GetMessage(), output.GetErrorCode())
 	}
 	return output, nil
 }

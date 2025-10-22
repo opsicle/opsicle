@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/controller/models"
+	"opsicle/internal/types"
 )
 
 func generateApiKey(length int) (string, error) {
@@ -55,12 +56,12 @@ func validateRequesterCanManageOrgUsers(opts validateRequesterCanManageOrgUsersO
 	})
 	if err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
-			return fmt.Errorf("failed to verify requester: %w", ErrorInsufficientPermissions)
+			return fmt.Errorf("failed to verify requester: %w", types.ErrorInsufficientPermissions)
 		}
-		return fmt.Errorf("failed to verify requester: %w", ErrorDatabaseIssue)
+		return fmt.Errorf("failed to verify requester: %w", types.ErrorDatabaseIssue)
 	}
 	if !isAllowedToManageOrgUsers(requester) {
-		return fmt.Errorf("requester is not an admin or manager: %w", ErrorInsufficientPermissions)
+		return fmt.Errorf("requester is not an admin or manager: %w", types.ErrorInsufficientPermissions)
 	}
 	return nil
 }
@@ -79,7 +80,7 @@ func validateUserIsNotLastAdmin(opts validateUserIsNotLastAdminOpts) error {
 		return fmt.Errorf("failed to retrieve admin list: %w", err)
 	}
 	if len(admins) == 1 && admins[0].User.GetId() == opts.UserId {
-		return ErrorOrgRequiresOneAdmin
+		return types.ErrorLastOrgAdmin
 	}
 	return nil
 }

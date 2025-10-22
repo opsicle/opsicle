@@ -13,6 +13,7 @@ import (
 	"opsicle/internal/controller/models"
 	"opsicle/internal/controller/templates"
 	"opsicle/internal/email"
+	"opsicle/internal/types"
 	"strings"
 	"time"
 
@@ -56,12 +57,12 @@ func handleListUserAuditLogsV1(w http.ResponseWriter, r *http.Request) {
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
 		return
 	}
 	var input handleListUserAuditLogsV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", types.ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving audit logs for user[%s]", session.UserId))
@@ -73,7 +74,7 @@ func handleListUserAuditLogsV1(w http.ResponseWriter, r *http.Request) {
 		Reverse:   input.Reverse,
 	})
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve audit logs", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve audit logs", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -136,7 +137,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to create user: %s", err))
 		if errors.Is(err, models.ErrorDuplicateEntry) {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user, email already exists", ErrorEmailExists)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user, email already exists", types.ErrorEmailExists)
 			return
 		}
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user for unexpected reasons", err)
@@ -271,13 +272,13 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
 		return
 	}
 
 	var input handleCreateUserMfaV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", types.ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("creating mfa of type[%s] for user[%s]", input.MfaType, session.UserId))
@@ -285,13 +286,13 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	user := models.User{Id: &session.UserId}
 	if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s]: %s", session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", types.ErrorDatabaseIssue)
 		return
 	}
 
 	if !user.ValidatePassword(input.Password) {
 		log(common.LogLevelError, fmt.Sprintf("user[%s] entered the wrong password", user.GetId()))
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate user's current password", ErrorInvalidCredentials)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate user's current password", types.ErrorInvalidCredentials)
 		return
 	}
 
@@ -299,7 +300,7 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	case models.MfaTypeTotp:
 		totpSeed, err := auth.CreateTotpSeed("opsicle", user.Email)
 		if err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create totp seed", ErrorCodeIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create totp seed", types.ErrorCodeIssue)
 			return
 		}
 
@@ -311,7 +312,7 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 			Type:   models.MfaTypeTotp,
 		})
 		if err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user totp mfa", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create user totp mfa", types.ErrorDatabaseIssue)
 			return
 		}
 
@@ -330,7 +331,7 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 		})
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", userMfa)
 	default:
-		common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to recognise type of mfa", ErrorUnrecognisedMfaType)
+		common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to recognise type of mfa", types.ErrorUnrecognisedMfaType)
 		return
 	}
 }
@@ -354,13 +355,13 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
 		return
 	}
 
 	var input handleVerifyUserMfaV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", types.ErrorInvalidInput)
 		return
 	}
 	log(common.LogLevelDebug, fmt.Sprintf("verifying mfa[%s] for user[%s]", mfaId, session.UserId))
@@ -371,7 +372,7 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get mfa[%s] for user[%s]: %s", mfaId, session.UserId, err))
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user mfa", ErrorDatabaseIssue)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user mfa", types.ErrorDatabaseIssue)
 		return
 	}
 
@@ -379,17 +380,17 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	case models.MfaTypeTotp:
 		isValid, err := auth.ValidateTotpToken(*userMfa.Secret, input.Value)
 		if err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate provided totp token", ErrorTotpInvalid)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to validate provided totp token", types.ErrorTotpInvalid)
 			return
 		} else if !isValid {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "provided totp token is not valid", ErrorTotpInvalid)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "provided totp token is not valid", types.ErrorTotpInvalid)
 			return
 		}
 		if err := models.VerifyUserMfaV1(models.VerifyUserMfaV1Opts{
 			Db: db,
 			Id: mfaId,
 		}); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify mfa", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify mfa", types.ErrorDatabaseIssue)
 			return
 		}
 		audit.Log(audit.LogEntry{
@@ -590,10 +591,10 @@ func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to verify user: %s", err))
 		if errors.Is(err, models.ErrorNotFound) {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify user", ErrorInvalidVerificationCode)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify user", types.ErrorInvalidVerificationCode)
 			return
 		}
-		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify user", ErrorInvalidVerificationCode)
+		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify user", types.ErrorInvalidVerificationCode)
 		return
 	}
 	userAgent := r.UserAgent()
@@ -645,16 +646,16 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
 		return
 	}
 	if len(bodyData) == 0 {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
 		return
 	}
 	var input handleUpdateUserPasswordV1Input
 	if err := json.Unmarshal(bodyData, &input); err != nil {
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", types.ErrorInvalidInput)
 		return
 	}
 
@@ -667,16 +668,16 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: changing password for user", sessionInfo.UserId))
 		// get user from session info
 		if sessionInfo.ExpiresAt.Before(time.Now()) {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "password change failed", ErrorAuthRequired)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "password change failed", types.ErrorAuthRequired)
 			return
 		}
 
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: validating passwords for password update", sessionInfo.UserId))
 		if _, err := auth.IsPasswordValid(*input.CurrentPassword); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid current password", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid current password", types.ErrorInvalidInput)
 			return
 		} else if _, err := auth.IsPasswordValid(*input.NewPassword); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid new password", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid new password", types.ErrorInvalidInput)
 			return
 		}
 		currentPassword := *input.CurrentPassword
@@ -686,14 +687,14 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: retrieving user details", userId))
 		user := models.User{Id: &userId}
 		if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user", types.ErrorDatabaseIssue)
 			return
 		}
 
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: validating current password", userId))
 		if !auth.ValidatePassword(currentPassword, *user.PasswordHash) {
 			log(common.LogLevelError, fmt.Sprintf("current password verification failed: %s", err))
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed password verification", ErrorInvalidCredentials)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed password verification", types.ErrorInvalidCredentials)
 			return
 		}
 
@@ -703,7 +704,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 			NewPassword: newPassword,
 		}); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("password update failed: %s", err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed password update", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed password update", types.ErrorDatabaseIssue)
 			return
 		}
 		audit.Log(audit.LogEntry{
@@ -728,7 +729,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		log(common.LogLevelDebug, fmt.Sprintf("email[%s].forgotPassword: resetting password for user", userEmail))
 		_, err := auth.IsEmailValid(userEmail)
 		if err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive user email", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive user email", types.ErrorInvalidInput)
 			return
 		}
 
@@ -743,7 +744,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			log(common.LogLevelError, fmt.Sprintf("email[%s].forgotPassword: failed to retrieve user: %s", userEmail, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to get user", types.ErrorDatabaseIssue)
 			return
 		}
 
@@ -751,7 +752,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		verificationCode, err := common.GenerateRandomString(32)
 		if err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to create password reset verification code: %s", err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create password reset verification code", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create password reset verification code", types.ErrorDatabaseIssue)
 			return
 		}
 		passwordResetId, err := models.CreateUserPasswordResetV1(models.CreateUserPasswordResetV1Input{
@@ -763,7 +764,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			log(common.LogLevelError, fmt.Sprintf("user[%s].forgotPassword: failed to create password reset database item: %s", *user.Id, err))
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create password reset item", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create password reset item", types.ErrorDatabaseIssue)
 			return
 		}
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].forgotPassword: created password reset with id[%s]", *user.Id, passwordResetId))
@@ -814,7 +815,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 
 		log(common.LogLevelDebug, "validating incoming password")
 		if _, err := auth.IsPasswordValid(newPassword); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid new password", ErrorInvalidInput)
+			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid new password", types.ErrorInvalidInput)
 			return
 		}
 
@@ -826,10 +827,10 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			if errors.Is(err, models.ErrorNotFound) {
-				common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid verification code", ErrorInvalidInput)
+				common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid verification code", types.ErrorInvalidInput)
 				return
 			}
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to identify password reset attempt", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to identify password reset attempt", types.ErrorDatabaseIssue)
 			return
 		}
 
@@ -837,10 +838,10 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		user := models.User{Id: &passwordReset.Id}
 		if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
 			if errors.Is(err, models.ErrorNotFound) {
-				common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user referenced", ErrorInvalidInput)
+				common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user referenced", types.ErrorInvalidInput)
 				return
 			}
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", types.ErrorDatabaseIssue)
 			return
 		}
 
@@ -849,7 +850,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 			Db:          db,
 			NewPassword: newPassword,
 		}); err != nil {
-			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed password update", ErrorDatabaseIssue)
+			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed password update", types.ErrorDatabaseIssue)
 			return
 		}
 
@@ -878,7 +879,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		}
 
 	default:
-		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "bad request", ErrorInvalidInput)
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "bad request", types.ErrorInvalidInput)
 		return
 	}
 

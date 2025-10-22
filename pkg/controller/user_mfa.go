@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"opsicle/internal/controller/models"
+	"opsicle/internal/types"
 )
 
 const (
@@ -86,8 +87,8 @@ func (c Client) CreateUserMfaV1(input CreateUserMfaV1Input) (*CreateUserMfaV1Out
 		Output: &outputData,
 	})
 	if err != nil {
-		if outputClient.GetErrorCode().Error() == ErrorInvalidCredentials.Error() {
-			err = fmt.Errorf("password verification failed: %w", ErrorInvalidCredentials)
+		if outputClient.GetErrorCode().Error() == types.ErrorInvalidCredentials.Error() {
+			err = fmt.Errorf("password verification failed: %w", types.ErrorInvalidCredentials)
 		}
 	}
 	return &CreateUserMfaV1Output{

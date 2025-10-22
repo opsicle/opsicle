@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/types"
 	"opsicle/internal/validate"
 	"opsicle/pkg/controller"
 	"sort"
@@ -186,11 +187,11 @@ var Command = &cobra.Command{
 			Type:                  membershipType,
 		})
 		if err != nil {
-			if errors.Is(err, controller.ErrorInvitationExists) {
+			if errors.Is(err, types.ErrorInvitationExists) {
 				fmt.Printf("⚠️  Looks like an invitation for the user '%s' already exists\n", userEmail)
 				return fmt.Errorf("invitation already exists")
 			}
-			if errors.Is(err, controller.ErrorUserExistsInOrg) {
+			if errors.Is(err, types.ErrorUserExistsInOrg) {
 				fmt.Printf("⚠️  Looks like the user '%s' already exists in your org\n", userEmail)
 				return fmt.Errorf("user already in org")
 			}
