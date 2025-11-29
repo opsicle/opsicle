@@ -1,10 +1,10 @@
 package controller
 
 import (
-	"database/sql"
 	"net/http"
 	"net/url"
 	"opsicle/internal/common"
+	"opsicle/internal/persistence"
 	"opsicle/internal/queue"
 	"strings"
 
@@ -13,20 +13,19 @@ import (
 	"opsicle/internal/controller/models"
 
 	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"github.com/swaggo/swag"
 )
 
 type HttpApplicationOpts struct {
-	AdminToken          string
-	DatabaseConnection  *sql.DB
+	DatabaseConnection  *persistence.Mysql
 	EmailConfig         *SmtpServerConfig
 	LivenessChecks      []func() error
 	ReadinessChecks     []func() error
 	PublicServerUrl     *url.URL
 	QueueId             string
+	QueueConnection     *persistence.Nats
 	ServiceLogs         chan<- common.ServiceLog
 	SessionSigningToken string
 }
@@ -46,10 +45,7 @@ type HttpApplicationOpts struct {
 // @name						Authorization
 // @description			Used for authenticating with endpoints
 func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
-	db = opts.DatabaseConnection
-	if err := db.Ping(); err != nil {
-		panic("failed to get required database connection")
-	}
+	db = opts.DatabaseConnection.GetClient()
 
 	var err error
 	q, err = queue.Get(opts.QueueId)
@@ -92,24 +88,12 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 
 	handler := mux.NewRouter()
 	handler.NotFoundHandler = common.GetNotFoundHandler()
-	if opts.LivenessChecks != nil {
-		livenessChecks = append(livenessChecks, opts.LivenessChecks...)
-	}
-	if opts.ReadinessChecks != nil {
-		readinessChecks = append(readinessChecks, opts.ReadinessChecks...)
-	}
-	registerHealthcheckRoutes(RouteRegistrationOpts{
-		Router:      handler,
-		ServiceLogs: opts.ServiceLogs,
+	common.RegisterCommonHttpEndpoints(common.CommonHttpEndpointsOpts{
+		Router:          handler,
+		ServiceLogs:     opts.ServiceLogs,
+		LivenessChecks:  opts.LivenessChecks,
+		ReadinessChecks: opts.ReadinessChecks,
 	})
-	handler.Handle("/metrics", promhttp.Handler())
-	if opts.AdminToken != "" {
-		admin := handler.PathPrefix("/admin").Subrouter()
-		registerAdminRoutes(RouteRegistrationOpts{
-			Router:      admin,
-			ServiceLogs: opts.ServiceLogs,
-		}, opts.AdminToken)
-	}
 
 	api := handler.PathPrefix("/api").Subrouter()
 	apiOpts := RouteRegistrationOpts{

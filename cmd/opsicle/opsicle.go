@@ -2,7 +2,6 @@ package opsicle
 
 import (
 	"fmt"
-	"opsicle/cmd/opsicle/admin"
 	"opsicle/cmd/opsicle/can"
 	"opsicle/cmd/opsicle/check"
 	"opsicle/cmd/opsicle/create"
@@ -97,7 +96,6 @@ func init() {
 	Command.SetHelpTemplate(`{{ prependText }}` + Command.HelpTemplate())
 	Command.SetVersionTemplate(cli.Logo + "\n" + `{{with .DisplayName}}{{printf "%s " .}}{{end}}{{printf "version %s" .Version}}`)
 
-	Command.AddCommand(admin.Command)
 	Command.AddCommand(check.Command)
 	Command.AddCommand(can.Command)
 	Command.AddCommand(create.Command)

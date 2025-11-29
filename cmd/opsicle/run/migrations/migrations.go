@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
-	"opsicle/internal/database"
+	"opsicle/internal/controller"
+	"opsicle/internal/persistence"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -78,7 +79,7 @@ var Command = &cobra.Command{
 		common.StartServiceLogLoop(serviceLogs)
 
 		logrus.Debugf("connecting to mysql database...")
-		databaseConnection, err := database.ConnectMysql(database.ConnectOpts{
+		databaseConnection, err := persistence.ConnectMysql(persistence.ConnectOpts{
 			ConnectionId: "opsicle/migrator",
 			Host:         viper.GetString("db-host"),
 			Port:         viper.GetInt("db-port"),
@@ -104,7 +105,7 @@ var Command = &cobra.Command{
 		}
 
 		logrus.Debugf("running migrations...")
-		migrateOutput, err := database.MigrateMysql(database.MigrateOpts{
+		migrateOutput, err := controller.MigrateDatabase(controller.MigrateDatabaseOpts{
 			Connection:  databaseConnection,
 			Force:       force,
 			Steps:       steps,

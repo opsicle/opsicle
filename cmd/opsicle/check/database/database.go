@@ -3,7 +3,7 @@ package database
 import (
 	"fmt"
 	"opsicle/internal/cli"
-	"opsicle/internal/database"
+	"opsicle/internal/persistence"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -62,7 +62,7 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logrus.Infof("verifying platform database connectivity...")
 		connectionId := "opsicle/check/database"
-		databaseConnection, err := database.ConnectMysql(database.ConnectOpts{
+		databaseConnection, err := persistence.ConnectMysql(persistence.ConnectOpts{
 			ConnectionId: connectionId,
 			Host:         viper.GetString("mysql-host"),
 			Port:         viper.GetInt("mysql-port"),

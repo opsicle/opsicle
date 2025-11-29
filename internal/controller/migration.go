@@ -1,4 +1,4 @@
-package database
+package controller
 
 import (
 	"database/sql"
@@ -17,21 +17,21 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-type MigrateMysqlOutput struct {
+type MigrateDatabaseOutput struct {
 	PostMigrationVersion uint
 	PreMigrationVersion  uint
 	IsDatabaseDirty      bool
 	VersionsApplied      []uint
 }
 
-type MigrateOpts struct {
+type MigrateDatabaseOpts struct {
 	Connection  *sql.DB
 	Force       int
 	Steps       *int
 	ServiceLogs chan<- common.ServiceLog
 }
 
-func MigrateMysql(opts MigrateOpts) (*MigrateMysqlOutput, error) {
+func MigrateDatabase(opts MigrateDatabaseOpts) (*MigrateDatabaseOutput, error) {
 	driver, err := mysql.WithInstance(opts.Connection, &mysql.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create mysql driver: %w", err)
@@ -50,7 +50,7 @@ func MigrateMysql(opts MigrateOpts) (*MigrateMysqlOutput, error) {
 	}
 	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "created migrator instance")
 
-	output := &MigrateMysqlOutput{}
+	output := &MigrateDatabaseOutput{}
 
 	output.PreMigrationVersion, output.IsDatabaseDirty, err = migrator.Version()
 	if err != nil {

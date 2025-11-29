@@ -4,33 +4,20 @@ import (
 	"fmt"
 	"opsicle/internal/common"
 	"opsicle/internal/integrations/redis"
+	"opsicle/internal/persistence"
 )
 
 // InitRedisOpts configures the InitRedis method
 type InitRedisOpts struct {
-	Addr     string
-	Username string
-	Password string
-
-	ServiceLogs chan<- common.ServiceLog
+	RedisConnection *persistence.Redis
+	ServiceLogs     chan<- common.ServiceLog
 }
 
 // InitRedis initialises a singleton instance of a Redis cache
 func InitRedis(opts InitRedisOpts) error {
 	redisOpts := redis.NewOpts{
-		Addr:           opts.Addr,
-		Username:       opts.Username,
-		Password:       opts.Password,
-		CheckRwEnabled: true,
-	}
-	if opts.ServiceLogs != nil {
-		redisOpts.ServiceLogs = &opts.ServiceLogs
-	} else {
-		initNoopServiceLog()
-		var serviceLogs chan<- common.ServiceLog = noopServiceLog
-		redisOpts.ServiceLogs = &serviceLogs
-		go startNoopServiceLog()
-		defer stopNoopServiceLog()
+		Client:      opts.RedisConnection,
+		ServiceLogs: opts.ServiceLogs,
 	}
 	client, err := redis.New(redisOpts)
 	if err != nil {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"opsicle/internal/cli"
-	"opsicle/internal/database"
+	"opsicle/internal/persistence"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -56,7 +56,7 @@ var Command = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logrus.Infof("verifying audit database connectivity...")
 		connectionId := "opsicle/check/audit_database"
-		databaseConnection, err := database.ConnectMongo(database.ConnectOpts{
+		databaseConnection, err := persistence.ConnectMongo(persistence.ConnectOpts{
 			ConnectionId: connectionId,
 			Host:         viper.GetString("mongo-host"),
 			Port:         viper.GetInt("mongo-port"),

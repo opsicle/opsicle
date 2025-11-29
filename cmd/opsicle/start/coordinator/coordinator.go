@@ -1,325 +1,211 @@
 package coordinator
 
 import (
-	"context"
-	"crypto/tls"
 	"fmt"
 	"opsicle/internal/audit"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
 	"opsicle/internal/coordinator"
-	"opsicle/internal/database"
-	"opsicle/internal/queue"
-	"os"
-	"sync"
-	"time"
+	"opsicle/internal/persistence"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-const (
-	ServiceId string = "opsicle/coordinator"
-)
+var Command = cli.NewCommand(cli.CommandOpts{
+	Name: "coordinator",
+	Flags: cli.Flags{
+		{
+			Name:         "listen-addr",
+			DefaultValue: "0.0.0.0:11111",
+			Usage:        "specifies the listen address of the server",
+			Type:         cli.FlagTypeString,
+		},
+		{
+			Name:         "mongo-host",
+			DefaultValue: []string{"127.0.0.1:27017"},
+			Usage:        "Specifies the hostname(s) of the MongoDB instance",
+			Type:         cli.FlagTypeStringSlice,
+		},
+		{
+			Name:         "mongo-user",
+			DefaultValue: "opsicle",
+			Usage:        "Specifies the username to use to login to the MongoDB instance",
+			Type:         cli.FlagTypeString,
+		},
+		{
+			Name:         "mongo-password",
+			DefaultValue: "password",
+			Usage:        "Specifies the password to use to login to the MongoDB instance",
+			Type:         cli.FlagTypeString,
+		},
+		{
+			Name:         "nats-addr",
+			DefaultValue: "localhost:4222",
+			Usage:        "Specifies the hostname (including port) of the NATS server",
+			Type:         cli.FlagTypeString,
+		},
+		{
+			Name:         "nats-username",
+			DefaultValue: "opsicle",
+			Usage:        "Specifies the username used to login to NATS",
+			Type:         cli.FlagTypeString,
+		},
+		{
+			Name:         "nats-password",
+			DefaultValue: "password",
+			Usage:        "Specifies the password used to login to NATS",
+			Type:         cli.FlagTypeString,
+		},
+		{
+			Name: "nats-nkey-value",
+			// this default value is the development nkey, this value must be aligned
+			// to the one in `./docker-compose.yml` in the root of the repository
+			DefaultValue: "SUADZTA4VJHBCO7K75DQ3IN7KZGWHKEI26D2IYEABRN5TXXYHXLWNDYT4A",
+			Usage:        "Specifies the nkey used to login to NATS",
+			Type:         cli.FlagTypeString,
+		},
+		{
+			Name:         "redis-addr",
+			DefaultValue: "localhost:6379",
+			Usage:        "defines the hostname (including port) of the redis server",
+			Type:         cli.FlagTypeString,
+		},
+		{
+			Name:         "redis-username",
+			DefaultValue: "opsicle",
+			Usage:        "defines the username used to login to redis",
+			Type:         cli.FlagTypeString,
+		},
+		{
+			Name:         "redis-password",
+			DefaultValue: "password",
+			Usage:        "defines the password used to login to redis",
+			Type:         cli.FlagTypeString,
+		},
+	},
+	Use:   "coordinator",
+	Short: "Starts the coordinator component",
+	Long:  "Starts the coordinator component which serves as the API layer that user interfaces can connect to to perform actions",
+	Run: func(cmd *cobra.Command, opts *cli.Command, args []string) error {
+		appName := opts.GetFullname()
+		serviceLogs := opts.GetServiceLogs()
 
-var flags cli.Flags = cli.Flags{
-	{
-		Name:         "ca-path",
-		DefaultValue: "./certs/ca.crt",
-		Usage:        "Specifies the path to a Certificate Authority",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "cert-path",
-		DefaultValue: "./certs/server.crt",
-		Usage:        "Specifies the path to a server TLS certificate",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "cert-key-path",
-		DefaultValue: "./certs/server.key",
-		Usage:        "Specifies the path to the key of the TLS certificate as defined in --cert-path",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "Defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "grpc-listen-addr",
-		DefaultValue: "0.0.0.0:12345",
-		Usage:        "Specifies the listen address of the grpc server",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "http-listen-addr",
-		DefaultValue: "0.0.0.0:12346",
-		Usage:        "Specifies the listen address of the http server",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "mongo-host",
-		DefaultValue: "127.0.0.1",
-		Usage:        "Specifies the hostname of the MongoDB instance",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "mongo-port",
-		DefaultValue: "27017",
-		Usage:        "Specifies the port which the MongoDB instance is listening on",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "mongo-user",
-		DefaultValue: "opsicle",
-		Usage:        "Specifies the username to use to login to the MongoDB instance",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "mongo-password",
-		DefaultValue: "password",
-		Usage:        "Specifies the password to use to login to the MongoDB instance",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "nats-addr",
-		DefaultValue: "localhost:4222",
-		Usage:        "Specifies the hostname (including port) of the NATS server",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "nats-username",
-		DefaultValue: "opsicle",
-		Usage:        "Specifies the username used to login to NATS",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "nats-password",
-		DefaultValue: "password",
-		Usage:        "Specifies the password used to login to NATS",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name: "nats-nkey-value",
-		// this default value is the development nkey, this value must be aligned
-		// to the one in `./docker-compose.yml` in the root of the repository
-		DefaultValue: "SUADZTA4VJHBCO7K75DQ3IN7KZGWHKEI26D2IYEABRN5TXXYHXLWNDYT4A",
-		Usage:        "Specifies the nkey used to login to NATS",
-		Type:         cli.FlagTypeString,
-	},
-}
-
-func init() {
-	flags.AddToCommand(Command)
-}
-
-var Command = &cobra.Command{
-	Use:     "coordinator",
-	Aliases: []string{"C"},
-	Short:   "Starts the coordinator component",
-	Long:    "Starts the coordinator component which serves as the API layer that worker interfaces can connect to to receive jobs",
-	PreRun: func(cmd *cobra.Command, args []string) {
-		flags.BindViper(cmd)
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		logrus.Debugf("starting logging engine...")
-		serviceLogs := make(chan common.ServiceLog, 64)
-		common.StartServiceLogLoop(serviceLogs)
-		logrus.Debugf("started logging engine")
-
-		hostname, _ := os.Hostname()
-		userId := os.Getuid()
-		serviceInstanceId := fmt.Sprintf("%s@%v@%s", ServiceId, userId, hostname)
-
-		certPath := viper.GetString("cert-path")
-		if certPath == "" {
-			return fmt.Errorf("tls certificate path not provided")
+		logrus.Infof("initialising audit module...")
+		logrus.Debugf("connecting to mongodb...")
+		mongoInstance := persistence.NewMongo(
+			persistence.MongoConnectionOpts{
+				AppName:  appName,
+				Hosts:    viper.GetStringSlice("mongo-host"),
+				IsDirect: true,
+			},
+			persistence.MongoAuthOpts{
+				Password: viper.GetString("mongo-password"),
+				Username: viper.GetString("mongo-user"),
+			},
+			&serviceLogs,
+		)
+		if err := mongoInstance.Init(); err != nil {
+			return fmt.Errorf("failed to connect to mongo: %w", err)
 		}
-		certKeyPath := viper.GetString("cert-key-path")
-		if certKeyPath == "" {
-			return fmt.Errorf("tls certificate key path not provided")
-		}
-		caPath := viper.GetString("ca-path")
-		if caPath == "" {
-			return fmt.Errorf("ca certificate path not provided")
-		}
-
-		serverCert, err := tls.LoadX509KeyPair(certPath, certKeyPath)
-		if err != nil {
-			return fmt.Errorf("load tls certificate: %w", err)
-		}
-		caPem, err := os.ReadFile(caPath)
-		if err != nil {
-			return fmt.Errorf("load ca pem: %w", err)
-		}
-
-		/*
-		    _  _   _ ___ ___ _____   ___   _ _____ _   ___   _   ___ ___
-		   /_\| | | |   |_ _|_   _| |   \ /_|_   _/_\ | _ ) /_\ / __| __|
-		  / _ | |_| | |) | |  | |   | |) / _ \| |/ _ \| _ \/ _ \\__ | _|
-		 /_/ \_\___/|___|___| |_|   |___/_/ \_|_/_/ \_|___/_/ \_|___|___|
-
-		*/
-
-		logrus.Infof("establishing connection to audit database...")
-
-		auditDatabaseConnection, err := database.ConnectMongo(database.ConnectOpts{
-			ConnectionId: ServiceId,
-			Host:         viper.GetString("mongo-host"),
-			Port:         viper.GetInt("mongo-port"),
-			Username:     viper.GetString("mongo-user"),
-			Password:     viper.GetString("mongo-password"),
-		})
-		if err != nil {
-			return fmt.Errorf("failed to establish connection to audit database: %w", err)
-		}
-		logrus.Debugf("established connection to audit database")
-		logrus.Infof("starting audit database connection freshness verifier...")
-		auditDatabaseConnectionOk := false
-		auditDatabaseConnectionStatusLastUpdatedAt := time.Now()
-		auditDatabaseConnectionStatusUpdates := make(chan bool)
-		var auditDatabaseConnectionStatusMutex sync.Mutex
-		var auditModuleError error = nil
-		var auditModuleErrorMutex sync.Mutex
-		go func() {
-			for {
-				if auditModuleError == nil {
-					logrus.Trace("audit module is ok")
-					<-time.After(3 * time.Second)
-					continue
-				}
-				if auditDatabaseConnectionOk {
-					logrus.Tracef("(re)trying initialisation of audit module (last error: %s)...", auditModuleError)
-					auditModuleErrorMutex.Lock()
-					auditModuleError = audit.InitMongo(auditDatabaseConnection)
-					if auditModuleError != nil {
-						logrus.Errorf("failed to initialise audit module: %s", auditModuleError)
-					}
-					auditModuleErrorMutex.Unlock()
-				} else {
-					logrus.Tracef("audit module is not ok (error: %s), waiting for audit database restoration...", auditModuleError)
-				}
-				<-time.After(3 * time.Second)
-			}
-		}()
-		go func() {
-			for {
-				statusUpdate := <-auditDatabaseConnectionStatusUpdates
-				auditDatabaseConnectionStatusMutex.Lock()
-				if statusUpdate != auditDatabaseConnectionOk {
-					logAtLevel := logrus.Infof
-					if !statusUpdate {
-						logAtLevel = logrus.Warnf
-						auditModuleError = fmt.Errorf("database connection lost")
-					}
-					logAtLevel("audit database connection freshness status switched to '%v'", statusUpdate)
-					auditDatabaseConnectionStatusLastUpdatedAt = time.Now()
-				}
-				auditDatabaseConnectionOk = statusUpdate
-				auditDatabaseConnectionStatusMutex.Unlock()
-			}
-		}()
-		go func() {
-			for {
-				logrus.Tracef("verifying audit database connection freshness...")
-				if err := database.CheckMongoConnection(ServiceId); err != nil {
-					logrus.Errorf("failed to check mongo connection with id '%s': %s", ServiceId, err)
-					auditDatabaseConnectionStatusUpdates <- false
-					if err := database.RefreshMongoConnection(ServiceId); err != nil {
-						logrus.Errorf("failed to refresh mongo connection with id '%s': %s", ServiceId, err)
-					} else {
-						if err := audit.InitMongo(auditDatabaseConnection); err != nil {
-							logrus.Errorf("failed to re-initialise audit module: %s", err)
-						}
-					}
-				} else {
-					logrus.Tracef("audit database connection freshness verified")
-					auditDatabaseConnectionStatusUpdates <- true
-				}
-				<-time.After(3 * time.Second)
-			}
-		}()
-		if auditModuleError = audit.InitMongo(auditDatabaseConnection); auditModuleError != nil {
+		logrus.Infof("connected to mongodb")
+		if auditModuleError := audit.InitMongo(mongoInstance.GetClient()); auditModuleError != nil {
 			return fmt.Errorf("failed to initialise audit module: %w", auditModuleError)
 		}
+		opts.AddShutdownProcess("mongo", mongoInstance.Shutdown)
 		audit.Log(audit.LogEntry{
-			EntityId:     fmt.Sprintf("%v@%s", userId, hostname),
-			EntityType:   audit.ControllerEntity,
+			EntityId:     fmt.Sprintf("%v@%s", opts.GetUserId(), opts.GetHostname()),
+			EntityType:   audit.CoordinatorEntity,
 			Verb:         audit.Connect,
 			ResourceId:   fmt.Sprintf("%s:%v", viper.GetString("mongo-host"), viper.GetInt("mongo-port")),
 			ResourceType: audit.DbResource,
 		})
 
-		/*
-		   ___  _   _ ___ _   _ ___
-		  / _ \| | | | __| | | | __|
-		 | (_) | |_| | _|| |_| | _|
-		  \__\_\\___/|___|\___/|___|
-
-		*/
-		logrus.Infof("establishing connection to queue...")
-		nats, err := queue.InitNats(queue.InitNatsOpts{
-			Id:          ServiceId,
-			Addr:        viper.GetString("nats-addr"),
-			Username:    viper.GetString("nats-username"),
-			Password:    viper.GetString("nats-password"),
-			NKey:        viper.GetString("nats-nkey-value"),
-			ServiceLogs: serviceLogs,
-		})
+		logrus.Infof("initialising queue connection...")
+		logrus.Debugf("connecting to nats...")
+		natsAddr := viper.GetString("nats-addr")
+		natsInstance, err := persistence.NewNats(
+			persistence.NatsConnectionOpts{
+				AppName: appName,
+				Host:    natsAddr,
+			},
+			persistence.NatsAuthOpts{
+				NKey: viper.GetString("nats-nkey-value"),
+			},
+			&serviceLogs,
+		)
 		if err != nil {
-			return fmt.Errorf("failed to initialise nats queue: %w", err)
+			return fmt.Errorf("failed to create nats client: %w", err)
 		}
-		if err := nats.Connect(); err != nil {
+		if err := natsInstance.Init(); err != nil {
 			return fmt.Errorf("failed to connect to nats: %w", err)
 		}
-		logrus.Debugf("established connection to queue")
+		logrus.Infof("connected to nats")
+		opts.AddShutdownProcess("nats", natsInstance.Shutdown)
 		audit.Log(audit.LogEntry{
-			EntityId:     serviceInstanceId,
+			EntityId:     fmt.Sprintf("%v@%s", opts.GetUserId(), opts.GetHostname()),
 			EntityType:   audit.CoordinatorEntity,
 			Verb:         audit.Connect,
 			ResourceId:   viper.GetString("nats-addr"),
-			ResourceType: audit.CacheResource,
+			ResourceType: audit.DbResource,
 		})
 
-		coodinatorContext := context.Background()
-		coordinatorInstance, err := coordinator.New(coordinator.NewOpts{
-			Context:  coodinatorContext,
-			HttpAddr: viper.GetString("http-listen-addr"),
-			ReadinessChecks: []func() error{
-				func() error {
-					if !auditDatabaseConnectionOk {
-						return fmt.Errorf("audit database connection is pending restoration")
-					}
-					return nil
-				},
+		logrus.Infof("initialising cache connection...")
+		logrus.Debugf("connecting to redis...")
+		redisAddr := viper.GetString("redis-addr")
+		redisInstance := persistence.NewRedis(
+			persistence.RedisConnectionOpts{
+				AppName: appName,
+				Addr:    redisAddr,
 			},
-			LivenessChecks: []func() error{
-				func() error {
-					if !auditDatabaseConnectionOk && auditDatabaseConnectionStatusLastUpdatedAt.Before(time.Now().Add(-30*time.Second)) {
-						return fmt.Errorf("audit database connection is invalid")
-					}
-					return nil
-				},
+			persistence.RedisAuthOpts{
+				Username: viper.GetString("redis-username"),
+				Password: viper.GetString("redis-password"),
 			},
-			GrpcAddr: viper.GetString("grpc-listen-addr"),
-			GrpcCert: serverCert,
-			GrpcCa:   caPem,
-			Services: coordinator.Services{
-				Queue: nats,
-			},
-			ServiceLogs: serviceLogs,
+			&serviceLogs,
+		)
+		if err := redisInstance.Init(); err != nil {
+			return fmt.Errorf("failed to connect to redis: %w", err)
+		}
+		logrus.Infof("connected to redis")
+		opts.AddShutdownProcess("redis", redisInstance.Shutdown)
+		audit.Log(audit.LogEntry{
+			EntityId:     fmt.Sprintf("%v@%s", opts.GetUserId(), opts.GetHostname()),
+			EntityType:   audit.CoordinatorEntity,
+			Verb:         audit.Connect,
+			ResourceId:   viper.GetString("redis-addr"),
+			ResourceType: audit.DbResource,
+		})
+
+		healthcheckProbes := []func() error{
+			redisInstance.GetStatus().GetError,
+			mongoInstance.GetStatus().GetError,
+			natsInstance.GetStatus().GetError,
+		}
+
+		handler := coordinator.GetHttpApplication(coordinator.HttpApplicationOpts{
+			Cache: redisInstance,
+			Queue: natsInstance,
+
+			LivenessChecks:  healthcheckProbes,
+			ReadinessChecks: healthcheckProbes,
+
+			ServiceLogs: opts.GetServiceLogs(),
+		})
+		httpServer, err := common.NewHttpServer(common.NewHttpServerOpts{
+			Addr:        viper.GetString("listen-addr"),
+			Handler:     handler,
+			ServiceLogs: opts.GetServiceLogs(),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to initialise coordinator component")
+			return fmt.Errorf("failed to create http server: %w", err)
 		}
-		if err := coordinatorInstance.Start(); err != nil {
-			return fmt.Errorf("failed to start coordinator component")
+		opts.AddShutdownProcess("http", httpServer.Shutdown)
+		if err := httpServer.Start(); err != nil {
+			return fmt.Errorf("failed to start http server: %w", err)
 		}
 
 		return nil
 	},
-}
+})

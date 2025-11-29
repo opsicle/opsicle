@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"opsicle/internal/cache"
 	"opsicle/internal/cli"
+	"opsicle/internal/persistence"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -31,23 +32,35 @@ var flags cli.Flags = cli.Flags{
 	},
 }
 
-func init() {
-	flags.AddToCommand(Command)
-}
-
-var Command = &cobra.Command{
+var Command = cli.NewCommand(cli.CommandOpts{
+	Name:    "check.cache",
+	Flags:   flags,
 	Use:     "cache",
 	Aliases: []string{"c"},
 	Short:   "Checks cache connectivity",
-	PreRun: func(cmd *cobra.Command, args []string) {
-		flags.BindViper(cmd)
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, opts *cli.Command, args []string) error {
+		appName := opts.GetFullname()
+		serviceLogs := opts.GetServiceLogs()
+
 		logrus.Infof("verifying cache connectivity...")
+		redisInstance := persistence.NewRedis(
+			persistence.RedisConnectionOpts{
+				AppName: appName,
+				Addr:    viper.GetString("redis-addr"),
+			},
+			persistence.RedisAuthOpts{
+				Username: viper.GetString("redis-username"),
+				Password: viper.GetString("redis-password"),
+			},
+			&serviceLogs,
+		)
+		if err := redisInstance.Init(); err != nil {
+			return fmt.Errorf("failed to connect to redis: %w", err)
+		}
+
 		if err := cache.InitRedis(cache.InitRedisOpts{
-			Addr:     viper.GetString("redis-addr"),
-			Username: viper.GetString("redis-username"),
-			Password: viper.GetString("redis-password"),
+			RedisConnection: redisInstance,
+			ServiceLogs:     serviceLogs,
 		}); err != nil {
 			return fmt.Errorf("failed to initialise cache: %w", err)
 		}
@@ -61,4 +74,4 @@ var Command = &cobra.Command{
 		))
 		return nil
 	},
-}
+})

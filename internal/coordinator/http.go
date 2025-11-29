@@ -1,52 +1,39 @@
 package coordinator
 
 import (
-	"errors"
-	"fmt"
 	"net/http"
 	"opsicle/internal/common"
+	"opsicle/internal/persistence"
+	"time"
 
 	"github.com/gorilla/mux"
 )
 
-type HttpServer struct {
-	Addr            string
-	Done            chan struct{}
-	Errors          chan error
-	Instance        *http.Server
-	LivenessChecks  healthcheckProbes
-	ReadinessChecks healthcheckProbes
+type HttpApplicationOpts struct {
+	Cache *persistence.Redis
+	Queue *persistence.Nats
+
+	LivenessChecks  []func() error
+	ReadinessChecks []func() error
 
 	ServiceLogs chan<- common.ServiceLog
 }
 
-func (h *HttpServer) Listen() {
-	httpAddr := h.Addr
-	h.Done = make(chan struct{})
-	h.Instance = &http.Server{Addr: httpAddr}
-
+func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 	handler := mux.NewRouter()
-	registerHealthcheckRoutes(
-		RouteRegistrationOpts{
-			Router:      handler,
-			ServiceLogs: h.ServiceLogs,
-		},
-		HealthcheckOpts{
-			LivenessChecks:  h.LivenessChecks,
-			ReadinessChecks: h.ReadinessChecks,
-		},
-	)
-	registerMetricsRoutes(RouteRegistrationOpts{
-		Router:      handler,
-		ServiceLogs: h.ServiceLogs,
+
+	handler.Handle("/asd", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-time.After(3 * time.Second)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+
+	handler.NotFoundHandler = common.GetNotFoundHandler()
+	common.RegisterCommonHttpEndpoints(common.CommonHttpEndpointsOpts{
+		LivenessChecks:  opts.LivenessChecks,
+		ReadinessChecks: opts.ReadinessChecks,
+		Router:          handler,
+		ServiceLogs:     opts.ServiceLogs,
 	})
-	h.Instance.Handler = handler
-	done := h.Done
-	go func() {
-		defer close(done)
-		h.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "starting http listener...")
-		if serveErr := h.Instance.ListenAndServe(); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-			h.Errors <- fmt.Errorf("failed to start http server: %w", serveErr)
-		}
-	}()
+	return handler
 }

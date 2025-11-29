@@ -256,3 +256,43 @@ func (c *Client) ListApprovalRequests() ([]string, error) {
 	}
 	return approvalRequestKeys, nil
 }
+
+func (c *Client) Ping() error {
+	approverUrl := *c.ApproverUrl
+	approverUrl.Path = "/healthz"
+	httpRequest, err := http.NewRequest(
+		http.MethodGet,
+		approverUrl.String(),
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create http request to get approval requests: %w", err)
+	}
+	httpRequest.Header.Add("Content-Type", "application/json")
+	httpRequest.Header.Add("User-Agent", fmt.Sprintf("opsicle-sdk/client-%s", c.Id))
+	if c.BasicAuth != nil {
+		httpRequest.SetBasicAuth(c.BasicAuth.Username, c.BasicAuth.Password)
+	}
+	if c.BearerAuth != nil {
+		httpRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.BearerAuth.Token))
+	}
+	httpResponse, err := c.HttpClient.Do(httpRequest)
+	if err != nil {
+		return fmt.Errorf("failed to execute http request to get approval requests: %w", err)
+	}
+	responseBody, err := io.ReadAll(httpResponse.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+	if httpResponse.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to receive a successful response (status code: %v): %s", httpResponse.StatusCode, string(responseBody))
+	}
+	var response common.HttpResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return fmt.Errorf("failed to parse response from approver service: %w", err)
+	}
+	if !response.Success {
+		return fmt.Errorf("failed healthcheck: %s", response.Code)
+	}
+	return nil
+}

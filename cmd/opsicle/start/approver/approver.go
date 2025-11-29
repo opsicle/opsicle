@@ -6,16 +6,13 @@ import (
 	"opsicle/internal/cache"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
+	"opsicle/internal/persistence"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-func init() {
-	flags.AddToCommand(Command)
-}
 
 var flags cli.Flags = cli.Flags{
 	{
@@ -122,29 +119,43 @@ var flags cli.Flags = cli.Flags{
 	},
 }
 
-var Command = &cobra.Command{
+var Command = cli.NewCommand(cli.CommandOpts{
+	Name:    "approver",
+	Flags:   flags,
 	Use:     "approver",
 	Aliases: []string{"a"},
 	Short:   "Starts the approver component",
 	Long:    "Starts the approver component which serves as a background job that communicates with the configured component",
-	PreRun: func(cmd *cobra.Command, args []string) {
-		flags.BindViper(cmd)
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-
-		serviceLogs := make(chan common.ServiceLog, 64)
-		common.StartServiceLogLoop(serviceLogs)
+	Run: func(cmd *cobra.Command, opts *cli.Command, args []string) error {
+		appName := opts.GetFullname()
+		serviceLogs := opts.GetServiceLogs()
 
 		isRedisEnabled := viper.GetBool("redis-enabled")
 		logrus.Debugf("redis-enabled status: %v", isRedisEnabled)
 		if isRedisEnabled {
+			redisInstance := persistence.NewRedis(
+				persistence.RedisConnectionOpts{
+					AppName: appName,
+					Addr:    viper.GetString("redis-addr"),
+				},
+				persistence.RedisAuthOpts{
+					Username: viper.GetString("redis-username"),
+					Password: viper.GetString("redis-password"),
+				},
+				&serviceLogs,
+			)
+			if err := redisInstance.Init(); err != nil {
+				return fmt.Errorf("failed to connect to redis: %w", err)
+			}
+
 			if err := cache.InitRedis(cache.InitRedisOpts{
-				Addr:        viper.GetString("redis-addr"),
-				Username:    viper.GetString("redis-username"),
-				Password:    viper.GetString("redis-password"),
-				ServiceLogs: serviceLogs,
+				RedisConnection: redisInstance,
+				ServiceLogs:     serviceLogs,
 			}); err != nil {
-				return fmt.Errorf("failed to initialise redis cache: %w", err)
+				return fmt.Errorf("failed to initialise cache: %w", err)
+			}
+			if err := cache.Get().Ping(); err != nil {
+				return fmt.Errorf("failed to establish connection to cache: %w", err)
 			}
 			logrus.Infof("redis client initialised")
 		}
@@ -229,4 +240,4 @@ var Command = &cobra.Command{
 
 		return cmd.Help()
 	},
-}
+})

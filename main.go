@@ -26,7 +26,7 @@ func main() {
 
 func handleError(err error) {
 	if err != nil {
-		logrus.Debugf("exitting because of error:\n```\n%s\n```\n", err)
+		logrus.Errorf("exitting because of error:\n```\n%s\n```\n", err)
 	}
 	switch true {
 	case errors.Is(err, types.ErrorDatabaseIssue):

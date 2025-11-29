@@ -1,9 +1,12 @@
 package common
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type HttpServer struct {
@@ -12,28 +15,52 @@ type HttpServer struct {
 	ServiceLogs chan<- ServiceLog
 }
 
+func (s *HttpServer) Shutdown() error {
+	s.ServiceLogs <- ServiceLogf(LogLevelInfo, "shutting down http server at %s...", s.Server.Addr)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := s.Server.Shutdown(ctx); err != nil {
+		return fmt.Errorf("http server closed: %s", err)
+	}
+	return nil
+}
+
 func (s *HttpServer) Start() error {
 	s.ServiceLogs <- ServiceLogf(LogLevelInfo, "starting http server on %s...", s.Server.Addr)
-	go func() {
-		<-s.Done
-		if err := s.Server.Close(); err != nil {
-			s.ServiceLogs <- ServiceLogf(LogLevelError, "server closed: %s", err)
-		}
-	}()
-
 	if err := s.Server.ListenAndServe(); err != nil {
-		return fmt.Errorf("failed to start server: %w", err)
+		if !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("failed to start http server: %w", err)
+		}
 	}
 	return nil
 }
 
 type NewHttpServerOpts struct {
-	Addr        string
-	BasicAuth   *NewHttpServerBasicAuthOpts
-	BearerAuth  *NewHttpServerBearerAuthOpts
-	Done        chan Done
+	// Addr specifies the interface address which the server should
+	// listen on
+	Addr string
+
+	// BasicAuth when defined, sets the server up so that BasicAuth
+	// is required
+	BasicAuth *NewHttpServerBasicAuthOpts
+
+	// BearerAuth when defined, sets the server up so that token-based
+	// authentication is required
+	BearerAuth *NewHttpServerBearerAuthOpts
+
+	// Done is the channel through which a message will come through to
+	// let the server know to initiate a graceful shutdown
+	Done chan Done
+
+	// IpAllowlist when defined, sets the server up so that only
+	// connections from the addresses defined here are allowed to
+	// connect to the server
 	IpAllowlist *NewHttpServerIpAllowlistOpts
-	Handler     http.Handler
+
+	// Handler is the
+	Handler http.Handler
+
+	// ServiceLogs is where logs are sent to
 	ServiceLogs chan<- ServiceLog
 }
 
@@ -53,6 +80,9 @@ type NewHttpServerIpAllowlistOpts struct {
 func NewHttpServer(opts NewHttpServerOpts) (*HttpServer, error) {
 	logger := GetRequestLoggerMiddleware(opts.ServiceLogs)
 	metrics := GetCommonMetricsMiddleware(opts.ServiceLogs)
+
+	// var router = mux.NewRouter()
+	// router.NotFoundHandler = GetNotFoundHandler()
 
 	var handler http.Handler = opts.Handler
 

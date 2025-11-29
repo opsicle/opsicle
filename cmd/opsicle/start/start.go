@@ -4,15 +4,17 @@ import (
 	"opsicle/cmd/opsicle/start/approver"
 	"opsicle/cmd/opsicle/start/controller"
 	"opsicle/cmd/opsicle/start/coordinator"
+	"opsicle/cmd/opsicle/start/reporter"
 	"opsicle/cmd/opsicle/start/worker"
 
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	Command.AddCommand(approver.Command)
-	Command.AddCommand(controller.Command)
-	Command.AddCommand(coordinator.Command)
+	Command.AddCommand(approver.Command.Get())
+	Command.AddCommand(controller.Command.Get())
+	Command.AddCommand(coordinator.Command.Get())
+	Command.AddCommand(reporter.Command)
 	Command.AddCommand(worker.Command)
 }
 

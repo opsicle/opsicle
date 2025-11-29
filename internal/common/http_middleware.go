@@ -23,7 +23,9 @@ func GetCommonMetricsMiddleware(serviceLogs chan<- ServiceLog) func(http.Handler
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			incomingRequestsCounter.WithLabelValues(r.Method, r.URL.Path).Inc()
+			pendingRequestsCounter.WithLabelValues(r.Method, r.URL.Path).Inc()
 			next.ServeHTTP(w, r)
+			pendingRequestsCounter.WithLabelValues(r.Method, r.URL.Path).Dec()
 		})
 	}
 }

@@ -25,7 +25,7 @@ var flags cli.Flags = cli.Flags{
 
 func init() {
 	Command.AddCommand(audit_database.Command)
-	Command.AddCommand(cache.Command)
+	Command.AddCommand(cache.Command.Get())
 	Command.AddCommand(database.Command)
 	Command.AddCommand(queue.Command)
 

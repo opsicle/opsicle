@@ -14,6 +14,7 @@ import (
 
 func Log(log LogEntry) error {
 	if client != nil {
+		logrus.Tracef("logged audit entry %v", log)
 		return client.Log(log)
 	}
 	logrus.Warnf("audit.Log called without a valid logger")

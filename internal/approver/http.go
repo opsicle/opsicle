@@ -44,6 +44,11 @@ type StartHttpServerIpAllowlistOpts struct {
 func StartHttpServer(opts StartHttpServerOpts) error {
 	router := mux.NewRouter()
 
+	registerHealthcheckRoutes(RouteRegistrationOpts{
+		Router:      router,
+		ServiceLogs: opts.ServiceLogs,
+	})
+
 	for urlPath, routeHandlers := range routesMapping {
 		for method, getRouteHandler := range routeHandlers {
 			router.HandleFunc(urlPath, getRouteHandler()).Methods(method)
