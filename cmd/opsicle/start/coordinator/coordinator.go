@@ -52,6 +52,7 @@ var Command = cli.NewCommand(cli.CommandOpts{
 			ResourceId:   fmt.Sprintf("%s:%v", viper.GetString("mongo-host"), viper.GetInt("mongo-port")),
 			ResourceType: audit.DbResource,
 		})
+		logrus.Infof("initialised audit module")
 
 		logrus.Infof("initialising queue connection...")
 		logrus.Debugf("connecting to nats...")
@@ -72,7 +73,7 @@ var Command = cli.NewCommand(cli.CommandOpts{
 		if err := natsInstance.Init(); err != nil {
 			return fmt.Errorf("failed to connect to nats: %w", err)
 		}
-		logrus.Infof("connected to nats")
+		logrus.Debugf("connected to nats")
 		opts.AddShutdownProcess("nats", natsInstance.Shutdown)
 		audit.Log(audit.LogEntry{
 			EntityId:     fmt.Sprintf("%v@%s", opts.GetUserId(), opts.GetHostname()),
@@ -81,6 +82,7 @@ var Command = cli.NewCommand(cli.CommandOpts{
 			ResourceId:   viper.GetString("nats-addr"),
 			ResourceType: audit.DbResource,
 		})
+		logrus.Infof("initialised queue connection")
 
 		logrus.Infof("initialising cache connection...")
 		logrus.Debugf("connecting to redis...")
@@ -99,7 +101,7 @@ var Command = cli.NewCommand(cli.CommandOpts{
 		if err := redisInstance.Init(); err != nil {
 			return fmt.Errorf("failed to connect to redis: %w", err)
 		}
-		logrus.Infof("connected to redis")
+		logrus.Debugf("connected to redis")
 		opts.AddShutdownProcess("redis", redisInstance.Shutdown)
 		audit.Log(audit.LogEntry{
 			EntityId:     fmt.Sprintf("%v@%s", opts.GetUserId(), opts.GetHostname()),
@@ -108,6 +110,7 @@ var Command = cli.NewCommand(cli.CommandOpts{
 			ResourceId:   viper.GetString("redis-addr"),
 			ResourceType: audit.DbResource,
 		})
+		logrus.Infof("initialised cache connection")
 
 		healthcheckProbes := []func() error{
 			redisInstance.GetStatus().GetError,
@@ -115,6 +118,7 @@ var Command = cli.NewCommand(cli.CommandOpts{
 			natsInstance.GetStatus().GetError,
 		}
 
+		logrus.Infof("initialising web application...")
 		handler := coordinator.GetHttpApplication(coordinator.HttpApplicationOpts{
 			Cache: redisInstance,
 			Queue: natsInstance,
@@ -133,6 +137,8 @@ var Command = cli.NewCommand(cli.CommandOpts{
 			return fmt.Errorf("failed to create http server: %w", err)
 		}
 		opts.AddShutdownProcess("http", httpServer.Shutdown)
+		logrus.Infof("initialised web application")
+		logrus.Infof("starting web application...")
 		if err := httpServer.Start(); err != nil {
 			return fmt.Errorf("failed to start http server: %w", err)
 		}

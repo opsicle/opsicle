@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"opsicle/internal/audit"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/pkg/controller"
 	"time"
 
@@ -15,13 +16,6 @@ import (
 )
 
 var flags cli.Flags = cli.Flags{
-	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "Defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
 	{
 		Name:         "more",
 		DefaultValue: false,
@@ -52,7 +46,7 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "When this is specified, the latest logs will appear first",
 		Type:         cli.FlagTypeBool,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

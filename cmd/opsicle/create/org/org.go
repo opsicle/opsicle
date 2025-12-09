@@ -7,6 +7,7 @@ import (
 	"opsicle/cmd/opsicle/create/org/token"
 	"opsicle/cmd/opsicle/create/org/user"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/internal/types"
 	"opsicle/internal/validate"
 	"opsicle/pkg/controller"
@@ -20,13 +21,6 @@ import (
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-	{
 		Name:         "org-code",
 		DefaultValue: "",
 		Usage:        "code of the orgnaisation to be created",
@@ -38,7 +32,7 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "name of the orgnaisation to be created",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	Command.AddCommand(user.Command)

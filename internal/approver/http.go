@@ -62,7 +62,6 @@ func StartHttpServer(opts StartHttpServerOpts) error {
 
 	serverOpts := common.NewHttpServerOpts{
 		Addr:        opts.Addr,
-		Done:        opts.Done,
 		Handler:     router,
 		ServiceLogs: opts.ServiceLogs,
 	}

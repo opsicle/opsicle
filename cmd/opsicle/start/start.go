@@ -14,7 +14,7 @@ func init() {
 	Command.AddCommand(approver.Command.Get())
 	Command.AddCommand(controller.Command.Get())
 	Command.AddCommand(coordinator.Command.Get())
-	Command.AddCommand(reporter.Command)
+	Command.AddCommand(reporter.Command.Get())
 	Command.AddCommand(worker.Command)
 }
 

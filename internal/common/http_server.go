@@ -10,7 +10,6 @@ import (
 )
 
 type HttpServer struct {
-	Done        chan Done
 	Server      http.Server
 	ServiceLogs chan<- ServiceLog
 }
@@ -47,10 +46,6 @@ type NewHttpServerOpts struct {
 	// BearerAuth when defined, sets the server up so that token-based
 	// authentication is required
 	BearerAuth *NewHttpServerBearerAuthOpts
-
-	// Done is the channel through which a message will come through to
-	// let the server know to initiate a graceful shutdown
-	Done chan Done
 
 	// IpAllowlist when defined, sets the server up so that only
 	// connections from the addresses defined here are allowed to
@@ -123,7 +118,6 @@ func NewHttpServer(opts NewHttpServerOpts) (*HttpServer, error) {
 	handler = logger(metrics(handler))
 
 	return &HttpServer{
-		Done: opts.Done,
 		Server: http.Server{
 			Addr:              opts.Addr,
 			Handler:           handler,

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/pkg/controller"
 
 	"github.com/olekukonko/tablewriter"
@@ -38,19 +39,12 @@ var actionMaskLabels = []struct {
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-	{
 		Name:         "org",
 		DefaultValue: "",
 		Usage:        "codeword of the organisation to list roles from",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"opsicle/cmd/opsicle/remove/template/user"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/pkg/controller"
 
 	"github.com/charmbracelet/lipgloss"
@@ -13,20 +14,13 @@ import (
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "Defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-	{
 		Name:         "template-name",
 		Short:        't',
 		DefaultValue: "",
 		Usage:        "Defines the name of the template to remove",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	Command.AddCommand(user.Command)

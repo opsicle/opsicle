@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	Command.AddCommand(email.Command)
+	Command.AddCommand(email.Command.Get())
 }
 
 var Command = &cobra.Command{

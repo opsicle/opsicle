@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"fmt"
 	"opsicle/internal/common"
 	"opsicle/internal/integrations/redis"
 	"opsicle/internal/persistence"
@@ -14,15 +13,10 @@ type InitRedisOpts struct {
 }
 
 // InitRedis initialises a singleton instance of a Redis cache
-func InitRedis(opts InitRedisOpts) error {
+func InitRedis(opts InitRedisOpts) {
 	redisOpts := redis.NewOpts{
 		Client:      opts.RedisConnection,
 		ServiceLogs: opts.ServiceLogs,
 	}
-	client, err := redis.New(redisOpts)
-	if err != nil {
-		return fmt.Errorf("failed to create redis client: %w", err)
-	}
-	instance = client
-	return nil
+	instance = redis.New(redisOpts)
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/internal/types"
 	"opsicle/internal/validate"
 	"opsicle/pkg/controller"
@@ -15,13 +16,6 @@ import (
 )
 
 var Flags cli.Flags = cli.Flags{
-	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
 	{
 		Name:         "email",
 		DefaultValue: "",
@@ -40,7 +34,7 @@ var Flags cli.Flags = cli.Flags{
 		Usage:        "Type of membership that the user should have",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	Flags.AddToCommand(Command)

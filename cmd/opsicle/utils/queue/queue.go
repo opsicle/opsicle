@@ -9,9 +9,9 @@ import (
 )
 
 func init() {
-	Command.AddCommand(push.Command)
-	Command.AddCommand(pop.Command)
-	Command.AddCommand(subscribe.Command)
+	Command.AddCommand(push.Command.Get())
+	Command.AddCommand(pop.Command.Get())
+	Command.AddCommand(subscribe.Command.Get())
 }
 
 var Command = &cobra.Command{

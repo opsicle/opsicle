@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 
@@ -19,31 +20,18 @@ import (
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-	{
 		Name:         "org",
 		DefaultValue: "",
 		Usage:        "codeword of the organisation to view tokens for",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
-func init() {
-	flags.AddToCommand(Command)
-}
-
-var Command = &cobra.Command{
+var Command = cli.NewCommand(cli.CommandOpts{
+	Flags: flags,
 	Use:   "token [token-id]",
 	Short: "Displays details for an organisation token",
-	PreRun: func(cmd *cobra.Command, args []string) {
-		flags.BindViper(cmd)
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, opts *cli.Command, args []string) error {
 		controllerUrl := viper.GetString("controller-url")
 		methodId := "opsicle/get/org/token"
 
@@ -245,7 +233,7 @@ var Command = &cobra.Command{
 
 		return nil
 	},
-}
+})
 
 func formatActionMask(mask uint64) string {
 	if mask == 0 {

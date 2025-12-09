@@ -9,6 +9,7 @@ import (
 )
 
 type DeleteSessionV1Opts struct {
+	Cache       cache.Cache
 	BearerToken string
 	CachePrefix string
 }
@@ -21,12 +22,12 @@ func DeleteSessionV1(opts DeleteSessionV1Opts) (string, error) {
 			return "", auth.ErrorJwtTokenSignature
 		case errors.Is(err, auth.ErrorJwtTokenExpired):
 			if claims != nil && claims.ID != "" {
-				cache.Get().Del(strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":"))
+				opts.Cache.Del(strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":"))
 			}
 			return "", auth.ErrorJwtTokenExpired
 		case errors.Is(err, auth.ErrorJwtClaimsInvalid):
 			if claims != nil && claims.ID != "" {
-				cache.Get().Del(strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":"))
+				opts.Cache.Del(strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":"))
 			}
 			return "", auth.ErrorJwtClaimsInvalid
 		default:
@@ -36,6 +37,6 @@ func DeleteSessionV1(opts DeleteSessionV1Opts) (string, error) {
 	if claims == nil || claims.ID == "" {
 		return "", nil
 	}
-	cache.Get().Del(strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":"))
+	opts.Cache.Del(strings.Join([]string{opts.CachePrefix, claims.UserID, claims.ID}, ":"))
 	return claims.ID, nil
 }

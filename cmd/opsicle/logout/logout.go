@@ -3,6 +3,7 @@ package logout
 import (
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/pkg/controller"
 
 	"github.com/sirupsen/logrus"
@@ -10,14 +11,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var flags cli.Flags = cli.Flags{
-	{
-		Name:         "controller-url",
-		DefaultValue: "http://localhost:54321",
-		Usage:        "defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-}
+var flags cli.Flags = cli.Flags{}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

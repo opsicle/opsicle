@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"opsicle/internal/common"
 	"opsicle/internal/persistence"
-	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -22,11 +21,13 @@ type HttpApplicationOpts struct {
 func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 	handler := mux.NewRouter()
 
-	handler.Handle("/asd", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-time.After(3 * time.Second)
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
-	}))
+	api := handler.PathPrefix("/api").Subrouter()
+	apiOpts := RouteRegistrationOpts{
+		Router:      api,
+		ServiceLogs: opts.ServiceLogs,
+	}
+
+	registerJobsRoutes(apiOpts)
 
 	handler.NotFoundHandler = common.GetNotFoundHandler()
 	common.RegisterCommonHttpEndpoints(common.CommonHttpEndpointsOpts{

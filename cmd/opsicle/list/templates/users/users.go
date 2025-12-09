@@ -3,6 +3,7 @@ package users
 import (
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/pkg/controller"
 	"sort"
 	"strings"
@@ -14,20 +15,13 @@ import (
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "Defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-	{
 		Name:         "template-id",
 		Short:        't',
 		DefaultValue: "",
 		Usage:        "ID of the template to remove a user from",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

@@ -96,7 +96,7 @@ func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested deletion of org[%s]", session.UserId, orgId))
 
-	orgInstance, err := models.GetOrgV1(models.GetOrgV1Opts{Db: db, Id: &orgId})
+	orgInstance, err := models.GetOrgV1(models.GetOrgV1Opts{Db: dbInstance, Id: &orgId})
 	if err != nil {
 		switch {
 		case errors.Is(err, models.ErrorNotFound):
@@ -108,7 +108,7 @@ func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgUser, err := orgInstance.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: session.UserId})
+	orgUser, err := orgInstance.GetUserV1(models.GetOrgUserV1Opts{Db: dbInstance, UserId: session.UserId})
 	if err != nil {
 		switch {
 		case errors.Is(err, models.ErrorNotFound):
@@ -121,7 +121,7 @@ func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _, canDelete, err := orgUser.CanV1(models.DatabaseConnection{Db: db}, models.ResourceOrg, models.ActionDelete)
+	_, _, canDelete, err := orgUser.CanV1(models.DatabaseConnection{Db: dbInstance}, models.ResourceOrg, models.ActionDelete)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to evaluate delete permissions for user[%s] in org[%s]: %s", session.UserId, orgId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to verify requester", types.ErrorDatabaseIssue)
@@ -133,7 +133,7 @@ func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := orgInstance.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := orgInstance.DeleteV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to delete org[%s] by user[%s]: %s", orgId, session.UserId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete org", types.ErrorDatabaseIssue)
 		return
@@ -196,7 +196,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	// create organisation
 
 	orgInstance, err := models.CreateOrgV1(models.CreateOrgV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		Code:   input.Code,
 		Name:   input.Name,
 		Type:   models.TypeTenantOrg,
@@ -216,7 +216,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("adding user[%s] to org[%s]", session.UserId, orgInstance.GetId()))
 	if err := orgInstance.AddUserV1(models.AddUserToOrgV1{
-		Db:         db,
+		Db:         dbInstance,
 		UserId:     session.UserId,
 		MemberType: string(models.TypeOrgAdmin),
 	}); err != nil {
@@ -230,7 +230,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("adding default admin role to org[%s]...", orgInstance.GetId()))
 	defaultAdminRole, err := orgInstance.CreateRoleV1(models.CreateOrgRoleV1Input{
-		DatabaseConnection: models.DatabaseConnection{Db: db},
+		DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 		RoleName:           models.DefaultOrgRoleAdminName,
 		UserId:             session.UserId,
 	})
@@ -255,7 +255,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		if err := defaultAdminRole.CreatePermissionV1(models.CreateOrgRolePermissionV1Input{
 			Allows:             models.ActionSetAdmin,
 			Resource:           resource,
-			DatabaseConnection: models.DatabaseConnection{Db: db},
+			DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 		}); err != nil {
 			permissionErrs = append(permissionErrs, err)
 		}
@@ -270,7 +270,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("adding default worker role to org[%s]...", orgInstance.GetId()))
 	defaultWorkerRole, err := orgInstance.CreateRoleV1(models.CreateOrgRoleV1Input{
-		DatabaseConnection: models.DatabaseConnection{Db: db},
+		DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 		RoleName:           models.DefaultOrgRoleWorkerName,
 		UserId:             session.UserId,
 	})
@@ -291,7 +291,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 		if err := defaultWorkerRole.CreatePermissionV1(models.CreateOrgRolePermissionV1Input{
 			Allows:             allowedActions,
 			Resource:           resourceType,
-			DatabaseConnection: models.DatabaseConnection{Db: db},
+			DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 		}); err != nil {
 			permissionErrs = append(permissionErrs, err)
 		}
@@ -306,7 +306,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	assigner := session.UserId
 	if err := defaultAdminRole.AssignUserV1(models.AssignOrgRoleV1Input{
-		DatabaseConnection: models.DatabaseConnection{Db: db},
+		DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 		OrgId:              orgInstance.GetId(),
 		UserId:             session.UserId,
 		AssignedBy:         &assigner,
@@ -320,7 +320,7 @@ func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("creating certificate authority for org[%s]", orgInstance.GetId()))
 	if _, err := orgInstance.CreateCertificateAuthorityV1(models.CreateOrgCertificateAuthorityV1Input{
-		DatabaseConnection: models.DatabaseConnection{Db: db},
+		DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 		CertOptions: &tls.CertificateOptions{
 			NotAfter: time.Now().Add(time.Hour * 24 * 365 * 5),
 		},
@@ -374,7 +374,7 @@ func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	// retrieve the org
 	getOrgOpts := models.GetOrgV1Opts{
-		Db: db,
+		Db: dbInstance,
 	}
 	if isorgRefUuid {
 		getOrgOpts.Id = &orgRef
@@ -396,7 +396,7 @@ func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 	// only return the information if the user is part of the org
 
 	orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: session.UserId,
 	})
 	if err != nil {
@@ -463,7 +463,7 @@ func handleListOrgsV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving organisations that user[%s] is in", session.UserId))
 
 	orgs, err := models.ListUserOrgsV1(models.ListUserOrgsV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: session.UserId,
 	})
 	if err != nil {
@@ -544,7 +544,7 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested list of users from org[%s]", session.UserId, orgId))
 	org := models.Org{Id: &orgId}
-	_, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: session.UserId})
+	_, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: dbInstance, UserId: session.UserId})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get user[%s] from org[%s]: %s", session.UserId, orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
@@ -554,7 +554,7 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org users", types.ErrorDatabaseIssue)
 		return
 	}
-	orgUsers, err := org.ListUsersV1(models.DatabaseConnection{Db: db})
+	orgUsers, err := org.ListUsersV1(models.DatabaseConnection{Db: dbInstance})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list users from org[%s]: %s", orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
@@ -566,7 +566,7 @@ func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 	}
 	output := handleListOrgUsersV1Output{}
 	for _, orgUser := range orgUsers {
-		userRoles, err := orgUser.ListRolesV1(models.DatabaseConnection{Db: db})
+		userRoles, err := orgUser.ListRolesV1(models.DatabaseConnection{Db: dbInstance})
 		if err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to list roles for user[%s] in org[%s]: %s", orgUser.User.GetId(), orgId, err))
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user roles", types.ErrorDatabaseIssue)
@@ -661,7 +661,7 @@ func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested list of roles from org[%s]", session.UserId, orgId))
 	org := models.Org{Id: &orgId}
-	if _, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: session.UserId}); err != nil {
+	if _, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: dbInstance, UserId: session.UserId}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get user[%s] from org[%s]: %s", session.UserId, orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusNotFound, fmt.Sprintf("refused to list roles in org[%s] at user[%s]'s request", orgId, session.UserId), types.ErrorInvalidInput)
@@ -670,7 +670,7 @@ func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org roles", types.ErrorDatabaseIssue)
 		return
 	}
-	orgRoles, err := org.ListRolesV1(models.DatabaseConnection{Db: db})
+	orgRoles, err := org.ListRolesV1(models.DatabaseConnection{Db: dbInstance})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list roles from org[%s]: %s", orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
@@ -747,7 +747,7 @@ func handleSubmitOrgTemplateV1(w http.ResponseWriter, r *http.Request) {
 
 	org := models.Org{Id: &orgId}
 	if _, err := org.GetUserV1(models.GetOrgUserV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: session.UserId,
 	}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to verify membership of user[%s] in org[%s]: %s", session.UserId, orgId, err))
@@ -777,7 +777,7 @@ func handleSubmitOrgTemplateV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	automationTemplateVersion, err := models.SubmitOrgTemplateV1(models.SubmitOrgTemplateV1Opts{
-		Db:       db,
+		Db:       dbInstance,
 		OrgId:    orgId,
 		Template: template,
 		UserId:   session.UserId,
@@ -829,7 +829,7 @@ func handleListOrgTemplatesV1(w http.ResponseWriter, r *http.Request) {
 
 	org := models.Org{Id: &orgId}
 	if _, err := org.GetUserV1(models.GetOrgUserV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: session.UserId,
 	}); err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
@@ -841,7 +841,7 @@ func handleListOrgTemplatesV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	templates, err := org.ListTemplatesV1(models.DatabaseConnection{Db: db})
+	templates, err := org.ListTemplatesV1(models.DatabaseConnection{Db: dbInstance})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list org templates for org[%s]: %s", orgId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list automation templates", types.ErrorDatabaseIssue)
@@ -936,7 +936,7 @@ func handleListOrgTokensV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	org := models.Org{Id: &orgId}
-	orgTokens, err := org.ListTokensV1(models.ListOrgTokensV1Opts{DatabaseConnection: models.DatabaseConnection{Db: db}})
+	orgTokens, err := org.ListTokensV1(models.ListOrgTokensV1Opts{DatabaseConnection: models.DatabaseConnection{Db: dbInstance}})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list tokens for org[%s]: %s", orgId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org tokens", types.ErrorDatabaseIssue)
@@ -1048,7 +1048,7 @@ func handleGetOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 
 	org := models.Org{Id: &orgId}
 	orgToken, err := org.GetTokenByIdV1(models.GetOrgTokenByIdV1Opts{
-		DatabaseConnection: models.DatabaseConnection{Db: db},
+		DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 		TokenId:            tokenId,
 	})
 	if err != nil {
@@ -1161,7 +1161,7 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	org := models.Org{Id: &orgId}
-	orgDetails, err := models.GetOrgV1(models.GetOrgV1Opts{Db: db, Id: &orgId})
+	orgDetails, err := models.GetOrgV1(models.GetOrgV1Opts{Db: dbInstance, Id: &orgId})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get org[%s]: %s", orgId, err))
 		if errors.Is(err, models.ErrorNotFound) {
@@ -1173,7 +1173,7 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orgRole, err := org.GetRoleByIdV1(models.GetOrgRoleByIdV1Opts{
-		DatabaseConnection: models.DatabaseConnection{Db: db},
+		DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 		RoleId:             input.RoleId,
 	})
 	if err != nil {
@@ -1187,13 +1187,13 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ca, err := org.LoadCertificateAuthorityV1(models.LoadOrgCertificateAuthorityV1Opts{
-		DatabaseConnection: models.DatabaseConnection{Db: db},
+		DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 	})
 	if err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
 			log(common.LogLevelDebug, fmt.Sprintf("no certificate authority for org[%s], creating new one", orgId))
 			ca, err = org.CreateCertificateAuthorityV1(models.CreateOrgCertificateAuthorityV1Input{
-				DatabaseConnection: models.DatabaseConnection{Db: db},
+				DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 			})
 		}
 		if err != nil {
@@ -1239,7 +1239,7 @@ func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	createdBy := session.UserId
 	orgToken, err := org.CreateTokenV1(models.CreateOrgTokenV1Input{
 		TokenId:            tokenId,
-		DatabaseConnection: models.DatabaseConnection{Db: db},
+		DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
 		Name:               input.Name,
 		Description:        input.Description,
 		CertificatePem:     certificate.Pem,
@@ -1319,7 +1319,7 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	org, err := models.GetOrgV1(models.GetOrgV1Opts{
-		Db: db,
+		Db: dbInstance,
 		Id: &orgId,
 	})
 	if err != nil {
@@ -1349,7 +1349,7 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 
 	isAcceptorExists := false
 	acceptor := models.User{Email: input.Email}
-	if err := acceptor.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := acceptor.LoadByEmailV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		if !errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve acceptor", types.ErrorDatabaseIssue)
 			return
@@ -1365,7 +1365,7 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	invitationOpts := models.InviteOrgUserV1Opts{
-		Db:             db,
+		Db:             dbInstance,
 		InviterId:      session.UserId,
 		JoinCode:       joinCode,
 		MembershipType: input.Type,
@@ -1373,7 +1373,7 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	if isAcceptorExists {
 		invitationOpts.AcceptorId = acceptor.Id
 		if _, err = org.GetUserV1(models.GetOrgUserV1Opts{
-			Db:     db,
+			Db:     dbInstance,
 			UserId: session.UserId,
 		}); err != nil {
 			if !errors.Is(err, models.ErrorNotFound) {
@@ -1412,7 +1412,7 @@ func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 				Message: email.Message{
 					Title: fmt.Sprintf("You have been invited to %s on Opsicle!", org.Name),
 					Body: templates.GetOrgInviteNotificationMessage(
-						publicServerUrl,
+						publicServerUrl.String(),
 						joinCode,
 						remoteAddr,
 						userAgent,
@@ -1489,7 +1489,7 @@ func handleGetOrgCurrentUserV1(w http.ResponseWriter, r *http.Request) {
 
 	org := models.Org{Id: &orgId}
 	orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: session.UserId,
 	})
 	if err != nil {
@@ -1560,7 +1560,7 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orgInvite := models.OrgUserInvitation{Id: invitationId}
-	if err := orgInvite.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := orgInvite.LoadV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed find invitation", types.ErrorInvitationInvalid)
 			return
@@ -1582,7 +1582,7 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 	if input.IsAcceptance {
 		org := models.Org{Id: &orgInvite.OrgId}
 		if err := org.AddUserV1(models.AddUserToOrgV1{
-			Db:         db,
+			Db:         dbInstance,
 			UserId:     session.UserId,
 			MemberType: orgInvite.Type,
 		}); err != nil {
@@ -1591,13 +1591,13 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := orgInvite.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+		if err := orgInvite.DeleteByIdV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", types.ErrorDatabaseIssue)
 			return
 		}
 
 		orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{
-			Db:     db,
+			Db:     dbInstance,
 			UserId: session.UserId,
 		})
 		if err != nil {
@@ -1630,7 +1630,7 @@ func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 		})
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 	} else {
-		if err := orgInvite.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+		if err := orgInvite.DeleteByIdV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", types.ErrorDatabaseIssue)
 			return
 		}
@@ -1670,7 +1670,7 @@ func handleLeaveOrgV1(w http.ResponseWriter, r *http.Request) {
 	orgUser := models.NewOrgUser()
 	orgUser.Org.Id = &orgId
 	orgUser.User.Id = &session.UserId
-	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := orgUser.LoadV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", types.ErrorDatabaseIssue)
 		return
 	}
@@ -1685,7 +1685,7 @@ func handleLeaveOrgV1(w http.ResponseWriter, r *http.Request) {
 
 	// delete the org user
 
-	if err := orgUser.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := orgUser.DeleteV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to remove user[%s] from org[%s]: %s", session.UserId, orgId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove member", types.ErrorDatabaseIssue)
 		return
@@ -1756,7 +1756,7 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	orgUser := models.NewOrgUser()
 	orgUser.Org.Id = &orgId
 	orgUser.User.Id = &session.UserId
-	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := orgUser.LoadV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to load user to be removed", types.ErrorDatabaseIssue)
 		return
 	}
@@ -1771,7 +1771,7 @@ func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 
 	// delete the org user
 
-	if err := orgUser.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := orgUser.DeleteV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to remove user[%s] from org[%s]: %s", userId, orgId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove member", types.ErrorDatabaseIssue)
 		return
@@ -1834,7 +1834,7 @@ func handleCanOrgUserActionV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	org := models.Org{Id: &orgId}
-	orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: userId})
+	orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: dbInstance, UserId: userId})
 	if err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
 			log(common.LogLevelWarn, fmt.Sprintf("user[%s] requested permissions for user[%s] not found in org[%s]", session.UserId, userId, orgId))
@@ -1846,7 +1846,7 @@ func handleCanOrgUserActionV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowsMask, denysMask, isAllowed, err := orgUser.CanV1(models.DatabaseConnection{Db: db}, resourceValue, actionValue)
+	allowsMask, denysMask, isAllowed, err := orgUser.CanV1(models.DatabaseConnection{Db: dbInstance}, resourceValue, actionValue)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed evaluating permissions for user[%s] in org[%s] action[%s] resource[%s]: %s", userId, orgId, actionCanonical, resourceCanonical, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to evaluate permissions", types.ErrorDatabaseIssue)
@@ -1914,7 +1914,7 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 
 	if isUserEmail {
 		user := models.User{Email: input.User}
-		if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
+		if err := user.LoadByEmailV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("user[%s] submitted an invalid user email: %s", session.UserId, err))
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user identifier", types.ErrorInvalidInput)
 			return
@@ -1945,7 +1945,7 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	orgUser := models.NewOrgUser()
 	orgUser.Org.Id = &orgId
 	orgUser.User.Id = &session.UserId
-	if err := orgUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := orgUser.LoadV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to load user[%s] in org[%s]: %s", userId, orgId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve org user", types.ErrorDatabaseIssue)
 		return
@@ -1960,7 +1960,7 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 			if membershipType.(string) != string(models.TypeOrgAdmin) {
 				org := models.Org{Id: &orgId}
 				adminsCount, err := org.GetRoleCountV1(models.GetRoleCountV1Opts{
-					Db:   db,
+					Db:   dbInstance,
 					Role: models.TypeOrgAdmin,
 				})
 				if err != nil {
@@ -1979,7 +1979,7 @@ func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	// make org user changes
 
 	if err := orgUser.UpdateFieldsV1(models.UpdateFieldsV1{
-		Db:          db,
+		Db:          dbInstance,
 		FieldsToSet: input.Update,
 	}); err != nil {
 		if errors.Is(err, models.ErrorInvalidInput) {

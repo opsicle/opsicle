@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/pkg/controller"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,13 +20,6 @@ import (
 )
 
 var flags cli.Flags = cli.Flags{
-	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "Defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
 	{
 		Name:         "org",
 		DefaultValue: "",
@@ -38,7 +32,7 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "Location of the output directory (when specified, generated API key, certificate, and key will be placed in this directory)",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

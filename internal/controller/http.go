@@ -1,8 +1,11 @@
 package controller
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"opsicle/internal/cache"
 	"opsicle/internal/common"
 	"opsicle/internal/persistence"
 	"opsicle/internal/queue"
@@ -13,21 +16,54 @@ import (
 	"opsicle/internal/controller/models"
 
 	"github.com/gorilla/mux"
-	"github.com/sirupsen/logrus"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"github.com/swaggo/swag"
 )
 
 type HttpApplicationOpts struct {
+	ApiKeys             []string
+	CacheConnection     *persistence.Redis
 	DatabaseConnection  *persistence.Mysql
 	EmailConfig         *SmtpServerConfig
 	LivenessChecks      []func() error
 	ReadinessChecks     []func() error
-	PublicServerUrl     *url.URL
-	QueueId             string
+	PublicServerUrl     string
 	QueueConnection     *persistence.Nats
 	ServiceLogs         chan<- common.ServiceLog
 	SessionSigningToken string
+}
+
+func (o HttpApplicationOpts) Validate() error {
+	errs := []error{}
+
+	if o.ApiKeys == nil {
+		errs = append(errs, fmt.Errorf("failed to receive api key: %w", ErrorMissingApiKeys))
+	}
+
+	if o.CacheConnection == nil {
+		errs = append(errs, fmt.Errorf("failed to receive a cache connection: %w", ErrorMissingDatabaseConnection))
+	}
+
+	if o.DatabaseConnection == nil {
+		errs = append(errs, fmt.Errorf("failed to receive a database connection: %w", ErrorMissingDatabaseConnection))
+	}
+
+	if o.EmailConfig == nil {
+		errs = append(errs, fmt.Errorf("failed to receive email configuration: %w", ErrorMissingEmailConfig))
+	}
+
+	if o.QueueConnection == nil {
+		errs = append(errs, fmt.Errorf("failed to receive a queue connection: %w", ErrorMissingQueueConnection))
+	}
+
+	if o.ServiceLogs == nil {
+		errs = append(errs, fmt.Errorf("failed to receive a service log: %w", ErrorMissingServiceLog))
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }
 
 // GetHttpApplication godoc
@@ -44,13 +80,36 @@ type HttpApplicationOpts struct {
 // @in							header
 // @name						Authorization
 // @description			Used for authenticating with endpoints
-func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
-	db = opts.DatabaseConnection.GetClient()
+func GetHttpApplication(opts HttpApplicationOpts) (http.Handler, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, fmt.Errorf("failed to initialise http application: %w", err)
+	}
+
+	// initialise common global
+
+	serviceLogs = &opts.ServiceLogs
+
+	apiKeys = opts.ApiKeys
+	*serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "controller has %v api keys registered", apiKeys)
+
+	dbInstance = opts.DatabaseConnection.GetClient()
+
+	cache.InitRedis(cache.InitRedisOpts{
+		RedisConnection: opts.CacheConnection,
+		ServiceLogs:     *serviceLogs,
+	})
+	cacheInstance = cache.Get()
+
+	queue.InitNats(queue.InitNatsOpts{
+		NatsConnection: opts.QueueConnection,
+		ServiceLogs:    *serviceLogs,
+	})
+	queueInstance = queue.Get()
 
 	var err error
-	q, err = queue.Get(opts.QueueId)
+	publicServerUrl, err = url.Parse(opts.PublicServerUrl)
 	if err != nil {
-		panic("failed to get required queue connection")
+		return nil, fmt.Errorf("failed to parse server url '%s': %w: %w", opts.PublicServerUrl, ErrorInvalidPublicServerUrl, err)
 	}
 
 	if opts.SessionSigningToken != "" {
@@ -58,39 +117,21 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 	}
 
 	if opts.EmailConfig == nil {
-		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "email is not enabled")
+		*serviceLogs <- common.ServiceLogf(common.LogLevelWarn, "email is not enabled")
 	} else {
 		smtpConfig = *opts.EmailConfig
 		if err := smtpConfig.VerifyConnection(); err != nil {
-			opts.ServiceLogs <- common.ServiceLogf(common.LogLevelError, "failed to authenticate with the provided smtp configuration: %s", err)
+			*serviceLogs <- common.ServiceLogf(common.LogLevelError, "failed to authenticate with the provided smtp configuration: %s", err)
 			smtpConfig = SmtpServerConfig{}
 		}
 	}
-	opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "email status: %v", smtpConfig.IsSet())
-
-	if publicServerUrl == "" {
-		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelWarn, "the public server url has not been set, some urls issued might not be accurate")
-	}
-
-	if serviceLogs == nil {
-		noopServiceLogs := make(chan common.ServiceLog, 32)
-		go func() {
-			if _, ok := <-noopServiceLogs; !ok {
-				logrus.Infof("what")
-				return
-			}
-		}()
-		var logsReceiver chan<- common.ServiceLog = noopServiceLogs
-		SetServiceLogs(&logsReceiver)
-	} else {
-		SetServiceLogs(&opts.ServiceLogs)
-	}
+	*serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "email status: %v", smtpConfig.IsSet())
 
 	handler := mux.NewRouter()
 	handler.NotFoundHandler = common.GetNotFoundHandler()
 	common.RegisterCommonHttpEndpoints(common.CommonHttpEndpointsOpts{
 		Router:          handler,
-		ServiceLogs:     opts.ServiceLogs,
+		ServiceLogs:     *serviceLogs,
 		LivenessChecks:  opts.LivenessChecks,
 		ReadinessChecks: opts.ReadinessChecks,
 	})
@@ -98,7 +139,7 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 	api := handler.PathPrefix("/api").Subrouter()
 	apiOpts := RouteRegistrationOpts{
 		Router:      api,
-		ServiceLogs: opts.ServiceLogs,
+		ServiceLogs: *serviceLogs,
 	}
 
 	registerAutomationRoutes(apiOpts)
@@ -120,11 +161,11 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 		if err != nil {
 			methods = []string{"*"}
 		}
-		opts.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "registered route[%s] with methods[%s]", pathTemplate, strings.Join(methods, "|"))
+		*serviceLogs <- common.ServiceLogf(common.LogLevelDebug, "registered route[%s] with methods[%s]", pathTemplate, strings.Join(methods, "|"))
 		return nil
 	}); err != nil {
-		return nil
+		return nil, err
 	}
 
-	return handler
+	return handler, nil
 }

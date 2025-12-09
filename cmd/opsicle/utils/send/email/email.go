@@ -3,8 +3,8 @@ package email
 import (
 	"fmt"
 	"opsicle/internal/cli"
-	"opsicle/internal/common"
 	"opsicle/internal/common/images"
+	"opsicle/internal/config"
 	"opsicle/internal/email"
 	"time"
 
@@ -40,47 +40,16 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "defines the sender's name",
 		Type:         cli.FlagTypeString,
 	},
-	{
-		Name:         "smtp-username",
-		Short:        's',
-		DefaultValue: "noreply@notification.opsicle.io",
-		Usage:        "defines the sender's email address",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "smtp-password",
-		Short:        'p',
-		DefaultValue: "",
-		Usage:        "defines the sender's password",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "smtp-hostname",
-		Short:        'H',
-		DefaultValue: "smtp.eu.mailgun.org",
-		Usage:        "defines the smtp server's hostname",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "smtp-port",
-		Short:        'P',
-		DefaultValue: 587,
-		Usage:        "defines the smtp server's port",
-		Type:         cli.FlagTypeInteger,
-	},
-}
+}.Append(config.GetSmtpFlags())
 
-func init() {
-	flags.AddToCommand(Command)
-}
-
-var Command = &cobra.Command{
+var Command = cli.NewCommand(cli.CommandOpts{
+	Name:  "utils.send.email",
+	Flags: flags,
 	Use:   "email",
 	Short: "Sends a test email given SMTP credentials",
-	PreRun: func(cmd *cobra.Command, args []string) {
-		flags.BindViper(cmd)
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, opts *cli.Command, args []string) error {
+		serviceLogs := opts.GetServiceLogs()
+
 		// SMTP settings
 		smtpHost := viper.GetString("smtp-hostname")
 		smtpPort := viper.GetInt("smtp-port")
@@ -96,9 +65,6 @@ var Command = &cobra.Command{
 		senderEmail := smtpUsername
 		senderName := viper.GetString("sender-name")
 		logrus.Infof("sending message from address[%s] to address[%s]...", senderEmail, receiverEmail)
-
-		serviceLogs := make(chan common.ServiceLog, 64)
-		common.StartServiceLogLoop(serviceLogs)
 
 		opsicleCatMimeType, opsicleCatData := images.GetOpsicleCat()
 		if err := email.SendSmtp(email.SendSmtpOpts{
@@ -137,4 +103,4 @@ var Command = &cobra.Command{
 		<-time.After(500 * time.Millisecond)
 		return nil
 	},
-}
+})

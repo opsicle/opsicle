@@ -3,6 +3,7 @@ package email
 import (
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/pkg/controller"
 
 	"github.com/sirupsen/logrus"
@@ -19,13 +20,7 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "the verification code sent to your email",
 		Type:         cli.FlagTypeString,
 	},
-	{
-		Name:         "controller-url",
-		DefaultValue: "http://localhost:54321",
-		Usage:        "defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

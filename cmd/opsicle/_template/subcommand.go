@@ -3,19 +3,14 @@ package template
 import (
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/pkg/controller"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-var flags cli.Flags = cli.Flags{
-	{
-		Name:         "controller-url",
-		DefaultValue: "http://localhost:54321",
-		Usage:        "Defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-}
+var flags cli.Flags = cli.Flags{}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

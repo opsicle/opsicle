@@ -62,7 +62,7 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	template, err := models.GetTemplateV1(models.GetTemplateV1Opts{
-		Db:         db,
+		Db:         dbInstance,
 		TemplateId: &templateId,
 		UserId:     session.UserId,
 	})
@@ -72,7 +72,7 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if input.OrgId == nil {
-		if canExecute, err := template.CanUserExecuteV1(models.DatabaseConnection{Db: db}, session.UserId); err != nil {
+		if canExecute, err := template.CanUserExecuteV1(models.DatabaseConnection{Db: dbInstance}, session.UserId); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to check permissions of user[%s] on template[%s]: %s", session.UserId, templateId, err))
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", types.ErrorDatabaseIssue)
 			return
@@ -88,7 +88,7 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 		}
 		orgId := *input.OrgId
 		org := models.Org{Id: &orgId}
-		orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: db, UserId: session.UserId})
+		orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{Db: dbInstance, UserId: session.UserId})
 		if err != nil {
 			if errors.Is(err, models.ErrorNotFound) {
 				log(common.LogLevelError, fmt.Sprintf("user[%s] is not a member of org[%s]: %s", session.UserId, orgId, err))
@@ -99,7 +99,7 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", types.ErrorDatabaseIssue)
 			return
 		}
-		_, _, canExecute, err := orgUser.CanV1(models.DatabaseConnection{Db: db}, models.ResourceTemplates, models.ActionExecute)
+		_, _, canExecute, err := orgUser.CanV1(models.DatabaseConnection{Db: dbInstance}, models.ResourceTemplates, models.ActionExecute)
 		if err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to check permissions of user[%s] in org[%s]: %s", session.UserId, orgId, err))
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "not allowed", types.ErrorDatabaseIssue)
@@ -112,14 +112,14 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	automationParams, err := template.GetAutomationParamsV1(models.DatabaseConnection{Db: db})
+	automationParams, err := template.GetAutomationParamsV1(models.DatabaseConnection{Db: dbInstance})
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to create pending automation based on template[%s]: %s", templateId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to create pending automation", types.ErrorDatabaseIssue)
 		return
 	}
 	user := models.User{Id: &session.UserId}
-	if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := user.LoadByIdV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s]: %s", session.UserId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "db query failed", types.ErrorDatabaseIssue)
 		return
@@ -127,6 +127,7 @@ func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 	redactedUser := user.GetRedacted()
 	automationParams.TriggeredBy = &redactedUser
 	pendingAutomation, err := models.CreatePendingAutomationV1(models.CreatePendingAutomationV1Opts{
+		Cache:            cacheInstance,
 		OrgId:            input.OrgId,
 		TemplateContent:  template.Content,
 		TemplateId:       template.GetId(),
@@ -202,13 +203,13 @@ func handleRunAutomationV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	automation := models.Automation{Id: &automationId}
-	if err := automation.LoadPendingV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := automation.LoadPendingV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve automation", types.ErrorInvalidInput)
 		return
 	}
 	queueRunOpts := models.QueueAutomationRunV1Opts{
-		Db: db,
-		Q:  q,
+		Db: dbInstance,
+		Q:  queueInstance,
 
 		Input: input.VariableMap,
 		OrgId: orgId,

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/pkg/controller"
 
 	"github.com/spf13/cobra"
@@ -11,13 +12,6 @@ import (
 )
 
 var flags cli.Flags = cli.Flags{
-	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
 	{
 		Name:         "org",
 		DefaultValue: "",
@@ -30,7 +24,7 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "ID or email of the user to check permissions for",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

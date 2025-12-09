@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"opsicle/internal/cli"
-	"opsicle/internal/common"
+	"opsicle/internal/persistence"
 	"opsicle/internal/queue"
 	"time"
 
@@ -43,36 +43,40 @@ var flags cli.Flags = cli.Flags{
 	},
 }
 
-func init() {
-	flags.AddToCommand(Command)
-}
-
-var Command = &cobra.Command{
+var Command = cli.NewCommand(cli.CommandOpts{
+	Name:    "utils.queue.subscribe",
+	Flags:   flags,
 	Use:     "subscribe",
 	Aliases: []string{"sub"},
 	Short:   "Subscribes to messages from the configured queue",
-	PreRun: func(cmd *cobra.Command, args []string) {
-		flags.BindViper(cmd)
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		serviceLogs := make(chan common.ServiceLog, 64)
-		common.StartServiceLogLoop(serviceLogs)
+	Run: func(cmd *cobra.Command, opts *cli.Command, args []string) error {
+		appName := opts.GetFullname()
+		serviceLogs := opts.GetServiceLogs()
 
-		logrus.Infof("establishing connection to queue...")
-		nats, err := queue.InitNats(queue.InitNatsOpts{
-			Addr:        viper.GetString("nats-addr"),
-			Username:    viper.GetString("nats-username"),
-			Password:    viper.GetString("nats-password"),
-			NKey:        viper.GetString("nats-nkey-value"),
-			ServiceLogs: serviceLogs,
-		})
+		natsAddr := viper.GetString("nats-addr")
+		natsInstance, err := persistence.NewNats(
+			persistence.NatsConnectionOpts{
+				AppName: appName,
+				Host:    natsAddr,
+			},
+			persistence.NatsAuthOpts{
+				NKey: viper.GetString("nats-nkey-value"),
+			},
+			&serviceLogs,
+		)
 		if err != nil {
-			return fmt.Errorf("failed to initialise nats queue: %w", err)
+			return fmt.Errorf("failed to create nats client: %w", err)
 		}
-		if err := nats.Connect(); err != nil {
+		if err := natsInstance.Init(); err != nil {
 			return fmt.Errorf("failed to connect to nats: %w", err)
 		}
+		queue.InitNats(queue.InitNatsOpts{
+			NatsConnection: natsInstance,
+			ServiceLogs:    serviceLogs,
+		})
+		opts.AddShutdownProcess("nats", natsInstance.Shutdown)
 		logrus.Infof("established connection to queue")
+		nats := queue.Get()
 
 		logrus.Infof("subscribing to queue...")
 		ctx, cancel := context.WithCancel(context.Background())
@@ -103,4 +107,4 @@ var Command = &cobra.Command{
 		}
 		return nil
 	},
-}
+})

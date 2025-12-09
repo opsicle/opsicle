@@ -71,7 +71,7 @@ func handleSubmitTemplateV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	automationTemplateVersion, err := models.CreateTemplateVersionV1(models.CreateTemplateVersionV1Opts{
-		Db:       db,
+		Db:       dbInstance,
 		Template: template,
 		UserId:   session.UserId,
 	})
@@ -118,7 +118,7 @@ func handleDeleteTemplateV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is deleting automationTemplate[%s]", session.UserId, automationTemplateId))
 
 	template := models.Template{Id: &automationTemplateId}
-	isUserAllowedToDoThis, err := template.CanUserDeleteV1(models.DatabaseConnection{Db: db}, session.UserId)
+	isUserAllowedToDoThis, err := template.CanUserDeleteV1(models.DatabaseConnection{Db: dbInstance}, session.UserId)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to load user[%s] of template[%s]: %s", session.UserId, template.GetId(), err))
 		if errors.Is(err, models.ErrorNotFound) {
@@ -133,7 +133,7 @@ func handleDeleteTemplateV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusForbidden, "not allowed to delete template", types.ErrorInsufficientPermissions)
 		return
 	}
-	if err := template.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := template.LoadV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to load template[%s]: %s", template.GetId(), err))
 		if errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusNotFound, "template not found", types.ErrorNotFound)
@@ -142,7 +142,7 @@ func handleDeleteTemplateV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "template could not be retrieved", types.ErrorDatabaseIssue)
 		return
 	}
-	if err := template.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := template.DeleteV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to delete template[%s]: %s", template.GetId(), err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "template could not be retrieved", types.ErrorDatabaseIssue)
 		return
@@ -211,7 +211,7 @@ func handleListTemplatesV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving automation templates for user[%s]", session.UserId))
 
 	user := models.User{Id: &session.UserId}
-	templates, err := user.ListTemplatesV1(models.DatabaseConnection{Db: db})
+	templates, err := user.ListTemplatesV1(models.DatabaseConnection{Db: dbInstance})
 	if err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list automation templates", types.ErrorDatabaseIssue)
 		return
@@ -298,7 +298,7 @@ func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	templateUserInvitation := models.TemplateUserInvitation{Id: invitationId}
-	if err := templateUserInvitation.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := templateUserInvitation.LoadV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		if errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed find invitation", types.ErrorInvitationInvalid)
 			return
@@ -320,7 +320,7 @@ func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
 	if input.IsAcceptance {
 		template := models.Template{Id: &templateUserInvitation.TemplateId}
 		if err := template.AddUserV1(models.AddUserToTemplateV1{
-			Db:         db,
+			Db:         dbInstance,
 			UserId:     session.UserId,
 			CanView:    templateUserInvitation.CanView,
 			CanExecute: templateUserInvitation.CanExecute,
@@ -338,7 +338,7 @@ func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
 			TemplateId: &templateUserInvitation.TemplateId,
 			UserId:     &session.UserId,
 		}
-		if err := templateUser.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+		if err := templateUser.LoadV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s] of template[%s]: %s", session.UserId, templateUserInvitation.TemplateId, err))
 		}
 
@@ -368,14 +368,14 @@ func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
 			SrcUa:        &session.UserAgent,
 			DstHost:      &r.Host,
 		})
-		if err := templateUserInvitation.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+		if err := templateUserInvitation.DeleteByIdV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", types.ErrorDatabaseIssue)
 			return
 		}
 		common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 		return
 	} else {
-		if err := templateUserInvitation.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+		if err := templateUserInvitation.DeleteByIdV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", types.ErrorDatabaseIssue)
 			return
 		}
@@ -397,7 +397,7 @@ func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := templateUserInvitation.DeleteByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := templateUserInvitation.DeleteByIdV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", types.ErrorDatabaseIssue)
 		return
 	}
@@ -405,7 +405,7 @@ func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "tmp ok", nil)
 
 	// 	orgUser, err := org.GetUserV1(models.GetOrgUserV1Opts{
-	// 		Db:     db,
+	// 		Db:     dbInstance,
 	// 		UserId: session.UserId,
 	// 	})
 	// 	if err != nil {
@@ -438,7 +438,7 @@ func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
 	// 	})
 	// 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", output)
 	// } else {
-	// 	if err := orgInvite.DeleteById(models.DatabaseConnection{Db: db}); err != nil {
+	// 	if err := orgInvite.DeleteById(models.DatabaseConnection{Db: dbInstance}); err != nil {
 	// 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to delete invitation", types.ErrorDatabaseIssue)
 	// 		return
 	// 	}
@@ -506,10 +506,10 @@ func handleCreateTemplateUserV1(w http.ResponseWriter, r *http.Request) {
 	var userLoadError error
 	if isInputUuid {
 		userInstance.Id = input.UserId
-		userLoadError = userInstance.LoadByIdV1(models.DatabaseConnection{Db: db})
+		userLoadError = userInstance.LoadByIdV1(models.DatabaseConnection{Db: dbInstance})
 	} else if isInputEmail {
 		userInstance.Email = *input.UserEmail
-		userLoadError = userInstance.LoadByEmailV1(models.DatabaseConnection{Db: db})
+		userLoadError = userInstance.LoadByEmailV1(models.DatabaseConnection{Db: dbInstance})
 	} else {
 		log(common.LogLevelError, "failed to receive either an id or email")
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to receive either an id or email", types.ErrorInvalidInput)
@@ -528,7 +528,7 @@ func handleCreateTemplateUserV1(w http.ResponseWriter, r *http.Request) {
 
 	templateInstance := models.Template{Id: &templateId}
 	log(common.LogLevelDebug, fmt.Sprintf("verifying if user[%s] can invite other users", session.UserId))
-	canUserInvite, err := templateInstance.CanUserInviteV1(models.DatabaseConnection{Db: db}, session.UserId)
+	canUserInvite, err := templateInstance.CanUserInviteV1(models.DatabaseConnection{Db: dbInstance}, session.UserId)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get user[%s] permissions on template[%s]: %s", session.UserId, templateId, err))
 		if errors.Is(err, models.ErrorNotFound) {
@@ -550,7 +550,7 @@ func handleCreateTemplateUserV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	inviteOpts := models.InviteTemplateUserV1Opts{
-		Db:         db,
+		Db:         dbInstance,
 		InviterId:  session.UserId,
 		JoinCode:   joinCode,
 		CanView:    input.CanView,
@@ -607,7 +607,7 @@ func handleListTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is listing template[%s] users", session.UserId, templateId))
 
 	template := models.Template{Id: &templateId}
-	if err := template.ListUsersV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := template.ListUsersV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list template users: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list template users", types.ErrorDatabaseIssue)
 		return
@@ -653,7 +653,7 @@ func handleDeleteTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is removing user[%s] from template[%s]", session.UserId, userId, templateId))
 
 	template := models.Template{Id: &templateId}
-	if err := template.ListUsersV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := template.ListUsersV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to list template users: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list template users", types.ErrorDatabaseIssue)
 		return
@@ -684,7 +684,7 @@ func handleDeleteTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "last user with invite permissions cannot be removed", types.ErrorLastManagerOfResource)
 		return
 	}
-	canInvite, err := template.CanUserInviteV1(models.DatabaseConnection{Db: db}, session.UserId)
+	canInvite, err := template.CanUserInviteV1(models.DatabaseConnection{Db: dbInstance}, session.UserId)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to check if user[%s] can invite other users: %s", session.UserId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "user cannot be removed", types.ErrorDatabaseIssue)
@@ -695,7 +695,7 @@ func handleDeleteTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := userToBeDeleted.DeleteV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := userToBeDeleted.DeleteV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to remove user[%s]: %s", userId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to remove user", types.ErrorDatabaseIssue)
 		return
@@ -741,7 +741,7 @@ func handleListTemplateVersionsV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelInfo, fmt.Sprintf("listing versions of template[%s]", templateId))
 
 	template := &models.Template{Id: &templateId}
-	canUpdate, err := template.CanUserUpdateV1(models.DatabaseConnection{Db: db}, session.UserId)
+	canUpdate, err := template.CanUserUpdateV1(models.DatabaseConnection{Db: dbInstance}, session.UserId)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to check if user can perform update: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list template versions", types.ErrorDatabaseIssue)
@@ -751,12 +751,12 @@ func handleListTemplateVersionsV1(w http.ResponseWriter, r *http.Request) {
 		common.SendHttpFailResponse(w, r, http.StatusForbidden, "failed to list template versions", types.ErrorInsufficientPermissions)
 		return
 	}
-	if err := template.LoadV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := template.LoadV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to load template: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list template versions", types.ErrorDatabaseIssue)
 		return
 	}
-	if err := template.LoadVersionsV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := template.LoadVersionsV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to load versions: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to list template versions", types.ErrorDatabaseIssue)
 		return
@@ -834,7 +834,7 @@ func handleUpdateTemplateVersionV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, fmt.Sprintf("updating default version of template[%s] to version[%v]", templateId, input.Version))
 
 	template := models.Template{Id: &templateId}
-	userCanUpdate, err := template.CanUserUpdateV1(models.DatabaseConnection{Db: db}, session.UserId)
+	userCanUpdate, err := template.CanUserUpdateV1(models.DatabaseConnection{Db: dbInstance}, session.UserId)
 	if err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to get permissions for user[%s] : %s", session.UserId, err))
 		if errors.Is(err, models.ErrorNotFound) {
@@ -849,7 +849,7 @@ func handleUpdateTemplateVersionV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := template.UpdateFieldsV1(models.UpdateFieldsV1{
-		Db: db,
+		Db: dbInstance,
 		FieldsToSet: map[string]any{
 			"version": input.Version,
 		},

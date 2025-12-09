@@ -95,10 +95,8 @@ var Command = cli.NewCommand(cli.CommandOpts{
 			w.Write([]byte("ok"))
 		}))
 
-		serverStopper := make(chan common.Done)
 		server, err := common.NewHttpServer(common.NewHttpServerOpts{
 			Addr:        viper.GetString("listen-addr"),
-			Done:        serverStopper,
 			Handler:     handler,
 			ServiceLogs: serviceLogs,
 		})

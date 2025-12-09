@@ -7,6 +7,7 @@ import (
 	"opsicle/internal/automations"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
+	"opsicle/internal/config"
 	"opsicle/internal/worker"
 	"opsicle/pkg/controller"
 	"sort"
@@ -20,12 +21,6 @@ import (
 )
 
 var flags cli.Flags = cli.Flags{
-	{
-		Name:         "controller-url",
-		DefaultValue: "http://localhost:54321",
-		Usage:        "Defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
 	{
 		Name:         "file",
 		Short:        'f',
@@ -46,7 +41,7 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "Specifies the organization ID where the automation should be created",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

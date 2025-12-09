@@ -17,6 +17,7 @@ type SessionToken struct {
 }
 
 type CreateSessionV1Opts struct {
+	Cache       cache.Cache
 	Db          *sql.DB
 	CachePrefix string
 
@@ -58,7 +59,7 @@ func CreateSessionV1(opts CreateSessionV1Opts) (*SessionToken, error) {
 	cacheKey := strings.Join([]string{opts.CachePrefix, user.GetId(), sessionId}, ":")
 	// random arbitrary cache expiration
 	cacheExpiryDuration := time.Hour * 24 * 7
-	if err := cache.Get().Set(cacheKey, sessionId, cacheExpiryDuration); err != nil {
+	if err := opts.Cache.Set(cacheKey, sessionId, cacheExpiryDuration); err != nil {
 		return nil, fmt.Errorf("models.CreateSessionV1: failed to update cache: %w", err)
 	}
 	return &SessionToken{

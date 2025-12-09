@@ -26,6 +26,11 @@ func (f Flags) AddToCommand(command *cobra.Command, persistent ...bool) {
 	}
 }
 
+func (f Flags) Append(more Flags) Flags {
+	f = append(f, more...)
+	return f
+}
+
 // BindViper is a convenience function to run the `.BindViper`
 // method on all children in this slice
 func (f Flags) BindViper(command *cobra.Command, persistent ...bool) {

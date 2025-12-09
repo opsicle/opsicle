@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/common"
+	"opsicle/internal/persistence"
 	"strings"
 	"time"
 
@@ -25,51 +26,24 @@ const (
 
 func getNatsQueueInfo(opts QueueOpts) (stream, subject string) {
 	stream = strings.ToLower(opts.Stream)
-	subject = fmt.Sprintf("%s.%s.*", stream, strings.ToLower(opts.Subject))
+	subject = fmt.Sprintf("%s.%s", stream, strings.ToLower(opts.Subject))
 	return
 }
 
 type Nats struct {
-	Addr        string
-	Client      *nats.Conn
+	Client      *persistence.Nats
 	ServiceLogs chan<- common.ServiceLog
-
-	options       []nats.Option
-	streamContext nats.JetStreamContext
-}
-
-func (n *Nats) Close() error {
-	if isNoopInUse {
-		stopNoopServiceLog()
-	}
-	if err := n.Client.Drain(); err != nil {
-		return fmt.Errorf("failed to drain connection[%s]: %w", n.Client.ConnectedAddr(), err)
-	}
-	n.Client.Close()
-	return nil
-}
-
-func (n *Nats) Connect() error {
-	addr := n.Addr
-	var err error
-	n.Client, err = nats.Connect("nats://"+addr, n.options...)
-	if err != nil {
-		return fmt.Errorf("failed to connect to nats: %w", err)
-	}
-	if !n.Client.IsConnected() {
-		return fmt.Errorf("failed to verify connection")
-	}
-	n.streamContext, err = n.Client.JetStream()
-	if err != nil {
-		return fmt.Errorf("failed to get jetstream context: %w", err)
-	}
-	return nil
 }
 
 func (n *Nats) Push(opts PushOpts) (*PushOutput, error) {
 	if err := n.ensureNats(); err != nil {
 		return nil, fmt.Errorf("failed to validate nats setup: %w", err)
 	}
+	jsContext, err := n.Client.GetStreamingClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get streaming context: %w", err)
+	}
+
 	_, subject := getNatsQueueInfo(opts.Queue)
 	ensureStreamOpts := NatsStreamOpts{
 		MaxMessagesCount: DefaultNatsMaxMessageCount,
@@ -93,7 +67,8 @@ func (n *Nats) Push(opts PushOpts) (*PushOutput, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultNatsPublishTimeout)
 	defer cancel()
-	_, err := n.streamContext.Publish(subject, opts.Data, nats.Context(ctx))
+	n.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "pushing message[%s] to subject[%s]", string(opts.Data), subject)
+	_, err = jsContext.Publish(subject, opts.Data, nats.Context(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to publish message: %w", err)
 	}
@@ -113,13 +88,17 @@ func (n *Nats) Pop(opts PopOpts) (*Message, error) {
 	} else if !hasMessage {
 		return nil, nil
 	}
-	sub, err := n.streamContext.PullSubscribe(
+	jsContext, err := n.Client.GetStreamingClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get streaming context: %w", err)
+	}
+	n.ServiceLogs <- common.ServiceLogf(common.LogLevelDebug, "subscribing to stream[%s]/subject[%s] with durable[%s]", stream, subject, opts.ConsumerId)
+	sub, err := jsContext.PullSubscribe(
 		subject,
 		opts.ConsumerId,
-		nats.BindStream(stream),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to subscribe to stream[%s]: %w", stream, err)
+		return nil, fmt.Errorf("failed to subscribe to stream[%s]/subject[%s] with durable[%s]: %w", stream, subject, opts.ConsumerId, err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultNatsPullTimeout)
 	defer cancel()
@@ -143,7 +122,7 @@ func (n *Nats) Pop(opts PopOpts) (*Message, error) {
 	}
 	return &Message{
 		Data:    msg[0].Data,
-		Subject: msg[0].Sub.Subject,
+		Subject: msg[0].Subject,
 	}, nil
 }
 
@@ -196,7 +175,11 @@ func (n *Nats) Subscribe(opts SubscribeOpts) error {
 	}
 
 	// --- Bind pull subscription to the durable ---
-	sub, err := n.streamContext.PullSubscribe(
+	jsContext, err := n.Client.GetStreamingClient()
+	if err != nil {
+		return fmt.Errorf("failed to get streaming context: %w", err)
+	}
+	sub, err := jsContext.PullSubscribe(
 		subject,
 		opts.ConsumerId,
 		nats.Bind(stream, opts.ConsumerId),
@@ -282,7 +265,11 @@ func (n *Nats) ensureNats() error {
 	if n.Client == nil {
 		errs = append(errs, ErrorClientUndefined)
 	}
-	if n.streamContext == nil {
+	jsContext, err := n.Client.GetStreamingClient()
+	if err != nil {
+		return fmt.Errorf("failed to get streaming context: %w", err)
+	}
+	if jsContext == nil {
 		errs = append(errs, ErrorStreamingClientUndefined)
 	}
 	if len(errs) > 0 {
@@ -300,7 +287,11 @@ type NatsDurableOpts struct {
 }
 
 func (n *Nats) ensureDurable(opts NatsDurableOpts) error {
-	ci, err := n.streamContext.ConsumerInfo(opts.Stream, opts.Durable)
+	jsContext, err := n.Client.GetStreamingClient()
+	if err != nil {
+		return fmt.Errorf("failed to get streaming context: %w", err)
+	}
+	ci, err := jsContext.ConsumerInfo(opts.Stream, opts.Durable)
 	if err == nil && ci != nil {
 		if ci.Config.FilterSubject != opts.Subject {
 			return fmt.Errorf("failed to ensure durable subject association: have=%q want=%q", ci.Config.FilterSubject, opts.Subject)
@@ -317,7 +308,7 @@ func (n *Nats) ensureDurable(opts NatsDurableOpts) error {
 		ackWait = DefaultNatsAckWaitDuration
 	}
 
-	_, err = n.streamContext.AddConsumer(opts.Stream, &nats.ConsumerConfig{
+	_, err = jsContext.AddConsumer(opts.Stream, &nats.ConsumerConfig{
 		Durable:           opts.Durable,
 		FilterSubject:     opts.Subject,
 		AckPolicy:         nats.AckExplicitPolicy,
@@ -344,16 +335,20 @@ type NatsStreamOpts struct {
 
 func (n *Nats) ensureStream(opts NatsStreamOpts) error {
 	stream, subject := getNatsQueueInfo(opts.QueueInfo)
-	if streamInfo, err := n.streamContext.StreamInfo(stream); err == nil && streamInfo != nil {
+	jsContext, err := n.Client.GetStreamingClient()
+	if err != nil {
+		return fmt.Errorf("failed to get streaming context: %w", err)
+	}
+	if streamInfo, err := jsContext.StreamInfo(stream); err == nil && streamInfo != nil {
 		cfg := streamInfo.Config
 		if !n.isSubjectInSubjects(streamInfo.Config.Subjects, subject) {
 			cfg.Subjects = append(cfg.Subjects, subject)
-			if _, err := n.streamContext.UpdateStream(&cfg); err != nil {
+			if _, err := jsContext.UpdateStream(&cfg); err != nil {
 				return fmt.Errorf("failed to update stream[%s:%s]: %w", stream, subject, err)
 			}
 		}
 		cfg.Retention = nats.WorkQueuePolicy
-		if _, err := n.streamContext.UpdateStream(&cfg); err != nil {
+		if _, err := jsContext.UpdateStream(&cfg); err != nil {
 			return fmt.Errorf("failed to update stream retention: %w", err)
 		}
 		return nil
@@ -378,7 +373,7 @@ func (n *Nats) ensureStream(opts NatsStreamOpts) error {
 		}
 	}
 
-	if _, err := n.streamContext.AddStream(cfg); err != nil {
+	if _, err := jsContext.AddStream(cfg); err != nil {
 		return fmt.Errorf("failed to add stream[%s:%s]: %w", stream, subject, err)
 	}
 	return nil
@@ -400,7 +395,7 @@ func (n *Nats) hasMessages(stream, subject string) (bool, error) {
 	data, _ := json.Marshal(req)
 
 	inbox := fmt.Sprintf("$JS.API.STREAM.MSG.GET.%s", stream)
-	msg, err := n.Client.Request(inbox, data, 2*time.Second)
+	msg, err := n.Client.GetClient().Request(inbox, data, 2*time.Second)
 	if err != nil {
 		return false, err
 	}

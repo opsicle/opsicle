@@ -51,7 +51,7 @@ type validateRequesterCanManageOrgUsersOpts struct {
 func validateRequesterCanManageOrgUsers(opts validateRequesterCanManageOrgUsersOpts) error {
 	org := models.Org{Id: &opts.OrgId}
 	requester, err := org.GetUserV1(models.GetOrgUserV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: opts.RequesterUserId,
 	})
 	if err != nil {
@@ -75,7 +75,7 @@ type validateUserIsNotLastAdminOpts struct {
 // is not the last administrator in the organisation
 func validateUserIsNotLastAdmin(opts validateUserIsNotLastAdminOpts) error {
 	org := models.Org{Id: &opts.OrgId}
-	admins, err := org.GetAdminsV1(models.DatabaseConnection{Db: db})
+	admins, err := org.GetAdminsV1(models.DatabaseConnection{Db: dbInstance})
 	if err != nil {
 		return fmt.Errorf("failed to retrieve admin list: %w", err)
 	}

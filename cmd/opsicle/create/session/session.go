@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"opsicle/internal/auth"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 	"os"
@@ -17,12 +18,6 @@ import (
 )
 
 var Flags cli.Flags = cli.Flags{
-	{
-		Name:         "controller-url",
-		DefaultValue: "http://localhost:54321",
-		Usage:        "Defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
 	{
 		Name:         "email",
 		DefaultValue: "",
@@ -41,7 +36,7 @@ var Flags cli.Flags = cli.Flags{
 		Usage:        "The password for your account to be used with your email address to authenticate",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	Flags.AddToCommand(Command)

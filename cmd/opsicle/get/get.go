@@ -12,7 +12,7 @@ import (
 func init() {
 	Command.AddCommand(approval.Command)
 	Command.AddCommand(approval_request.Command)
-	Command.AddCommand(org.Command)
+	Command.AddCommand(org.Command.Get())
 	Command.AddCommand(users.Command)
 }
 

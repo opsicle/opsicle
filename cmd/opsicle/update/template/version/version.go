@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 	"sort"
@@ -16,14 +17,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var flags cli.Flags = cli.Flags{
-	{
-		Name:         "controller-url",
-		DefaultValue: "http://localhost:54321",
-		Usage:        "Defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-}
+var flags cli.Flags = cli.Flags{}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

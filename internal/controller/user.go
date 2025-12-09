@@ -129,7 +129,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := models.CreateUserV1(models.CreateUserV1Opts{
-		Db: db,
+		Db: dbInstance,
 
 		Email:    input.Email,
 		Password: input.Password,
@@ -145,7 +145,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := models.User{Email: input.Email}
-	if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := user.LoadByEmailV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user via email: %s", err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", err)
 		return
@@ -153,7 +153,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("listing organisation invitations to user's email address[%s]...", input.Email))
 	listOrgInvitations, err := models.ListOrgInvitationsV1(models.ListOrgInvitationsV1Opts{
-		Db:        db,
+		Db:        dbInstance,
 		UserEmail: &input.Email,
 	})
 	if err != nil {
@@ -166,7 +166,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	for _, orgInvitation := range listOrgInvitations {
 		var orgInvitationReplacementErrs []error
 		orgInvitation.AcceptorId = user.Id
-		if err := orgInvitation.ReplaceAcceptorEmailWithId(models.DatabaseConnection{Db: db}); err != nil {
+		if err := orgInvitation.ReplaceAcceptorEmailWithId(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			orgInvitationReplacementErrs = append(orgInvitationReplacementErrs, err)
 		}
 		if len(orgInvitationReplacementErrs) > 0 {
@@ -178,7 +178,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 
 	log(common.LogLevelDebug, fmt.Sprintf("listing template invitations to user's email address[%s]...", input.Email))
 	listTemplateInvitations, err := models.ListTemplateInvitationsV1(models.ListTemplateInvitationsV1Opts{
-		Db:        db,
+		Db:        dbInstance,
 		UserEmail: &input.Email,
 	})
 	if err != nil {
@@ -191,7 +191,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 	for _, templateInvitation := range listTemplateInvitations {
 		var templateInvitationReplacementErrs []error
 		templateInvitation.AcceptorId = user.Id
-		if err := templateInvitation.ReplaceAcceptorEmailWithId(models.DatabaseConnection{Db: db}); err != nil {
+		if err := templateInvitation.ReplaceAcceptorEmailWithId(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			templateInvitationReplacementErrs = append(templateInvitationReplacementErrs, err)
 		}
 		if len(templateInvitationReplacementErrs) > 0 {
@@ -217,7 +217,7 @@ func handleCreateUserV1(w http.ResponseWriter, r *http.Request) {
 				Message: email.Message{
 					Title: "Verify your Opsicle account email to get started",
 					Body: templates.GetEmailVerificationMessage(
-						publicServerUrl,
+						publicServerUrl.String(),
 						user.EmailVerificationCode,
 						remoteAddr,
 						userAgent,
@@ -284,7 +284,7 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, fmt.Sprintf("creating mfa of type[%s] for user[%s]", input.MfaType, session.UserId))
 
 	user := models.User{Id: &session.UserId}
-	if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := user.LoadByIdV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to retrieve user[%s]: %s", session.UserId, err))
 		common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed to retrieve user", types.ErrorDatabaseIssue)
 		return
@@ -305,7 +305,7 @@ func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 		}
 
 		userMfa, err := models.CreateUserMfaV1(models.CreateUserMfaV1Opts{
-			Db: db,
+			Db: dbInstance,
 
 			UserId: session.UserId,
 			Secret: &totpSeed,
@@ -367,7 +367,7 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, fmt.Sprintf("verifying mfa[%s] for user[%s]", mfaId, session.UserId))
 
 	userMfa, err := models.GetUserMfaV1(models.GetUserMfaV1Opts{
-		Db: db,
+		Db: dbInstance,
 		Id: mfaId,
 	})
 	if err != nil {
@@ -387,7 +387,7 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := models.VerifyUserMfaV1(models.VerifyUserMfaV1Opts{
-			Db: db,
+			Db: dbInstance,
 			Id: mfaId,
 		}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to verify mfa", types.ErrorDatabaseIssue)
@@ -410,7 +410,6 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 			UserId: userMfa.UserId,
 		})
 	}
-
 }
 
 func handleListUserMfasV1(w http.ResponseWriter, r *http.Request) {
@@ -419,7 +418,7 @@ func handleListUserMfasV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving user[%s]'s available mfas", session.UserId))
 
 	userMfas, err := models.ListUserMfasV1(models.ListUserMfasV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: &session.UserId,
 	})
 	if err != nil {
@@ -461,7 +460,7 @@ func handleListUserOrgInvitationsV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving org invitations for user[%s]", session.UserId))
 
 	listOrgInvitations, err := models.ListOrgInvitationsV1(models.ListOrgInvitationsV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: &session.UserId,
 	})
 	if err != nil {
@@ -519,7 +518,7 @@ func handleListUserTemplateInvitationsV1(w http.ResponseWriter, r *http.Request)
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving org invitations for user[%s]", session.UserId))
 
 	listTemplateInvitationsOutput, err := models.ListTemplateInvitationsV1(models.ListTemplateInvitationsV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: &session.UserId,
 	})
 	if err != nil {
@@ -584,7 +583,7 @@ func handleVerifyUserV1(w http.ResponseWriter, r *http.Request) {
 	verificationCode := vars["verificationCode"]
 	user := models.User{}
 	if err := user.VerifyV1(models.VerifyUserV1Opts{
-		Db:               db,
+		Db:               dbInstance,
 		VerificationCode: verificationCode,
 		UserAgent:        r.UserAgent(),
 		IpAddress:        r.RemoteAddr,
@@ -686,7 +685,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		userId := sessionInfo.UserId
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: retrieving user details", userId))
 		user := models.User{Id: &userId}
-		if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+		if err := user.LoadByIdV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user", types.ErrorDatabaseIssue)
 			return
 		}
@@ -700,7 +699,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: updating password", userId))
 		if err := user.UpdatePasswordV1(models.UpdateUserPasswordV1Input{
-			Db:          db,
+			Db:          dbInstance,
 			NewPassword: newPassword,
 		}); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("password update failed: %s", err))
@@ -734,7 +733,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		}
 
 		user := models.User{Email: userEmail}
-		if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
+		if err := user.LoadByEmailV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			if errors.Is(err, models.ErrorNotFound) {
 				// we send a success response because we don't want to alert the user if the email is
 				// incorrect
@@ -756,7 +755,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		passwordResetId, err := models.CreateUserPasswordResetV1(models.CreateUserPasswordResetV1Input{
-			Db:               db,
+			Db:               dbInstance,
 			UserId:           *user.Id,
 			IpAddress:        r.RemoteAddr,
 			UserAgent:        r.UserAgent(),
@@ -821,7 +820,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 
 		log(common.LogLevelDebug, "retrieving user password reset attempt")
 		passwordReset, err := models.GetUserPasswordResetV1(models.GetUserPasswordResetV1Input{
-			Db: db,
+			Db: dbInstance,
 
 			VerificationCode: verificationCode,
 		})
@@ -836,7 +835,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 
 		log(common.LogLevelDebug, fmt.Sprintf("identified request as user[%s]'s passwordReset attempt[%s]", passwordReset.UserId, passwordReset.Id))
 		user := models.User{Id: &passwordReset.Id}
-		if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+		if err := user.LoadByIdV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 			if errors.Is(err, models.ErrorNotFound) {
 				common.SendHttpFailResponse(w, r, http.StatusBadRequest, "invalid user referenced", types.ErrorInvalidInput)
 				return
@@ -847,7 +846,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 
 		log(common.LogLevelDebug, fmt.Sprintf("user[%s].updatePassword: updating password", user.GetId()))
 		if err := user.UpdatePasswordV1(models.UpdateUserPasswordV1Input{
-			Db:          db,
+			Db:          dbInstance,
 			NewPassword: newPassword,
 		}); err != nil {
 			common.SendHttpFailResponse(w, r, http.StatusInternalServerError, "failed password update", types.ErrorDatabaseIssue)
@@ -872,7 +871,7 @@ func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 		})
 
 		if err := models.SetUserPasswordResetToSuccessV1(models.SetUserPasswordResetToSuccessV1Input{
-			Db: db,
+			Db: dbInstance,
 			Id: passwordReset.Id,
 		}); err != nil {
 			log(common.LogLevelError, fmt.Sprintf("failed to update password reset attempt to successful: %s", err))

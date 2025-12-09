@@ -132,6 +132,11 @@ func (cd *Command) GetFullname() string {
 	return strings.ToLower("opsicle." + cd.name)
 }
 
+// GetFullanme returns the full namespaced ID of the current command
+func (cd *Command) GetSnakeCaseName() string {
+	return strings.ReplaceAll(strings.ToLower("opsicle."+cd.name), ".", "_")
+}
+
 // GetGroupId returns the group ID of the user running the application,
 // useful when debugging permission errors if any
 func (cd *Command) GetGroupId() int {

@@ -17,6 +17,7 @@ import (
 )
 
 type CreatePendingAutomationV1Opts struct {
+	Cache            cache.Cache
 	OrgId            *string
 	TemplateContent  []byte
 	TemplateId       string
@@ -52,7 +53,7 @@ func CreatePendingAutomationV1(opts CreatePendingAutomationV1Opts) (*Automation,
 		return nil, fmt.Errorf("invalid json: %w", err)
 	}
 	cacheExpiryDuration := time.Hour * 24 * 7
-	if err := cache.Get().Set(cacheKey, string(cacheData), cacheExpiryDuration); err != nil {
+	if err := opts.Cache.Set(cacheKey, string(cacheData), cacheExpiryDuration); err != nil {
 		return nil, fmt.Errorf("models.CreatePendingAutomationV1: failed to update cache: %w", err)
 	}
 	return automationInstance, nil
@@ -192,7 +193,7 @@ type QueueAutomationRunV1Output struct {
 
 type QueueAutomationRunV1Opts struct {
 	Db *sql.DB
-	Q  queue.Queue
+	Q  queue.Instance
 
 	Input map[string]any
 	OrgId *string

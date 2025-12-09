@@ -76,10 +76,10 @@ type NewOpts struct {
 	ServiceLogs chan<- common.ServiceLog
 }
 
-func New(opts NewOpts) (*Instance, error) {
+func New(opts NewOpts) *Instance {
 	instance := &Instance{
 		Client:      opts.Client,
 		ServiceLogs: opts.ServiceLogs,
 	}
-	return instance, nil
+	return instance
 }

@@ -6,6 +6,7 @@ import (
 	"opsicle/internal/cache"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
+	"opsicle/internal/config"
 	"opsicle/internal/persistence"
 	"strings"
 
@@ -58,34 +59,10 @@ var flags cli.Flags = cli.Flags{
 		Type:         cli.FlagTypeStringSlice,
 	},
 	{
-		Name:         "listen-addr",
-		DefaultValue: "0.0.0.0:12345",
-		Usage:        "specifies the listen address of the server",
-		Type:         cli.FlagTypeString,
-	},
-	{
 		Name:         "redis-enabled",
 		DefaultValue: true,
 		Usage:        "when this flag is specified, redis is used as the cache",
 		Type:         cli.FlagTypeBool,
-	},
-	{
-		Name:         "redis-addr",
-		DefaultValue: "localhost:6379",
-		Usage:        "defines the hostname (including port) of the redis server",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "redis-username",
-		DefaultValue: "opsicle",
-		Usage:        "defines the username used to login to redis",
-		Type:         cli.FlagTypeString,
-	},
-	{
-		Name:         "redis-password",
-		DefaultValue: "password",
-		Usage:        "defines the password used to login to redis",
-		Type:         cli.FlagTypeString,
 	},
 	{
 		Name:         "slack-enabled",
@@ -117,7 +94,9 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "the telegram bot token to be used when telegram is enabled",
 		Type:         cli.FlagTypeString,
 	},
-}
+}.
+	Append(config.GetListenAddrFlags(13370)).
+	Append(config.GetRedisFlags())
 
 var Command = cli.NewCommand(cli.CommandOpts{
 	Name:    "approver",
@@ -147,16 +126,10 @@ var Command = cli.NewCommand(cli.CommandOpts{
 			if err := redisInstance.Init(); err != nil {
 				return fmt.Errorf("failed to connect to redis: %w", err)
 			}
-
-			if err := cache.InitRedis(cache.InitRedisOpts{
+			cache.InitRedis(cache.InitRedisOpts{
 				RedisConnection: redisInstance,
 				ServiceLogs:     serviceLogs,
-			}); err != nil {
-				return fmt.Errorf("failed to initialise cache: %w", err)
-			}
-			if err := cache.Get().Ping(); err != nil {
-				return fmt.Errorf("failed to establish connection to cache: %w", err)
-			}
+			})
 			logrus.Infof("redis client initialised")
 		}
 

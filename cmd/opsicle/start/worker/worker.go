@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"opsicle/internal/cli"
 	"opsicle/internal/common"
+	"opsicle/internal/config"
 	"opsicle/internal/worker"
 	"os"
 	"os/signal"
@@ -17,14 +18,6 @@ import (
 )
 
 var flags cli.Flags = cli.Flags{
-	{
-		Name:         "coordinator-url",
-		Short:        'u',
-		DefaultValue: "localhost:12345",
-		Usage:        "the url of the coordinator",
-		Type:         cli.FlagTypeString,
-	},
-
 	{
 		Name:         "filesystem-path",
 		Short:        'p',
@@ -48,7 +41,7 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "interval between polls",
 		Type:         cli.FlagTypeDuration,
 	},
-}
+}.Append(config.GetCoordinatorUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

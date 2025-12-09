@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"opsicle/internal/cli"
+	"opsicle/internal/config"
 	"opsicle/internal/types"
 	"opsicle/pkg/controller"
 	"os"
@@ -19,13 +20,6 @@ import (
 
 var flags cli.Flags = cli.Flags{
 	{
-		Name:         "controller-url",
-		Short:        'u',
-		DefaultValue: "http://localhost:54321",
-		Usage:        "Defines the url where the controller service is accessible at",
-		Type:         cli.FlagTypeString,
-	},
-	{
 		Name:         "org",
 		DefaultValue: "",
 		Usage:        "Codeword of the organisation to list templates for",
@@ -38,7 +32,7 @@ var flags cli.Flags = cli.Flags{
 		Usage:        "Displays more information",
 		Type:         cli.FlagTypeBool,
 	},
-}
+}.Append(config.GetControllerUrlFlags())
 
 func init() {
 	flags.AddToCommand(Command)

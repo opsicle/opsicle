@@ -90,7 +90,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := models.User{Email: input.Email}
-	if err := user.LoadByEmailV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := user.LoadByEmailV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		log(common.LogLevelError, fmt.Sprintf("failed to query user by email: %s", err))
 		if errors.Is(err, models.ErrorNotFound) {
 			common.SendHttpFailResponse(w, r, http.StatusNotFound, "failed to receive a valid user", types.ErrorNotFound)
@@ -123,7 +123,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 			DstHost:      &r.Host,
 		})
 		_, err := models.CreateUserLoginV1(models.CreateUserLoginV1Input{
-			Db:        db,
+			Db:        dbInstance,
 			UserId:    user.GetId(),
 			IpAddress: r.RemoteAddr,
 			UserAgent: userAgent,
@@ -138,7 +138,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userMfas, err := models.ListUserMfasV1(models.ListUserMfasV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: user.Id,
 	})
 	if err != nil {
@@ -147,7 +147,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if len(userMfas) > 0 {
 		userLoginId, err := models.CreateUserLoginV1(models.CreateUserLoginV1Input{
-			Db:          db,
+			Db:          dbInstance,
 			UserId:      user.GetId(),
 			RequiresMfa: true,
 			IpAddress:   r.RemoteAddr,
@@ -169,7 +169,7 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userLoginId, err := models.CreateUserLoginV1(models.CreateUserLoginV1Input{
-		Db:        db,
+		Db:        dbInstance,
 		UserId:    user.GetId(),
 		IpAddress: r.RemoteAddr,
 		UserAgent: userAgent,
@@ -182,7 +182,8 @@ func handleCreateSessionV1(w http.ResponseWriter, r *http.Request) {
 	log(common.LogLevelDebug, fmt.Sprintf("logged user login attempt as login[%s]", userLoginId))
 
 	sessionToken, err := models.CreateSessionV1(models.CreateSessionV1Opts{
-		Db:          db,
+		Cache:       cacheInstance,
+		Db:          dbInstance,
 		CachePrefix: sessionCachePrefix,
 		Email:       input.Email,
 		IpAddress:   r.RemoteAddr,
@@ -329,6 +330,7 @@ func handleDeleteSessionV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionId, err := models.DeleteSessionV1(models.DeleteSessionV1Opts{
+		Cache:       cacheInstance,
 		BearerToken: authorizationToken,
 		CachePrefix: sessionCachePrefix,
 	})
@@ -404,7 +406,7 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 	loginId := vars["loginId"]
 
 	userLogin, err := models.GetUserLoginV1(models.GetUserLoginV1Input{
-		Db:      db,
+		Db:      dbInstance,
 		LoginId: loginId,
 	})
 	if err != nil {
@@ -417,13 +419,13 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := models.User{Id: &userLogin.UserId}
-	if err := user.LoadByIdV1(models.DatabaseConnection{Db: db}); err != nil {
+	if err := user.LoadByIdV1(models.DatabaseConnection{Db: dbInstance}); err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get user", types.ErrorGeneric)
 		return
 	}
 
 	userMfas, err := models.ListUserMfasV1(models.ListUserMfasV1Opts{
-		Db:     db,
+		Db:     dbInstance,
 		UserId: user.Id,
 	})
 	if err != nil {
@@ -439,7 +441,7 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 				valid, err := auth.ValidateTotpToken(*userMfa.Secret, input.MfaToken)
 				if err != nil || !valid {
 					if err := models.SetUserLoginStatusV1(models.SetUserLoginStatusV1Input{
-						Db:     db,
+						Db:     dbInstance,
 						Id:     loginId,
 						Status: "mfa_failed",
 					}); err != nil {
@@ -460,7 +462,7 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				if err := models.SetUserLoginMfaSucceededV1(models.SetUserLoginMfaSucceededV1Input{
-					Db: db,
+					Db: dbInstance,
 					Id: loginId,
 				}); err != nil {
 					log(common.LogLevelError, fmt.Sprintf("failed to set mfa status for user[%s]'s login[%s] to truthy", *user.Id, userLogin.Id))
@@ -468,7 +470,8 @@ func handleStartSessionWithMfaV1(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				createSessionInput := models.CreateSessionV1Opts{
-					Db:          db,
+					Cache:       cacheInstance,
+					Db:          dbInstance,
 					CachePrefix: sessionCachePrefix,
 
 					Email: user.Email,

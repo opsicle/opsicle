@@ -2,9 +2,10 @@ package queue
 
 import (
 	"context"
-	"fmt"
 	"time"
 )
+
+var instance Instance
 
 type Type string
 
@@ -12,31 +13,25 @@ const (
 	TypeNats Type = "qt_nats"
 )
 
-var queueMap = map[string]Queue{}
+var queueMap = map[string]Instance{}
 
-func Register(id string, client Queue) {
+func Register(id string, client Instance) {
 	queueMap[id] = client
 }
 
-func Get(id string) (Queue, error) {
-	queueInstance, queueIdValid := queueMap[id]
-	if !queueIdValid {
-		return nil, fmt.Errorf("no such queue")
-	}
-	return queueInstance, nil
+func Get() Instance {
+	return instance
 }
 
-type Queue interface {
-	Close() error
-	Connect() error
+type Instance interface {
 	Push(PushOpts) (*PushOutput, error)
 	Pop(PopOpts) (*Message, error)
 	Subscribe(SubscribeOpts) error
 }
 
 type Message struct {
-	Data    []byte
-	Subject string
+	Data    []byte `json:"data"`
+	Subject string `json:"subject"`
 }
 
 type MessageHandler func(context.Context, Message) error
