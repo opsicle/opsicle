@@ -41,7 +41,7 @@ type CreateAutomationV1Input struct {
 
 func handleCreateAutomationV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -177,7 +177,7 @@ type RunAutomationV1Input struct {
 
 func handleRunAutomationV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	vars := mux.Vars(r)
 	automationId := vars["automationId"]

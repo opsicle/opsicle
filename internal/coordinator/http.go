@@ -1,6 +1,7 @@
 package coordinator
 
 import (
+	"errors"
 	"net/http"
 	"opsicle/internal/common"
 	"opsicle/internal/persistence"
@@ -9,8 +10,9 @@ import (
 )
 
 type HttpApplicationOpts struct {
-	Cache *persistence.Redis
-	Queue *persistence.Nats
+	Cache            *persistence.Redis
+	ControllerApiKey string
+	Queue            *persistence.Nats
 
 	LivenessChecks  []func() error
 	ReadinessChecks []func() error
@@ -18,7 +20,32 @@ type HttpApplicationOpts struct {
 	ServiceLogs chan<- common.ServiceLog
 }
 
-func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
+func (o HttpApplicationOpts) Validate() error {
+	var errs = []error{}
+
+	if o.Cache == nil {
+		errs = append(errs, ErrorMissingCache)
+	}
+
+	if o.ControllerApiKey == "" {
+		errs = append(errs, ErrorMissingControllerApiKey)
+	}
+
+	if o.Queue == nil {
+		errs = append(errs, ErrorMissingQueue)
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+func GetHttpApplication(opts HttpApplicationOpts) (http.Handler, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, err
+	}
+
 	handler := mux.NewRouter()
 
 	api := handler.PathPrefix("/api").Subrouter()
@@ -36,5 +63,5 @@ func GetHttpApplication(opts HttpApplicationOpts) http.Handler {
 		Router:          handler,
 		ServiceLogs:     opts.ServiceLogs,
 	})
-	return handler
+	return handler, nil
 }

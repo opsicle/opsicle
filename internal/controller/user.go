@@ -53,7 +53,7 @@ type handleListUserAuditLogsV1Output models.AuditLogs
 
 func handleListUserAuditLogsV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -268,7 +268,7 @@ type handleCreateUserMfaV1Input struct {
 
 func handleCreateUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -348,7 +348,7 @@ type handleVerifyUserMfaV1Output struct {
 
 func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	vars := mux.Vars(r)
 	mfaId := vars["mfaId"]
@@ -414,7 +414,7 @@ func handleVerifyUserMfaV1(w http.ResponseWriter, r *http.Request) {
 
 func handleListUserMfasV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving user[%s]'s available mfas", session.UserId))
 
 	userMfas, err := models.ListUserMfasV1(models.ListUserMfasV1Opts{
@@ -456,7 +456,7 @@ type handleListUserOrgInvitationsV1OutputOrgInvite struct {
 
 func handleListUserOrgInvitationsV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving org invitations for user[%s]", session.UserId))
 
 	listOrgInvitations, err := models.ListOrgInvitationsV1(models.ListOrgInvitationsV1Opts{
@@ -514,7 +514,7 @@ type handleListUserTemplateInvitationsV1OutputTemplateInvite struct {
 
 func handleListUserTemplateInvitationsV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving org invitations for user[%s]", session.UserId))
 
 	listTemplateInvitationsOutput, err := models.ListTemplateInvitationsV1(models.ListTemplateInvitationsV1Opts{
@@ -623,7 +623,6 @@ type handleUpdateUserPasswordV1Input struct {
 
 func handleUpdateUserPasswordV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	log(common.LogLevelDebug, "this endpoint updates a user's password")
 	userAgent := r.UserAgent()
 
 	isUserLoggedIn := false

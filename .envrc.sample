@@ -5,3 +5,8 @@ export SLACK_APP_TOKEN='';
 export SMTP_USERNAME='';
 export SMTP_PASSWORD='';
 export TELEGRAM_BOT_TOKEN='';
+
+# for coordinator, ensure both are the same
+
+export API_KEY=""
+export CONTROLLER_API_KEY=""

@@ -50,7 +50,7 @@ type handleSubmitTemplateV1Input struct {
 
 func handleSubmitTemplateV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is creating an automation template", session.UserId))
 
 	bodyData, err := io.ReadAll(r.Body)
@@ -112,7 +112,7 @@ type handleDeleteTemplateV1Output struct {
 
 func handleDeleteTemplateV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	automationTemplateId := vars["templateId"]
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] is deleting automationTemplate[%s]", session.UserId, automationTemplateId))
@@ -161,7 +161,7 @@ func handleGetTemplateV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	vars := mux.Vars(r)
 	automationTemplateId := vars["templateId"]
-	currentUser, ok := r.Context().Value(authRequestContext).(identity)
+	currentUser, ok := r.Context().Value(userAuthRequestContext).(userIdentity)
 	if !ok {
 		common.SendHttpFailResponse(w, r, http.StatusTooEarly, "not implemented yet", nil)
 		return
@@ -196,7 +196,7 @@ type handleListTemplatesV1Input struct {
 func handleListTemplatesV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
 	log(common.LogLevelInfo, "this endpoint lists automation templates")
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	bodyData, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -281,7 +281,7 @@ type handleUpdateTemplateInvitationV1Input struct {
 
 func handleUpdateTemplateInvitationV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	invitationId := vars["invitationId"]
 	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is updating templateInvitation[%s]", session.UserId, invitationId))
@@ -475,7 +475,7 @@ type handleCreateTemplateUserV1Input struct {
 
 func handleCreateTemplateUserV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	templateId := vars["templateId"]
 	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is listing template[%s] users", session.UserId, templateId))
@@ -601,7 +601,7 @@ type handleListTemplateUsersV1OutputUser struct {
 
 func handleListTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	templateId := vars["templateId"]
 	log(common.LogLevelInfo, fmt.Sprintf("user[%s] is listing template[%s] users", session.UserId, templateId))
@@ -646,7 +646,7 @@ type handleDeleteTemplateUsersV1Output struct {
 
 func handleDeleteTemplateUsersV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	templateId := vars["templateId"]
 	userId := vars["userId"]
@@ -735,7 +735,7 @@ type handleListTemplateVersionsV1OutputUser struct {
 
 func handleListTemplateVersionsV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	templateId := vars["templateId"]
 	log(common.LogLevelInfo, fmt.Sprintf("listing versions of template[%s]", templateId))
@@ -810,7 +810,7 @@ type handleUpdateTemplateVersionV1Input struct {
 
 func handleUpdateTemplateVersionV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	templateId := vars["templateId"]
 

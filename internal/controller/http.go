@@ -21,15 +21,39 @@ import (
 )
 
 type HttpApplicationOpts struct {
-	ApiKeys             []string
-	CacheConnection     *persistence.Redis
-	DatabaseConnection  *persistence.Mysql
-	EmailConfig         *SmtpServerConfig
-	LivenessChecks      []func() error
-	ReadinessChecks     []func() error
-	PublicServerUrl     string
-	QueueConnection     *persistence.Nats
-	ServiceLogs         chan<- common.ServiceLog
+	// ApiKeys defines a list of valid API keys to be used for internal-only
+	// endpoints. This is defined as a slice so that a rolling update that enables
+	// a deprecation policy (eg. specify both old and new for a week before removing
+	// the old one),
+	ApiKeys []string
+
+	// CacheConnection provides a connection to a Redis cache
+	CacheConnection *persistence.Redis
+
+	// DatabaseConnection provides a connection to a MySQL compatible database
+	DatabaseConnection *persistence.Mysql
+
+	// EmailConfig provides SMTP configuration for email to be sent
+	EmailConfig *SmtpServerConfig
+
+	// LivenessChecks are sequentially executed when the liveness probe endpoint is hit
+	LivenessChecks []func() error
+
+	// LivenessChecks are sequentially executed when the readiness probe endpoint is hit
+	ReadinessChecks []func() error
+
+	// PublicServerUrl is used when communicating with custoemrs so that the correct
+	// URL appears in emails/other notifications
+	PublicServerUrl string
+
+	// QueueConnection provides a connection to a NATS queue service
+	QueueConnection *persistence.Nats
+
+	// ServiceLogs is a centralised channel where logs get sent to
+	ServiceLogs chan<- common.ServiceLog
+
+	// SessionSigningToken is the session signing token to use, change this to invalidate
+	// all users with immediate effect
 	SessionSigningToken string
 }
 
@@ -90,7 +114,7 @@ func GetHttpApplication(opts HttpApplicationOpts) (http.Handler, error) {
 	serviceLogs = &opts.ServiceLogs
 
 	apiKeys = opts.ApiKeys
-	*serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "controller has %v api keys registered", apiKeys)
+	*serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "controller has %v api key(s) registered", len(apiKeys))
 
 	dbInstance = opts.DatabaseConnection.GetClient()
 
@@ -138,6 +162,7 @@ func GetHttpApplication(opts HttpApplicationOpts) (http.Handler, error) {
 
 	api := handler.PathPrefix("/api").Subrouter()
 	apiOpts := RouteRegistrationOpts{
+		ApiKeys:     opts.ApiKeys,
 		Router:      api,
 		ServiceLogs: *serviceLogs,
 	}
@@ -147,6 +172,7 @@ func GetHttpApplication(opts HttpApplicationOpts) (http.Handler, error) {
 	registerOrgRoutes(apiOpts)
 	registerSessionRoutes(apiOpts)
 	registerUserRoutes(apiOpts)
+	registerUtilityRoutes(apiOpts)
 
 	swag.Register(docs.SwaggerInfo.InstanceName(), docs.SwaggerInfo)
 	handler.PathPrefix("/docs").Handler(httpSwagger.WrapHandler)

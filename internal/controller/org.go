@@ -84,7 +84,7 @@ type DeleteOrgV1Output struct {
 // @Router       /api/v1/org/{orgId} [delete]
 func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
@@ -167,7 +167,7 @@ func handleDeleteOrgV1(w http.ResponseWriter, r *http.Request) {
 // @Router       /api/v1/org [post]
 func handleCreateOrgV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	requestBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to read request body", types.ErrorInvalidInput)
@@ -358,7 +358,7 @@ type handleGetOrgV1Output struct {
 
 func handleGetOrgV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	vars := mux.Vars(r)
 	orgRef := vars["orgRef"]
@@ -458,7 +458,7 @@ type handleListOrgsV1OutputOrg struct {
 // @Router       /api/v1/org [get]
 func handleListOrgsV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	log(common.LogLevelDebug, fmt.Sprintf("retrieving organisations that user[%s] is in", session.UserId))
 
@@ -538,7 +538,7 @@ type handleListOrgUsersV1OutputUserRolePermission struct {
 
 func handleListOrgUsersV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
 
@@ -655,7 +655,7 @@ type ListOrgRolesV1OutputRolePermission struct {
 
 func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
 
@@ -732,7 +732,7 @@ func handleListOrgRolesV1(w http.ResponseWriter, r *http.Request) {
 
 func handleSubmitOrgTemplateV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
 	if orgId == "" {
@@ -813,7 +813,7 @@ func handleSubmitOrgTemplateV1(w http.ResponseWriter, r *http.Request) {
 
 func handleListOrgTemplatesV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
 	if orgId == "" {
@@ -909,7 +909,7 @@ type ListOrgTokensV1OutputTokenUser struct {
 
 func handleListOrgTokensV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
 
@@ -1013,7 +1013,7 @@ type GetOrgTokenV1OutputRolePermission struct {
 
 func handleGetOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
 	tokenId := vars["tokenId"]
@@ -1130,7 +1130,7 @@ type CreateOrgTokenV1Output struct {
 
 func handleCreateOrgTokenV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
 
@@ -1291,7 +1291,7 @@ type handleCreateOrgUserV1Output struct {
 
 func handleCreateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
@@ -1475,7 +1475,7 @@ type handleGetOrgCurrentUserV1Output struct {
 
 func handleGetOrgCurrentUserV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
@@ -1541,7 +1541,7 @@ type handleUpdateOrgInvitationV1Input struct {
 
 func handleUpdateOrgInvitationV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 	invitationId := vars["invitationId"]
 
@@ -1655,7 +1655,7 @@ type handleLeaveOrgV1Output struct {
 
 func handleLeaveOrgV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
@@ -1711,7 +1711,7 @@ type handleDeleteOrgUserV1Output struct {
 
 func handleDeleteOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
@@ -1803,7 +1803,7 @@ type CanOrgUserActionV1OutputData struct {
 
 func handleCanOrgUserActionV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	vars := mux.Vars(r)
 
 	orgId := vars["orgId"]
@@ -1877,7 +1877,7 @@ type handleUpdateOrgUserV1Input struct {
 
 func handleUpdateOrgUserV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 
 	vars := mux.Vars(r)
 	orgId := vars["orgId"]
@@ -2054,7 +2054,7 @@ func mapOrgPermissionResource(resource string) (models.Resource, string, error) 
 
 func handleListOrgMemberTypesV1(w http.ResponseWriter, r *http.Request) {
 	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
-	session := r.Context().Value(authRequestContext).(identity)
+	session := r.Context().Value(userAuthRequestContext).(userIdentity)
 	log(common.LogLevelDebug, fmt.Sprintf("user[%s] requested member types for orgs", session.UserId))
 	memberTypes := []string{}
 	for memberType := range models.OrgMemberTypeMap {
