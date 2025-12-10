@@ -8,5 +8,5 @@ export TELEGRAM_BOT_TOKEN='';
 
 # for coordinator, ensure both are the same
 
-export API_KEY=""
+export API_KEYS=""
 export CONTROLLER_API_KEY=""
