@@ -1,12 +1,28 @@
 # AGENTS.md
 
+# General Conventions
+
 ## Naming Conventions
 
 - Use the `New` verb for initialisation commands
 - Components implementing a gracefully shutdown should include a `Shutdown` method
 
+---
 
-# Networking
+# Application Conventions
+
+## Authentication and Authorisation
+
+1. Use HTTP header `Authorization` for auth related to users
+2. Use HTTP header `X-Api-Key` for internal use
+
+---
+
+# Cloud Infrastructure Conventions
+
+---
+
+# Networking Conventions
 
 ## Ports
 

@@ -50,6 +50,7 @@ func registerOrgRoutes(opts RouteRegistrationOpts) {
 	v1.Handle("/{orgId}/token/{tokenId}", requiresAuth(http.HandlerFunc(handleGetOrgTokenV1))).Methods(http.MethodGet)
 	v1.Handle("/{orgId}/token", requiresAuth(http.HandlerFunc(handleCreateOrgTokenV1))).Methods(http.MethodPost)
 	v1.Handle("/invitation/{invitationId}", requiresAuth(http.HandlerFunc(handleUpdateOrgInvitationV1))).Methods(http.MethodPatch)
+	v1.HandleFunc("/validate", handleOrgTokenValidationV1).Methods(http.MethodPost)
 
 	v1 = opts.Router.PathPrefix("/v1/orgs").Subrouter()
 
@@ -2072,4 +2073,32 @@ func handleListOrgMemberTypesV1(w http.ResponseWriter, r *http.Request) {
 		DstHost:      &r.Host,
 	})
 	common.SendHttpSuccessResponse(w, r, http.StatusOK, "ok", memberTypes)
+}
+
+type handleOrgTokenValidationV1Input struct {
+	TokenId string `json:"tokenId"`
+	Token   string `json:"token"`
+}
+
+// TODO
+func handleOrgTokenValidationV1(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(common.HttpContextLogger).(common.HttpRequestLogger)
+	log(common.LogLevelInfo, "hi")
+	bodyData, err := io.ReadAll(r.Body)
+	if err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to get body data", types.ErrorInvalidInput)
+		return
+	}
+	var input handleOrgTokenValidationV1Input
+	if err := json.Unmarshal(bodyData, &input); err != nil {
+		common.SendHttpFailResponse(w, r, http.StatusBadRequest, "failed to parse body data", types.ErrorInvalidInput)
+		return
+	}
+
+	_, err = models.ValidateOrgTokenV1(models.ValidateOrgTokenV1Opts{
+		DatabaseConnection: models.DatabaseConnection{Db: dbInstance},
+		Token:              input.Token,
+		TokenId:            input.TokenId,
+	})
+	common.SendHttpSuccessResponse(w, r, http.StatusOK, "")
 }

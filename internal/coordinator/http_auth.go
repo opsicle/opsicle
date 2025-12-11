@@ -2,9 +2,9 @@ package coordinator
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"opsicle/internal/common"
+	"opsicle/internal/coordinator/models"
 	"opsicle/internal/types"
 	"strings"
 )
@@ -33,18 +33,18 @@ func getRouteAuther(serviceLogs chan<- common.ServiceLog) func(http.Handler) htt
 				return
 			}
 			authorizationToken := strings.ReplaceAll(authorizationHeader, "Bearer ", "")
-			fmt.Println(authorizationToken)
-			// sessionInfo, err := models.GetSessionV1(models.GetSessionV1Opts{
-			// 	BearerToken: authorizationToken,
-			// 	CachePrefix: sessionCachePrefix,
-			// })
-			// if err != nil {
-			// 	common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to retrieve session", types.ErrorAuthRequired)
-			// 	return
-			// }
+			authorizationTokenId := r.Header.Get("X-Token-Id")
+			org, err := models.AuthOrgTokenV1(models.AuthOrgTokenV1Opts{
+				TokenId: authorizationTokenId,
+				Token:   authorizationToken,
+			})
+			if err != nil {
+				common.SendHttpFailResponse(w, r, http.StatusUnauthorized, "failed to retrieve session", types.ErrorAuthRequired)
+				return
+			}
 			identityInstance := identity{
 				SourceIp:  r.RemoteAddr,
-				OrgId:     "TODO",
+				OrgId:     org.Id,
 				UserAgent: r.UserAgent(),
 			}
 			authContext := context.WithValue(r.Context(), authRequestContext, identityInstance)
