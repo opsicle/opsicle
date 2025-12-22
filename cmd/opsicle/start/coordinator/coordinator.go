@@ -180,7 +180,10 @@ var Command = cli.NewCommand(cli.CommandOpts{
 		}
 		opts.AddShutdownProcess("http", httpServer.Shutdown)
 		logrus.Infof("initialised web application")
-		logrus.Infof("starting web application...")
+
+		opts.IsReady()
+
+		logrus.Infof("starting coordinator component...")
 		if err := httpServer.Start(); err != nil {
 			return fmt.Errorf("failed to start http server: %w", err)
 		}

@@ -238,10 +238,12 @@ var Command = cli.NewCommand(cli.CommandOpts{
 		if err != nil {
 			return fmt.Errorf("failed to create new http server: %w", err)
 		}
+		opts.AddShutdownProcess("http", server.Shutdown)
 		logrus.Infof("http server initialised")
 
+		opts.IsReady()
+
 		logrus.Infof("starting controller component...")
-		opts.AddShutdownProcess("http", server.Shutdown)
 		if err := server.Start(); err != nil {
 			return fmt.Errorf("failed to start http server: %w", err)
 		}

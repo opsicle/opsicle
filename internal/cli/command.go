@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var commandProcessWaiter sync.WaitGroup
+
 type CommandOpts struct {
 	Name  string
 	Flags Flags
@@ -57,27 +59,12 @@ func NewCommand(opts CommandOpts) *Command {
 			opts.Flags.BindViper(cmd)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			signalChannel := make(chan os.Signal, 1)
-			signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
-			isShutdownFromSignal := false
-			var isShutdownFromSignalMutex sync.Mutex
-
-			var processWaiter sync.WaitGroup
-			processWaiter.Add(1)
-			go func() {
-				<-signalChannel
-				isShutdownFromSignalMutex.Lock()
-				isShutdownFromSignal = true
-				isShutdownFromSignalMutex.Unlock()
-				output.Shutdown()
-				processWaiter.Done()
-			}()
 			err := opts.Run(cmd, output, args)
-			if !isShutdownFromSignal {
+			if !output.isShutdownFromSignal {
 				output.Shutdown()
-				processWaiter.Done()
+				commandProcessWaiter.Done()
 			}
-			processWaiter.Wait()
+			commandProcessWaiter.Wait()
 			return err
 		},
 	}
@@ -88,15 +75,16 @@ func NewCommand(opts CommandOpts) *Command {
 
 // Command is an abstraction for all of opsicle cli's commands
 type Command struct {
-	errs              []error
-	flags             Flags
-	name              string
-	user              int
-	group             int
-	hostname          string
-	serviceLogs       *chan common.ServiceLog
-	shutdownProcesses map[string]func() error
-	workingDirectory  string
+	errs                 []error
+	flags                Flags
+	name                 string
+	user                 int
+	group                int
+	hostname             string
+	isShutdownFromSignal bool
+	serviceLogs          *chan common.ServiceLog
+	shutdownProcesses    map[string]func() error
+	workingDirectory     string
 
 	*cobra.Command
 }
@@ -166,6 +154,24 @@ func (cd *Command) GetUserId() int {
 // GetWorkingDirectory retrieves the current working directory
 func (cd *Command) GetWorkingDirectory() string {
 	return cd.workingDirectory
+}
+
+// IsReady tells the command to begin listening for system lifecycle
+// events
+func (cd *Command) IsReady() {
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
+	var isShutdownFromSignalMutex sync.Mutex
+
+	commandProcessWaiter.Add(1)
+	go func() {
+		<-signalChannel
+		isShutdownFromSignalMutex.Lock()
+		cd.isShutdownFromSignal = true
+		isShutdownFromSignalMutex.Unlock()
+		cd.Shutdown()
+		commandProcessWaiter.Done()
+	}()
 }
 
 // Shutdown gracefully terminates any processes in the command, for this

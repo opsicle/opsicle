@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `org_approvers` (
+    `id` VARCHAR(36) NOT NULL,
+    `org_id` VARCHAR(36) NOT NULL,
+    `user_id` VARCHAR(36) NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `last_updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`org_id`, `user_id`),
+    CONSTRAINT `fk_org_approvers_org` FOREIGN KEY (`org_id`) REFERENCES `orgs`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_org_approvers_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS `org_config` (
+    `id` VARCHAR(36) PRIMARY KEY,
+    `org_id` VARCHAR(36) NOT NULL,
+    `is_approvals_enabled` BOOLEAN NOT NULL DEFAULT FALSE,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `last_updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_org_config_org` (`org_id`),
+    CONSTRAINT `fk_org_config_org` FOREIGN KEY (`org_id`) REFERENCES `orgs`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
+);

@@ -170,6 +170,7 @@ func (n *Nats) startAutoReconnector() {
 				continue
 			}
 			retryLock.Lock()
+			n.serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "reconnected to nats after %v attempts and %s", n.retryCount+1, time.Duration(n.retryCount)*n.healthcheckInterval)
 			n.retryCount = 0
 			retryLock.Unlock()
 		}

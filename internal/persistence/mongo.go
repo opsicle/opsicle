@@ -147,6 +147,7 @@ func (m *Mongo) startAutoReconnector() {
 				continue
 			}
 			retryLock.Lock()
+			m.serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "reconnected to mongo after %v attempts and %s", m.retryCount+1, time.Duration(m.retryCount)*m.healthcheckInterval)
 			m.retryCount = 0
 			retryLock.Unlock()
 		}

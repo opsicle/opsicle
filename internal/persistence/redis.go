@@ -171,6 +171,7 @@ func (r *Redis) startAutoReconnector() {
 				continue
 			}
 			retryLock.Lock()
+			r.serviceLogs <- common.ServiceLogf(common.LogLevelInfo, "reconnected to redis after %v attempts and %s", r.retryCount+1, time.Duration(r.retryCount)*r.healthcheckInterval)
 			r.retryCount = 0
 			retryLock.Unlock()
 		}
